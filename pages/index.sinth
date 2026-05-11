@@ -1,0 +1,16 @@
+page
+
+title = "Array Test"
+var str hello = "hello!"
+var str[] fruits = ["apple", "banana", "kiwi"]
+var int y
+
+y = 5   -- top-level assignment works!
+
+Main {
+    Heading(level: 1) { hello + "Fruit List" }
+    Paragraph { "y: " + y }
+    for x in fruits {
+        Paragraph { x }
+    }
+}

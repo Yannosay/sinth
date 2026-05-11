@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test</title>
+</head>
+<body data-s="931b8d90">
+<main data-s="931b8d90"><p data-s="931b8d90"><span class="sinth-expr" data-expr="(&quot;x: &quot; + x)"></span></p><p data-s="931b8d90"><span class="sinth-expr" data-expr="(&quot;y: &quot; + y)"></span></p><p data-s="931b8d90"><span class="sinth-expr" data-expr="(&quot;z: &quot; + z)"></span></p><template data-sinth-for="items" data-sinth-item="item"><p data-s="931b8d90"><span class="sinth-expr" data-expr="item"></span></p></template></main>
+<script>
+// v0.2.0: Sinth variable declarations
+let x;
+let y = 5;
+let z = y;
+let items = ["apple","banana","kiwi"];
+
+// v0.2.0: Store original page HTML for full re-render
+const _sinthBodyHTML = document.body.innerHTML;
+
+function sinthRender() {
+  // Save current scroll position
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  
+  // Re-render the entire body from the original HTML
+  document.body.innerHTML = _sinthBodyHTML;
+  
+  // Re-process all templates recursively
+  function processTemplates(root) {
+    root.querySelectorAll('template[data-sinth-if]').forEach(t => {
+      const cond = new Function('return ' + t.dataset.sinthIf)();
+      if (cond) {
+        const frag = document.createRange().createContextualFragment(t.innerHTML);
+        t.replaceWith(frag);
+        processTemplates(root); // Re-process in case templates were nested
+      } else {
+        const elseT = t.nextElementSibling;
+        if (elseT && elseT.matches && elseT.matches('template[data-sinth-else]')) {
+          const frag = document.createRange().createContextualFragment(elseT.innerHTML);
+          elseT.replaceWith(frag);
+          processTemplates(root);
+        }
+        t.remove();
+      }
+    });
+    root.querySelectorAll('template[data-sinth-for]').forEach(t => {
+      const arr = eval(t.dataset.sinthFor);
+      if (arr && Array.isArray(arr)) {
+        const itemName = t.dataset.sinthItem;
+        const frag = document.createDocumentFragment();
+        arr.forEach(item => {
+          // Fill the expression spans with the actual loop value BEFORE adding to DOM
+          let itemHTML = t.innerHTML;
+          const regex = new RegExp('<span class="sinth-expr" data-expr="' + itemName + '"></span>', 'g');
+          itemHTML = itemHTML.replace(regex, '<span class="sinth-expr" data-expr="' + itemName + '">' + item + '</span>');
+          frag.append(document.createRange().createContextualFragment(itemHTML));
+        });
+        t.replaceWith(frag);
+        processTemplates(root);
+      }
+    });
+  }
+  processTemplates(document.body);
+  
+  // Update all expression spans
+  document.querySelectorAll('.sinth-expr').forEach(el => {
+    try { el.textContent = eval(el.dataset.expr); } catch(e) {}
+  });
+  
+  // Update onclick handlers
+  document.querySelectorAll('[onclick]').forEach(el => {
+    const oc = el.getAttribute('onclick');
+    if (oc && oc.startsWith('(function(){') && !oc.includes('sinthRender()')) {
+      const inner = oc.slice(12, -4);
+      el.setAttribute('onclick', '(function(){' + inner + ';sinthRender();})()');
+    }
+  });
+  
+  // Restore scroll
+  window.scrollTo(scrollX, scrollY);
+}
+
+// Initial render
+sinthRender();
+</script>
+<script>
+x = 10;
+sinthRender();
+</script>
+</body>
+</html>
