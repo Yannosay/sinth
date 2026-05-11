@@ -1,0 +1,7 @@
+{
+  "outDir": "./dist",
+  "libraryPaths": [
+    "./libraries"
+  ],
+  "minify": false
+}
