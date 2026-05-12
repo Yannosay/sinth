@@ -2311,8 +2311,18 @@ depth:   number,
     const condId = registerExpr(ctx, ifBlock.condition);
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
     const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
+    let replaceAttr = "";
+    const firstComp = ifBlock.body.find(c => c.kind === "use") as CompUse | undefined;
+    if (firstComp) {
+      const idAttr = firstComp.attrs.find(a => a.name === "id");
+      const replAttr = firstComp.attrs.find(a => a.name === "replace");
+      const wantsReplace = !replAttr || replAttr.value === null || (replAttr.value?.kind === "bool" && replAttr.value.value === true);
+      if (idAttr && idAttr.value?.kind === "str" && wantsReplace) {
+        replaceAttr = ` data-sinth-if-replace="${escAttr(idAttr.value.value)}"`;
+      }
+    }
     return (
-      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}">${bodyHTML}</template>` +
+      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${replaceAttr}>${bodyHTML}</template>` +
       (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}">${elseHTML}</template>` : "")
     );
   }
@@ -2746,6 +2756,10 @@ return `var ${v.name} = ${val};`;
 
       _loopIdx++;
       var _user = _v;
+      if (t.dataset.sinthIfReplace) {
+        var _rp = document.getElementById(t.dataset.sinthIfReplace);
+        if (_rp) _rp.parentNode.removeChild(_rp);
+      }
       var frag = document.createRange().createContextualFragment(t.innerHTML);
       frag.querySelectorAll('.sinth-expr').forEach(function(el) {
         try {
@@ -2826,6 +2840,10 @@ return `var ${v.name} = ${val};`;
     var condFn = __X[t.dataset.sinthIfExpr];
     var cond = condFn ? condFn() : false;
     if (cond) {
+      if (t.dataset.sinthIfReplace) {
+        var _rp = document.getElementById(t.dataset.sinthIfReplace);
+        if (_rp) _rp.parentNode.removeChild(_rp);
+      }
       if (anchor) {
         var cur = anchor.nextSibling;
         while (cur && cur !== t) { var nx = cur.nextSibling; cur.remove(); cur = nx; }
