@@ -1,0 +1,38 @@
+-- Navbar component
+
+component Navbar {
+  Header {
+    Nav {
+      Link(href: "/", class: "logo") { "MySite" }
+      Div(class: "nav-links") {
+        NavLink(href: "/")       { "Homesss!" }
+        NavLink(href: "/about")  { "About" }
+      }
+    }
+  }
+
+  style {
+    Header {
+      display: "flex"
+      alignItems: "center"
+      padding: "1rem 2rem"
+      backgroundColor: "#1a1a2e"
+      color: "white"
+    }
+    .logo {
+      fontSize: "1.5rem"
+      fontWeight: "700"
+      color: "white"
+      textDecoration: "none"
+    }
+    .nav-links {
+      marginLeft: "auto"
+      display: "flex"
+      gap: "1.5rem"
+    }
+    .nav-links a {
+      color: "rgba(255,255,255,0.8)"
+      textDecoration: "none"
+    }
+  }
+}
