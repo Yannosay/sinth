@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Array Test</title>
+</head>
+<body data-s="931b8d90">
+<main data-s="931b8d90"><h1 data-s="931b8d90"><span class="sinth-expr" data-expr="(hello + &quot;Fruit List&quot;)"></span></h1><p data-s="931b8d90"><span class="sinth-expr" data-expr="(&quot;y: &quot; + y)"></span></p><template data-sinth-for="fruits" data-sinth-item="x"><p data-s="931b8d90"><span class="sinth-expr" data-expr="x"></span></p></template></main>
+<script>
+// v0.2.0: Sinth variable declarations (global scope)
+var hello = "hello!";
+var fruits = ["apple","banana","kiwi"];
+var y;
+
+function sinthRender() {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+
+  function processTemplates(root) {
+  }
+  processTemplates(document.body);
+  document.querySelectorAll('.sinth-expr').forEach(el => {
+    try { el.textContent = eval(el.dataset.expr); } catch(e) {}
+  });
+  window.scrollTo(scrollX, scrollY);
+}
+
+sinthRender();
+</script>
+<script>
+y = 5;
+sinthRender();
+</script>
+</body>
+</html>
