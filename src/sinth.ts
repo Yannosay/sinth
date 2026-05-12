@@ -43,7 +43,7 @@ type AssignOp = "=" | "+=" | "-=";
 type PostfixOp = "++" | "--";
 
 interface Expression {
-  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix";
+  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index";
   value?:   Literal;
   name?:    string;
   op?:      UnaryOp | BinaryOp | AssignOp | PostfixOp;
@@ -51,6 +51,8 @@ interface Expression {
   left?:    Expression;
   right?:   Expression;
   target?:  string;
+  object?:  Expression;
+  key?:     Expression;
 }
 
 interface Attr       { name: string; value: Literal | null; loc: Loc }
@@ -125,6 +127,7 @@ interface CompileCtx {
   mixedBlocks:  MixedBlockEntry[];
   mixedCounter: number;
   logicBlocks:  string[];
+  ifIdCounter:  number;
 }
 
 class SinthError extends Error {
@@ -719,7 +722,8 @@ private parseArrayLiteral(): Literal {
       this.consume(TT.IDENT);
       const operand = this.parseExpression();
       if (!operand) throw new SinthError("Expected expression after 'not'", tok.loc);
-      return { kind: "unary", op: "not", operand };
+      const unaryExpr: Expression = { kind: "unary", op: "not", operand };
+      return this.parseBinaryRHS(this.parsePostfix(unaryExpr));
     }
 
     if (this.check(TT.LPAREN)) {
@@ -728,7 +732,7 @@ private parseArrayLiteral(): Literal {
       if (!inner) throw new SinthError("Expected expression after '('", this.peek().loc);
       if (!this.check(TT.RPAREN)) throw new SinthError("Expected closing ')'", this.peek().loc);
       this.consume(TT.RPAREN);
-      return this.parseBinaryRHS(inner);
+      return this.parseBinaryRHS(this.parsePostfix(inner));
     }
 
     // literal
@@ -736,66 +740,53 @@ private parseArrayLiteral(): Literal {
         this.check(TT.BOOL_FALSE) || this.check(TT.NULL_LIT)) {
       const lit = this.parseLiteral();
       const base: Expression = { kind: "literal", value: lit };
-      return this.parseBinaryRHS(base);
+      return this.parseBinaryRHS(this.parsePostfix(base));
     }
 
     // var or assignment
     if (tok.type === TT.IDENT) {
       const name = this.consume(TT.IDENT).value;
-      
-      // dot notation!! -> user.age
+      let varExpr: Expression;
+
+      // dot notation -> user.age
       if (this.check(TT.DOT)) {
         this.consume(TT.DOT);
         const propName = this.consume(TT.IDENT).value;
         const fullName = `${name}.${propName}`;
-        
-        // compound-assignment operators
-        const nextType = this.tokens[this.pos]?.type;
-        if (nextType === TT.OP_PLUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
-          this.consume(TT.OP_PLUS); this.consume(TT.EQUALS);
-          const rhs = this.parseExpression();
-          if (!rhs) throw new SinthError("Expected expression after +=", this.peek().loc);
-          return { kind: "assign", target: fullName, op: "+=", right: rhs };
-        }
-        if (nextType === TT.OP_MINUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
-          this.consume(TT.OP_MINUS); this.consume(TT.EQUALS);
-          const rhs = this.parseExpression();
-          if (!rhs) throw new SinthError("Expected expression after -=", this.peek().loc);
-          return { kind: "assign", target: fullName, op: "-=", right: rhs };
-        }
-        if (nextType === TT.EQUALS) {
-          this.consume(TT.EQUALS);
-          const rhs = this.parseExpression();
-          if (!rhs) throw new SinthError("Expected expression after =", this.peek().loc);
-          return { kind: "assign", target: fullName, op: "=", right: rhs };
-        }
-        
-        const varExpr: Expression = { kind: "variable", name: fullName };
-        return this.parseBinaryRHS(varExpr);
+        varExpr = { kind: "variable", name: fullName };
+      } else {
+        varExpr = { kind: "variable", name };
       }
 
+      // apply bracket postfixes (e.g. data[key], data["x"])
+      const indexedExpr = this.parsePostfix(varExpr);
+
+      // if indexing was applied, we don't allow assignment, just binary RHS
+      if (indexedExpr !== varExpr) {
+        return this.parseBinaryRHS(indexedExpr);
+      }
+
+      // no indexing – check for assignment operators
       const nextType = this.tokens[this.pos]?.type;
       if (nextType === TT.OP_PLUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
         this.consume(TT.OP_PLUS); this.consume(TT.EQUALS);
         const rhs = this.parseExpression();
         if (!rhs) throw new SinthError("Expected expression after +=", this.peek().loc);
-        return { kind: "assign", target: name, op: "+=", right: rhs };
+        return { kind: "assign", target: varExpr.name!, op: "+=", right: rhs };
       }
       if (nextType === TT.OP_MINUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
         this.consume(TT.OP_MINUS); this.consume(TT.EQUALS);
         const rhs = this.parseExpression();
         if (!rhs) throw new SinthError("Expected expression after -=", this.peek().loc);
-        return { kind: "assign", target: name, op: "-=", right: rhs };
+        return { kind: "assign", target: varExpr.name!, op: "-=", right: rhs };
       }
-      // Simple assignment
       if (nextType === TT.EQUALS) {
         this.consume(TT.EQUALS);
         const rhs = this.parseExpression();
         if (!rhs) throw new SinthError("Expected expression after =", this.peek().loc);
-        return { kind: "assign", target: name, op: "=", right: rhs };
+        return { kind: "assign", target: varExpr.name!, op: "=", right: rhs };
       }
 
-      const varExpr: Expression = { kind: "variable", name };
       return this.parseBinaryRHS(varExpr);
     }
 
@@ -825,6 +816,19 @@ private parseArrayLiteral(): Literal {
     if (!right) throw new SinthError(`Expected expression after '${op}'`, this.peek().loc);
     return { kind: "binary", left, op, right };
   }
+
+  private parsePostfix(base: Expression): Expression {
+    let expr = base;
+    while (this.check(TT.LBRACKET)) {
+      this.consume(TT.LBRACKET);
+      const key = this.parseExpression();
+      if (!key) throw new SinthError("Expected expression inside [...]", this.peek().loc);
+      this.consume(TT.RBRACKET);
+      expr = { kind: "index", object: expr, key };
+    }
+    return expr;
+  }
+
 
   // component definitions
 
@@ -1007,6 +1011,16 @@ private parseArrayLiteral(): Literal {
           continue;
         }
 
+        // bracket notation: ident[...]
+        if (nextType === TT.LBRACKET) {
+          this.consume(TT.IDENT);
+          const varExpr: Expression = { kind: "variable", name };
+          const indexedExpr = this.parsePostfix(varExpr);
+          children.push({ kind: "expr", expression: indexedExpr, loc });
+          continue;
+        }
+
+
         // simple variable reference
         this.consume(TT.IDENT);
         children.push({ kind: "expr", expression: { kind: "variable", name }, loc });
@@ -1017,6 +1031,30 @@ private parseArrayLiteral(): Literal {
         `Unexpected token '${this.peek().value}' in if/else body`,
         this.peek().loc,
       );
+
+      // reject implicit concatenation only after expression children
+      if (children.length > 0) {
+        const lastChild = children[children.length - 1];
+        if (lastChild.kind === "text" || lastChild.kind === "expr" || lastChild.kind === "assign_stmt") {
+          const nextTT = this.tokens[this.pos]?.type;
+          if (
+            nextTT === TT.STRING || nextTT === TT.NUMBER ||
+            nextTT === TT.BOOL_TRUE || nextTT === TT.BOOL_FALSE || nextTT === TT.NULL_LIT ||
+            (nextTT === TT.IDENT &&
+              this.tokens[this.pos]?.value !== "var" &&
+              this.tokens[this.pos]?.value !== "if" &&
+              this.tokens[this.pos]?.value !== "for" &&
+              this.tokens[this.pos]?.value !== "else" &&
+              this.tokens[this.pos]?.value !== "and" &&
+              this.tokens[this.pos]?.value !== "or")
+          ) {
+            throw new SinthError(
+              `Unexpected ${TT[nextTT]}. Use '+' to concatenate values.`,
+              this.peek().loc,
+            );
+          }
+        }
+      }
     }
 
     return children;
@@ -1152,6 +1190,9 @@ private parseArrayLiteral(): Literal {
             if (this.check(TT.DOT)) {
               this.consume(TT.DOT);
               rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+            } else if (this.check(TT.LBRACKET)) {
+              const rhsVar: Expression = { kind: "variable", name: rhsName };
+              rhs = this.parsePostfix(rhsVar);
             } else {
               rhs = { kind: "variable", name: rhsName };
             }
@@ -1193,6 +1234,9 @@ private parseArrayLiteral(): Literal {
                 if (this.check(TT.DOT)) {
                   this.consume(TT.DOT);
                   rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+                } else if (this.check(TT.LBRACKET)) {
+                  const rhsVar: Expression = { kind: "variable", name: rhsName };
+                  rhs = this.parsePostfix(rhsVar);
                 } else {
                   rhs = { kind: "variable", name: rhsName };
                 }
@@ -1223,6 +1267,9 @@ private parseArrayLiteral(): Literal {
               if (this.check(TT.DOT)) {
                 this.consume(TT.DOT);
                 rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+              } else if (this.check(TT.LBRACKET)) {
+                const rhsVar: Expression = { kind: "variable", name: rhsName };
+                rhs = this.parsePostfix(rhsVar);
               } else {
                 rhs = { kind: "variable", name: rhsName };
               }
@@ -1236,6 +1283,39 @@ private parseArrayLiteral(): Literal {
         } else if (this.loopVar && rawName === this.loopVar) {
           this.consume(TT.IDENT);
           children.push({ kind: "expr", expression: { kind: "variable", name: rawName }, loc });
+        } else if (nextType === TT.LBRACKET) {
+          const name = this.consume(TT.IDENT).value;
+          const varExpr: Expression = { kind: "variable", name };
+          let indexedExpr = this.parsePostfix(varExpr);
+          // support concatenation: data[prop] + "..."
+          if (this.check(TT.OP_PLUS)) {
+            let leftExpr: Expression = indexedExpr;
+            while (this.check(TT.OP_PLUS)) {
+              this.consume(TT.OP_PLUS);
+              let rhs: Expression | null = null;
+              if (this.check(TT.STRING)) {
+                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              } else if (this.check(TT.IDENT)) {
+                const rhsName = this.consume(TT.IDENT).value;
+                if (this.check(TT.DOT)) {
+                  this.consume(TT.DOT);
+                  rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+                } else if (this.check(TT.LBRACKET)) {
+                  const rhsVar: Expression = { kind: "variable", name: rhsName };
+                  rhs = this.parsePostfix(rhsVar);
+                } else {
+                  rhs = { kind: "variable", name: rhsName };
+                }
+              } else {
+                rhs = this.parseExpression();
+              }
+              if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
+              leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
+            }
+            children.push({ kind: "expr", expression: leftExpr, loc });
+          } else {
+            children.push({ kind: "expr", expression: indexedExpr, loc });
+          }
         } else if (nextType === TT.LPAREN || nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
           children.push(this.parseCompUse());
         } else {
@@ -1244,6 +1324,29 @@ private parseArrayLiteral(): Literal {
         }
       }
       else throw new SinthError(`Unexpected token '${this.peek().value}' in children`, this.peek().loc);
+      // reject implicit concatenation only after expression children
+      if (children.length > 0) {
+        const lastChild = children[children.length - 1];
+        if (lastChild.kind === "text" || lastChild.kind === "expr" || lastChild.kind === "assign_stmt") {
+          const nextTT = this.tokens[this.pos]?.type;
+          if (
+            nextTT === TT.STRING || nextTT === TT.NUMBER ||
+            nextTT === TT.BOOL_TRUE || nextTT === TT.BOOL_FALSE || nextTT === TT.NULL_LIT ||
+            (nextTT === TT.IDENT &&
+              this.tokens[this.pos]?.value !== "var" &&
+              this.tokens[this.pos]?.value !== "if" &&
+              this.tokens[this.pos]?.value !== "for" &&
+              this.tokens[this.pos]?.value !== "else" &&
+              this.tokens[this.pos]?.value !== "and" &&
+              this.tokens[this.pos]?.value !== "or")
+          ) {
+            throw new SinthError(
+              `Unexpected ${TT[nextTT]}. Use '+' to concatenate values.`,
+              this.peek().loc,
+            );
+          }
+        }
+      }
     }
     return children;
   }
@@ -1591,7 +1694,7 @@ function eventAttrName(name: string): string | null {
 // preprocessor
 
 /**
- * For who's reading this: This maps Sinth Style pseudo-class shorthand keywords to real CSS pseudo-classes.
+ * for who's reading this: This maps Sinth Style pseudo-class shorthand keywords to real CSS pseudo-classes.
  * these are used inside component style blocks, for example:  onHover { color: "blue" }
  */
 const SINTH_PSEUDO_CLASS: Record<string, string> = {
@@ -1911,6 +2014,8 @@ function compileExprToJS(expr: Expression): string {
       const v = expr.right ? compileExprToJS(expr.right) : "null";
       return `${expr.target} ${expr.op} ${v}`;
     }
+    case "index":
+      return `${compileExprToJS(expr.object!)}[${compileExprToJS(expr.key!)}]`;    
     case "postfix":
       return `${expr.target}${expr.op}`;
     default:
@@ -2137,11 +2242,12 @@ depth:   number,
 
   // pure DOM
   if (!hasAssign && hasComp) {
+    const tplId = ctx.ifIdCounter++;
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
     const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
     return (
-      `<template data-sinth-if="${escAttr(condJS)}">${bodyHTML}</template>` +
-      (elseHTML ? `<template data-sinth-else>${elseHTML}</template>` : "")
+      `<template data-sinth-if="${escAttr(condJS)}" data-sinth-if-id="${tplId}">${bodyHTML}</template>` +
+      (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}">${elseHTML}</template>` : "")
     );
   }
 
@@ -2538,6 +2644,12 @@ return `var ${v.name} = ${val};`;
   document.querySelectorAll('template[data-sinth-for]').forEach(function(t) {
     var source;
     try { source = eval(t.dataset.sinthFor); } catch(e) { source = []; }
+    var newHash = '';
+    try { newHash = hashString(JSON.stringify(source)); } catch(e) { newHash = ''; }
+    if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) {
+      return;
+    }
+    t.dataset.sinthForHash = newHash;
     var isObj = (typeof source === 'object' && source !== null && !Array.isArray(source));
     var entries;
     if (isObj) {
@@ -2603,12 +2715,16 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
         }
       });
       frag.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
+        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
+        el.dataset.sinthDelayDone = '1';
         var ms = parseInt(el.dataset.sinthDelay) || 0;
         el.style.display = 'none';
         if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
         else el.style.display = '';
       });
       frag.querySelectorAll('[data-sinth-delay-expr]').forEach(function(el) {
+        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
+        el.dataset.sinthDelayDone = '1';
         try {
           eval('var ' + _item + ' = _user;');
           if (_key) eval('var ' + _key + ' = _k;');
@@ -2627,7 +2743,8 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
   if (needsIf) {
     renderBody += `
   document.querySelectorAll('template[data-sinth-if]').forEach(function(t) {
-    var anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + t.dataset.sinthIf + '"]');
+    var ifId = t.dataset.sinthIfId;
+    var anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
     var cond;
     try { cond = eval(t.dataset.sinthIf); } catch(e) { cond = false; }
     if (cond) {
@@ -2637,7 +2754,7 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
       } else {
         anchor = document.createElement('span');
         anchor.style.display = 'none';
-        anchor.dataset.sinthIfAnchor = t.dataset.sinthIf;
+        anchor.dataset.sinthIfAnchor = ifId;
         t.parentNode.insertBefore(anchor, t);
       }
       var frag = document.createRange().createContextualFragment(t.innerHTML);
@@ -2645,6 +2762,8 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
         try { el.textContent = eval(el.dataset.expr); } catch(e) {}
       });
       frag.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
+        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
+        el.dataset.sinthDelayDone = '1';
         var ms = parseInt(el.dataset.sinthDelay) || 0;
         el.style.display = 'none';
         if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
@@ -2666,14 +2785,14 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
       }
       var elseT = t.nextElementSibling;
       if (elseT && elseT.dataset && elseT.hasAttribute('data-sinth-else')) {
-        var ea = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + t.dataset.sinthIf + '"]');
+        var ea = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]');
         if (ea) {
           var cur3 = ea.nextSibling;
           while (cur3 && cur3 !== t) { var nx3 = cur3.nextSibling; cur3.remove(); cur3 = nx3; }
         } else {
           ea = document.createElement('span');
           ea.style.display = 'none';
-          ea.dataset.sinthIfAnchor = '__else__' + t.dataset.sinthIf;
+          ea.dataset.sinthIfAnchor = '__else__' + ifId;
           t.parentNode.insertBefore(ea, t);
         }
         var ef = document.createRange().createContextualFragment(elseT.innerHTML);
@@ -2695,7 +2814,7 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
         });
         t.parentNode.insertBefore(ef, t);
       } else {
-        var ea2 = t.parentNode ? t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + t.dataset.sinthIf + '"]') : null;
+        var ea2 = t.parentNode ? t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]') : null;
         if (ea2) {
           var ec = ea2.nextSibling;
           while (ec && ec !== t) { var en = ec.nextSibling; ec.remove(); ec = en; }
@@ -2706,7 +2825,6 @@ try { eval('var ' + _item + ' = _user;'); if (_key) eval('var ' + _key + ' = _k;
   });
 `;
   }
-
 
 // mixed if/else blocks
 if (needsMixed) {
@@ -2811,8 +2929,18 @@ setTimeout(function() {
 }, 0);
 ` : "";
 
-  return `// Sinth v1.0.0 — compiled runtime
+  return `// Sinth compiled runtime
 ${varLines}
+${needsFor ? `function hashString(str) {
+  var hash = 0, i, chr;
+  for (i = 0; i < str.length; i++) {
+    chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0;
+  }
+  return String(hash);
+}
+` : ""}
 ${needsRender ? `function sinthRender() {\n${renderBody}}\nsinthRender();` : ""}
 ${delayBlock}`;
 }
@@ -2845,6 +2973,7 @@ function compileFile(filePath: string, opts: CompileOptions): string | null {
     mixedBlocks:  [],
     mixedCounter: 0,
     logicBlocks:  [],
+    ifIdCounter:  0,
   };
 
   if (!file.isPage) {
