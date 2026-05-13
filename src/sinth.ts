@@ -21,22 +21,20 @@ enum TT {
   KW_COMPONENT, KW_STYLE, KW_SCRIPT,
   KW_GLOBAL, KW_PAGE, KW_LANG,
   KW_CUSTOM_EL, KW_CUSTOM,
-  KW_IF, KW_ELSE, KW_FOR, KW_IN,
-  OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH,
+  KW_IF, KW_ELSE, KW_FOR, KW_IN, KW_REMOVE,
+  OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH, OP_SEMI,
   OP_LT, OP_GT, OP_NEQ, OP_EQEQ, OP_LTEQ, OP_GTEQ,
   EOF,
 }
 
 interface Token { type: TT; value: string; loc: Loc }
 
-// literal types
 type LitStr  = { kind: "str";  value: string };
 type LitNum  = { kind: "num";  value: number };
 type LitBool = { kind: "bool"; value: boolean };
 type LitNull = { kind: "null" };
 type Literal = LitStr | LitNum | LitBool | LitNull;
 
-// expression AST
 type UnaryOp  = "not" | "-";
 type BinaryOp = "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or";
 type AssignOp = "=" | "+=" | "-=";
@@ -62,11 +60,11 @@ interface ExprNode   { kind: "expr";        expression: Expression;             
 interface AssignStmt { kind: "assign_stmt"; expression: Expression;              loc: Loc }
 interface IfBlock    { kind: "if";          condition: Expression; body: Child[]; elseBody?: Child[]; loc: Loc }
 interface ForLoop    { kind: "for";         keyVar?: string; itemVar: string; indexVar?: string; arrayVar: string; body: Child[]; loc: Loc }
+interface RemoveStmt  { kind: "remove";      target: string; loc: Loc }
 
-// assignStmt is a first-class child so if bodies can be mixed
-type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop;
 
-// component / file structure
+type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt;
+
 interface ParamDecl   { name: string; defaultVal?: Literal; loc: Loc }
 
 interface StyleBlock {
@@ -228,6 +226,7 @@ const KEYWORDS: Record<string, TT> = {
   "else":           TT.KW_ELSE,
   "for":            TT.KW_FOR,
   "in":             TT.KW_IN,
+  "remove":         TT.KW_REMOVE,
 };
 
 export class Lexer {
@@ -266,6 +265,7 @@ export class Lexer {
       if (ch === "+") { tokens.push(this.single(TT.OP_PLUS,  loc)); continue; }
       if (ch === "*") { tokens.push(this.single(TT.OP_STAR,  loc)); continue; }
       if (ch === "/") { tokens.push(this.single(TT.OP_SLASH, loc)); continue; }
+      if (ch === ";") { tokens.push(this.single(TT.OP_SEMI, loc)); continue; }
       if (ch === "<") { tokens.push(this.single(TT.OP_LT,    loc)); continue; }
       if (ch === ">") { tokens.push(this.single(TT.OP_GT,    loc)); continue; }
       if (ch === "-" && !this.isDigit(this.src[this.pos + 1] ?? "")) {
@@ -954,6 +954,19 @@ private parseArrayLiteral(): Literal {
         continue;
       }
 
+      if (this.check(TT.KW_REMOVE)) {
+        const loc = this.consume(TT.KW_REMOVE).loc;
+        if (this.check(TT.STRING)) {
+          const target = this.consume(TT.STRING).value;
+          children.push({ kind: "remove", target, loc });
+        } else {
+          throw new SinthError(
+            `Expected a string after 'remove', got '${this.peek().value}'. Use remove "id".`,
+            this.peek().loc,
+          );
+        }
+        continue;
+      }
       if (this.check(TT.IDENT) && this.peek().value === "var") {
         const vd = this.parseVarDeclaration();
         if (vd) this._varDecls.push(vd);
@@ -1141,12 +1154,23 @@ private parseArrayLiteral(): Literal {
               value = this.parseLiteral();
             } else {
               const savedPos = this.pos;
-              const expr     = this.parseExpression();
-              if (expr && (this.check(TT.COMMA) || this.check(TT.RPAREN))) {
-                value = { kind: "str", value: "__EXPR__" + JSON.stringify(expr) };
+              const expr = this.parseExpression();
+              if (expr && (this.check(TT.COMMA) || this.check(TT.RPAREN) || this.check(TT.OP_SEMI))) {
+                const exprs: Expression[] = [expr];
+                while (this.check(TT.OP_SEMI)) {
+                  this.consume(TT.OP_SEMI);
+                  const next = this.parseExpression();
+                  if (next) exprs.push(next);
+                  else break;
+                }
+                if (exprs.length === 1) {
+                  value = { kind: "str", value: "__EXPR__" + JSON.stringify(exprs[0]) };
+                } else {
+                  value = { kind: "str", value: "__MULTI_EXPR__" + JSON.stringify(exprs) };
+                }
               } else {
                 this.pos = savedPos;
-                value    = this.parseLiteral();
+                value = this.parseLiteral();
               }
             }
           } else {
@@ -2173,15 +2197,25 @@ if (name === "delay") {
 
   let raw = value.value;
 
+  if (raw.startsWith("__MULTI_EXPR__")) {
+    const exprJson = raw.substring("__MULTI_EXPR__".length);
+    try {
+      const exprs: Expression[] = JSON.parse(exprJson);
+      const jsExprs = exprs.map(e => compileExprToJS(e)).join("; ");
+      const ev = eventAttrName(name);
+      if (ev) return `${ev}="(function(){ ${jsExprs.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
+      return `${name}="${escAttr(jsExprs)}"`;
+    } catch { }
+  }
   if (raw.startsWith("__EXPR__")) {
     const exprJson = raw.substring("__EXPR__".length);
     try {
       const expr: Expression = JSON.parse(exprJson);
       const jsExpr = compileExprToJS(expr);
       const ev = eventAttrName(name);
-      if (ev) return `${ev}="(function(){ ${jsExpr.replace(/"/g, "&quot;")}; })()"`;
+      if (ev) return `${ev}="(function(){ ${jsExpr.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
       return `${name}="${escAttr(jsExpr)}"`;
-    } catch { /* fall through */ }
+    } catch { }
   }
 
   raw = interpolateAttr(raw, paramMap);
@@ -2260,6 +2294,10 @@ function renderChild(
       return "";
     }
 
+    case "remove": {
+      return `<span data-sinth-remove="${esc((child as RemoveStmt).target)}"></span>`;
+    }
+
     case "if":
       return renderIfBlock(child, ctx, params, depth);
 
@@ -2316,7 +2354,7 @@ depth:   number,
     if (firstComp) {
       const idAttr = firstComp.attrs.find(a => a.name === "id");
       const replAttr = firstComp.attrs.find(a => a.name === "replace");
-      const wantsReplace = !replAttr || replAttr.value === null || (replAttr.value?.kind === "bool" && replAttr.value.value === true);
+      const wantsReplace = replAttr && (replAttr.value === null || (replAttr.value?.kind === "bool" && replAttr.value.value));
       if (idAttr && idAttr.value?.kind === "str" && wantsReplace) {
         replaceAttr = ` data-sinth-if-replace="${escAttr(idAttr.value.value)}"`;
       }
@@ -2357,14 +2395,14 @@ depth:   number,
     const ifId = ifFirstComp.attrs.find(a => a.name === "id")?.value;
     const ifReplace = ifFirstComp.attrs.find(a => a.name === "replace");
     const ifReplaceVal = ifReplace?.value;
-    const ifWantsReplace = !ifReplace || (ifReplaceVal?.kind === "bool" && ifReplaceVal.value === true) || (ifReplaceVal === null);
+    const ifWantsReplace = ifReplace && (ifReplaceVal === null || (ifReplaceVal?.kind === "bool" && ifReplaceVal.value));
     
     if (ifId && ifId.kind === "str" && ifWantsReplace) {
       if (elseFirstComp) {
         const elseId = elseFirstComp.attrs.find(a => a.name === "id")?.value;
         const elseReplace = elseFirstComp.attrs.find(a => a.name === "replace");
         const elseReplaceVal = elseReplace?.value;
-        const elseWantsReplace = !elseReplace || (elseReplaceVal?.kind === "bool" && elseReplaceVal.value === true) || (elseReplaceVal === null);
+        const elseWantsReplace = elseReplace && (elseReplaceVal === null || (elseReplaceVal?.kind === "bool" && elseReplaceVal.value));
         
         if (elseId && elseId.kind === "str" && elseId.value === ifId.value && elseWantsReplace) {
           replaceId = ifId.value;
@@ -2666,19 +2704,18 @@ function buildRuntime(opts: {
   mixedBlocks:  MixedBlockEntry[];
   assignedVars: Set<string>;
   exprRegistry: string[];
-}): string {
+  sharedRuntime: boolean;
+}): string | { page: string; shared: string } {
   const { varDecls, bodyHTML, logicBlocks, mixedBlocks, assignedVars, exprRegistry } = opts;
 
-
-const needsExpr   = bodyHTML.includes("sinth-expr");
-const needsIf     = bodyHTML.includes("data-sinth-if");
-const needsFor    = bodyHTML.includes("data-sinth-for");
-const needsDelay  = bodyHTML.includes("data-sinth-delay") || bodyHTML.includes("data-sinth-delay-expr-id") || mixedBlocks.some(mb => mb.ifHTML.includes("data-sinth-delay") || mb.ifHTML.includes("data-sinth-delay-expr-id") || mb.elseHTML.includes("data-sinth-delay") || mb.elseHTML.includes("data-sinth-delay-expr-id"));
-const needsMixed  = mixedBlocks.length > 0;
-const needsLogic  = logicBlocks.length > 0;
+  const needsExpr   = bodyHTML.includes("sinth-expr");
+  const needsIf     = bodyHTML.includes("data-sinth-if");
+  const needsFor    = bodyHTML.includes("data-sinth-for");
+  const needsDelay  = bodyHTML.includes("data-sinth-delay") || bodyHTML.includes("data-sinth-delay-expr-id") || mixedBlocks.some(mb => mb.ifHTML.includes("data-sinth-delay") || mb.ifHTML.includes("data-sinth-delay-expr-id") || mb.elseHTML.includes("data-sinth-delay") || mb.elseHTML.includes("data-sinth-delay-expr-id"));
+  const needsMixed  = mixedBlocks.length > 0;
+  const needsLogic  = logicBlocks.length > 0;
   const needsRender = needsExpr || needsIf || needsFor || needsMixed || needsLogic;
 
-  // var decls with type defaults
   const varLines = varDecls.map(v => {
     if (!v.value) {
       if (!assignedVars.has(v.name)) {
@@ -2696,366 +2733,173 @@ const needsLogic  = logicBlocks.length > 0;
     if (val.startsWith("__ARR__")) return `var ${v.name} = ${val.slice(7)};`;
     if (v.varType === "obj") return `var ${v.name} = ${val};`;
     if (v.varType === "str")  return `var ${v.name} = ${JSON.stringify(val)};`;
-if (v.varType === "str[]" && typeof val === 'string' && val.startsWith("__ARR__")) {
-  try {
-    const arr = JSON.parse(val.slice(7));
-    return `var ${v.name} = ${JSON.stringify(arr)};`;
-  } catch { return `var ${v.name} = ${val.slice(7)};`; }
-}
-return `var ${v.name} = ${val};`;
+    if (v.varType === "str[]" && typeof val === 'string' && val.startsWith("__ARR__")) {
+      try {
+        const arr = JSON.parse(val.slice(7));
+        return `var ${v.name} = ${JSON.stringify(arr)};`;
+      } catch { return `var ${v.name} = ${val.slice(7)};`; }
+    }
+    return `var ${v.name} = ${val};`;
   }).join("\n");
 
   if (!needsRender && !needsDelay) {
-    return varLines ? `// Sinth v1.0.0\n${varLines}` : "";
+    return varLines ? `// Sinth compiled runtime\n${varLines}` : "";
   }
 
-  let renderBody = "";
+  let helpers = "";
 
-  renderBody += `  var _sx = window.scrollX, _sy = window.scrollY;\n`;
+  if (needsExpr || needsIf || needsFor) {
+    helpers += `
+function sinthExpr(el) {
+  try {
+    var exprFn = __X[el.dataset.exprId];
+    if (exprFn) el.textContent = exprFn({});
+  } catch(e) {}
+}
+`;
+  }
 
-  if (needsLogic) {
-    renderBody += logicBlocks.map(b => b.replace(/^/gm, "  ")).join("\n") + "\n";
+  if (needsIf || needsMixed) {
+    helpers += `
+function sinthReplaceInsert(t, anchor, ifId, replaceId) {
+  if (anchor) {
+    var cur = anchor.nextSibling;
+    while (cur && cur !== t) { var nx = cur.nextSibling; cur.remove(); cur = nx; }
+  } else {
+    anchor = document.createElement('span');
+    anchor.style.display = 'none';
+    anchor.dataset.sinthIfAnchor = ifId;
+    t.parentNode.insertBefore(anchor, t);
+  }
+  var _rp = null, _rpParent = null, _rpNext = null;
+  if (replaceId) {
+    _rp = document.getElementById(replaceId);
+    if (_rp) {
+      _rpParent = _rp.parentNode;
+      _rpNext = _rp.nextSibling;
+      _rp.parentNode.removeChild(_rp);
+      anchor._sinthReplaced = _rp;
+      anchor._sinthReplacedParent = _rpParent;
+      anchor._sinthReplacedNext = _rpNext;
+    }
+  }
+  var frag = document.createRange().createContextualFragment(t.innerHTML);
+  frag.querySelectorAll('.sinth-expr').forEach(sinthExpr);
+  if (${needsDelay}) {
+    frag.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+    frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
+  }
+  var fragFirst = frag.firstChild;
+  var fragLast = frag.lastChild;
+  if (_rpParent && _rpNext) {
+    _rpParent.insertBefore(frag, _rpNext);
+  } else if (_rpParent) {
+    _rpParent.appendChild(frag);
+  } else {
+    t.parentNode.insertBefore(frag, t);
+  }
+  if (replaceId && anchor) {
+    anchor._sinthInsertedFirst = fragFirst;
+    anchor._sinthInsertedLast = fragLast;
+  }
+  return anchor;
+}
+`;
+  }
+
+  if (needsDelay) {
+    helpers += `
+function sinthDelay(el) {
+  if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
+  el.dataset.sinthDelayDone = '1';
+  var ms = parseInt(el.dataset.sinthDelay) || 0;
+  el.style.display = 'none';
+  if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
+  else el.style.display = '';
+}
+function sinthDelayExpr(el) {
+  try {
+    var fn = __X[el.dataset.sinthDelayExprId];
+    var ms = fn ? parseInt(fn()) || 0 : 0;
+    el.style.display = '';
+    if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
+  } catch(e) {}
+}
+`;
+  }
+
+  if (needsIf) {
+    helpers += `
+function sinthIfBlock(t) {
+  var ifId = t.dataset.sinthIfId;
+  var anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
+  var condFn = __X[t.dataset.sinthIfExpr];
+  var cond = condFn ? condFn() : false;
+  if (cond) {
+    anchor = sinthReplaceInsert(t, anchor, ifId, t.dataset.sinthIfReplace);
+  } else {
+    if (anchor) {
+      if (anchor._sinthReplaced) {
+        var insFirst = anchor._sinthInsertedFirst;
+        var insLast = anchor._sinthInsertedLast;
+        var rpParent = anchor._sinthReplacedParent;
+        var rpNext = anchor._sinthReplacedNext;
+        if (insFirst && insLast) {
+          var cur = insFirst;
+          while (cur && cur !== insLast) {
+            var next = cur.nextSibling;
+            cur.remove();
+            cur = next;
+          }
+          if (insLast) insLast.remove();
+        }
+        if (rpParent && rpNext) {
+          rpParent.insertBefore(anchor._sinthReplaced, rpNext);
+        } else if (rpParent) {
+          rpParent.appendChild(anchor._sinthReplaced);
+        }
+      } else {
+        var cur2 = anchor.nextSibling;
+        while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
+      }
+      anchor.remove();
+    }
+    var elseT = t.nextElementSibling;
+    if (elseT && elseT.hasAttribute('data-sinth-else')) {
+      var elseIfId = elseT.dataset.sinthIfId;
+      var ea = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + elseIfId + '"]');
+      if (ea) {
+        var cur3 = ea.nextSibling;
+        while (cur3 && cur3 !== t) { var nx3 = cur3.nextSibling; cur3.remove(); cur3 = nx3; }
+      } else {
+        ea = document.createElement('span');
+        ea.style.display = 'none';
+        ea.dataset.sinthIfAnchor = '__else__' + elseIfId;
+        t.parentNode.insertBefore(ea, t);
+      }
+      var ef = document.createRange().createContextualFragment(elseT.innerHTML);
+      ef.querySelectorAll('.sinth-expr').forEach(sinthExpr);
+      if (${needsDelay}) {
+        ef.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+        ef.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
+      }
+      t.parentNode.insertBefore(ef, t);
+    } else {
+      var ea2 = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]');
+      if (ea2) {
+        var ec = ea2.nextSibling;
+        while (ec && ec !== t) { var en = ec.nextSibling; ec.remove(); ec = en; }
+        ea2.remove();
+      }
+    }
+  }
+}
+`;
   }
 
   if (needsFor) {
-    renderBody += `
-  document.querySelectorAll('template[data-sinth-for]').forEach(function(t) {
-    var source = window[t.dataset.sinthFor];
-    if (source === undefined) source = [];
-    var newHash = '';
-    try { newHash = hashString(JSON.stringify(source)); } catch(e) { newHash = ''; }
-    if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) {
-      return;
-    }
-    t.dataset.sinthForHash = newHash;
-    var isObj = (typeof source === 'object' && source !== null && !Array.isArray(source));
-    var entries;
-    if (isObj) {
-      entries = Object.entries(source);
-    } else {
-      if (!Array.isArray(source)) source = [];
-      entries = source.map(function(item, index) { return [index, item]; });
-    }
-    var anchor = t.parentNode ? t.parentNode.querySelector('[data-sinth-for-anchor="' + t.dataset.sinthFor + '"]') : null;
-    if (anchor) {
-      var cur2 = anchor.nextSibling;
-      while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
-      anchor.remove();
-    }
-    var fa = document.createElement('span');
-    fa.style.display = 'none';
-    fa.dataset.sinthForAnchor = t.dataset.sinthFor;
-    t.parentNode && t.parentNode.insertBefore(fa, t);
-    var _loopIdx = 0;
-    entries.forEach(function(entry) {
-      var _k = entry[0];
-      var _v = entry[1];
-      var _item = (t.dataset && t.dataset.sinthItem) ? t.dataset.sinthItem : '__item__';
-      var _key = t.dataset && t.dataset.sinthKey ? t.dataset.sinthKey : null;
-      var _idx = t.dataset && t.dataset.sinthIndex ? t.dataset.sinthIndex : null;
-
-      _loopIdx++;
-      var _user = _v;
-      if (t.dataset.sinthIfReplace) {
-        var _rp = document.getElementById(t.dataset.sinthIfReplace);
-        if (_rp) _rp.parentNode.removeChild(_rp);
-      }
-      var frag = document.createRange().createContextualFragment(t.innerHTML);
-      frag.querySelectorAll('.sinth-expr').forEach(function(el) {
-        try {
-          var exprFn = __X[el.dataset.exprId];
-          if (!exprFn) return;
-          var _ctx = {};
-          if (_item) _ctx[_item] = _v;
-          if (_key)  _ctx[_key]  = _k;
-          if (_idx)  _ctx[_idx]  = _loopIdx - 1;
-          el.textContent = exprFn(_ctx);
-          el.classList.remove('sinth-expr');
-        } catch(e) {}
-      });
-      frag.querySelectorAll('template[data-sinth-if-expr]').forEach(function(ifT) {
-        var condFn = __X[ifT.dataset.sinthIfExpr];
-        var _ctx = {};
-        if (_item) _ctx[_item] = _v;
-        if (_key)  _ctx[_key]  = _k;
-        if (_idx)  _ctx[_idx]  = _loopIdx - 1;
-        var cond = false;
-        try { if (condFn) cond = condFn(_ctx); } catch(e) {}
-        if (cond) {
-          var ifContent = document.createRange().createContextualFragment(ifT.innerHTML);
-          ifContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-            try {
-              var exprFn2 = __X[el2.dataset.exprId];
-              if (exprFn2) el2.textContent = exprFn2(_ctx);
-            } catch(e) {}
-          });
-          ifT.parentNode.insertBefore(ifContent, ifT);
-        } else {
-          var elseT = ifT.nextElementSibling;
-          if (elseT && elseT.hasAttribute('data-sinth-else')) {
-            var elseContent = document.createRange().createContextualFragment(elseT.innerHTML);
-            elseContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-              try {
-                var exprFn2 = __X[el2.dataset.exprId];
-                if (exprFn2) el2.textContent = exprFn2(_ctx);
-              } catch(e) {}
-            });
-            ifT.parentNode.insertBefore(elseContent, ifT);
-          }
-        }
-      });
-      frag.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
-        el.dataset.sinthDelayDone = '1';
-        var ms = parseInt(el.dataset.sinthDelay) || 0;
-        el.style.display = 'none';
-        if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-        else el.style.display = '';
-      });
-      frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
-        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
-        el.dataset.sinthDelayDone = '1';
-        try {
-          var fn = __X[el.dataset.sinthDelayExprId];
-          var _ctx = {};
-          if (_item) _ctx[_item] = _v;
-          if (_key)  _ctx[_key]  = _k;
-          if (_idx)  _ctx[_idx]  = _loopIdx - 1;
-          var ms = fn ? parseInt(fn(_ctx)) || 0 : 0;
-          el.style.display = 'none';
-          if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-          else el.style.display = '';
-        } catch(e) {}
-      });
-      t.parentNode && t.parentNode.insertBefore(frag, t);
-    });
-  });
-`;
-  }
-  if (needsIf) {
-    renderBody += `
-  document.querySelectorAll('template[data-sinth-if-expr]').forEach(function(t) {
-    var ifId = t.dataset.sinthIfId;
-    var anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
-    var condFn = __X[t.dataset.sinthIfExpr];
-    var cond = condFn ? condFn() : false;
-    if (cond) {
-      if (t.dataset.sinthIfReplace) {
-        var _rp = document.getElementById(t.dataset.sinthIfReplace);
-        if (_rp) _rp.parentNode.removeChild(_rp);
-      }
-      if (anchor) {
-        var cur = anchor.nextSibling;
-        while (cur && cur !== t) { var nx = cur.nextSibling; cur.remove(); cur = nx; }
-      } else {
-        anchor = document.createElement('span');
-        anchor.style.display = 'none';
-        anchor.dataset.sinthIfAnchor = ifId;
-        t.parentNode.insertBefore(anchor, t);
-      }
-      var frag = document.createRange().createContextualFragment(t.innerHTML);
-      frag.querySelectorAll('.sinth-expr').forEach(function(el) {
-        try {
-          var exprFn = __X[el.dataset.exprId];
-          if (exprFn) el.textContent = exprFn();
-        } catch(e) {}
-      });
-      frag.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-        if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
-        el.dataset.sinthDelayDone = '1';
-        var ms = parseInt(el.dataset.sinthDelay) || 0;
-        el.style.display = 'none';
-        if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-        else el.style.display = '';
-      });
-      frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
-        try {
-          var fn = __X[el.dataset.sinthDelayExprId];
-          var ms = fn ? parseInt(fn()) || 0 : 0;
-          el.style.display = '';
-          if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-        } catch(e) {}
-      });
-      t.parentNode.insertBefore(frag, t);
-    } else {
-      if (anchor) {
-        var cur2 = anchor.nextSibling;
-        while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
-        anchor.remove();
-      }
-      var elseT = t.nextElementSibling;
-      if (elseT && elseT.dataset && elseT.hasAttribute('data-sinth-else')) {
-        var ea = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]');
-        if (ea) {
-          var cur3 = ea.nextSibling;
-          while (cur3 && cur3 !== t) { var nx3 = cur3.nextSibling; cur3.remove(); cur3 = nx3; }
-        } else {
-          ea = document.createElement('span');
-          ea.style.display = 'none';
-          ea.dataset.sinthIfAnchor = '__else__' + ifId;
-          t.parentNode.insertBefore(ea, t);
-        }
-        var ef = document.createRange().createContextualFragment(elseT.innerHTML);
-        ef.querySelectorAll('.sinth-expr').forEach(function(el) {
-          try {
-            var exprFn = __X[el.dataset.exprId];
-            if (exprFn) el.textContent = exprFn();
-          } catch(e) {}
-        });
-        ef.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-          var ms = parseInt(el.dataset.sinthDelay) || 0;
-          el.style.display = 'none';
-          if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-          else el.style.display = '';
-        });
-        ef.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
-          try {
-            var fn = __X[el.dataset.sinthDelayExprId];
-            var ms = fn ? parseInt(fn()) || 0 : 0;
-            el.style.display = '';
-            if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-          } catch(e) {}
-        });
-        t.parentNode.insertBefore(ef, t);
-      } else {
-        var ea2 = t.parentNode ? t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]') : null;
-        if (ea2) {
-          var ec = ea2.nextSibling;
-          while (ec && ec !== t) { var en = ec.nextSibling; ec.remove(); ec = en; }
-          ea2.remove();
-        }
-      }
-    }
-  });
-`;
-  }
-
-// mixed if/else blocks
-if (needsMixed) {
-for (const mb of mixedBlocks) {
-const ifHTMLJS   = JSON.stringify(mb.ifHTML);
-const elseHTMLJS = JSON.stringify(mb.elseHTML);
-const hasDelay = mb.ifHTML.includes("data-sinth-delay") || mb.elseHTML.includes("data-sinth-delay") || mb.ifHTML.includes("data-sinth-delay-expr-id") || mb.elseHTML.includes("data-sinth-delay-expr-id");
-renderBody += `
-(function() {
-var __el = document.getElementById(${JSON.stringify(mb.replaceId || mb.id)});
-if (__el) {
-var condFn = __X[${mb.conditionJS}];
-var __cond = condFn ? condFn() : false;
-if (__cond) {
-${mb.ifJS ? mb.ifJS : ""}        __el.innerHTML = ${ifHTMLJS};
-} else {
-${mb.elseJS ? mb.elseJS : ""}        __el.innerHTML = ${elseHTMLJS};
-}
-__el.querySelectorAll('.sinth-expr').forEach(function(e) {
-try {
-  var exprFn = __X[e.dataset.exprId];
-  if (exprFn) e.textContent = exprFn();
-} catch(ex) {}
-});
-__el.querySelectorAll('template[data-sinth-if-expr]').forEach(function(innerT) {
-  var innerCondFn = __X[innerT.dataset.sinthIfExpr];
-  var innerCond = innerCondFn ? innerCondFn() : false;
-  if (innerCond) {
-    var innerFrag = document.createRange().createContextualFragment(innerT.innerHTML);
-    innerFrag.querySelectorAll('.sinth-expr').forEach(function(e2) {
-      try {
-        var exprFn2 = __X[e2.dataset.exprId];
-        if (exprFn2) e2.textContent = exprFn2();
-      } catch(ex) {}
-    });
-    innerT.parentNode.insertBefore(innerFrag, innerT);
-  } else {
-    var innerElse = innerT.nextElementSibling;
-    if (innerElse && innerElse.hasAttribute('data-sinth-else')) {
-      var innerElseFrag = document.createRange().createContextualFragment(innerElse.innerHTML);
-      innerElseFrag.querySelectorAll('.sinth-expr').forEach(function(e2) {
-        try {
-          var exprFn2 = __X[e2.dataset.exprId];
-          if (exprFn2) e2.textContent = exprFn2();
-        } catch(ex) {}
-      });
-      innerT.parentNode.insertBefore(innerElseFrag, innerT);
-    }
-  }
-});
-${hasDelay ? `
-__el.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-var ms = parseInt(el.dataset.sinthDelay) || 0;
-el.style.display = 'none';
-if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-else el.style.display = '';
-});
-__el.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
-try {
-var fn = __X[el.dataset.sinthDelayExprId];
-var ms = fn ? parseInt(fn()) || 0 : 0;
-el.style.display = 'none';
-if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-else el.style.display = '';
-} catch(e) {}
-});
-` : ""}
-}
-})();
-`;
-}
-}
-
-  // set input vals from bound vars
-  renderBody += `
-  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
-  });
-  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
-    try { el.checked = !!window[el.dataset.sinthChecked]; } catch(e) {}
-  });
-`;
-
-  // expression spans
-  if (needsExpr) {
-    renderBody += `
-  document.querySelectorAll('.sinth-expr').forEach(function(el) {
-    try {
-      var exprFn = __X[el.dataset.exprId];
-      if (exprFn) el.textContent = exprFn({});
-    } catch(e) {}
-  });
-`;
-  }
-
-
-  renderBody += `  window.scrollTo(_sx, _sy);\n`;
-
-
-  const delayBlock = needsDelay ? `
-setTimeout(function() {
-  document.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-    var ms = parseInt(el.dataset.sinthDelay) || 0;
-    if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-    else el.style.display = '';
-  });
-  document.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
-    try {
-      var fn = __X[el.dataset.sinthDelayExprId];
-      var ms = fn ? parseInt(fn()) || 0 : 0;
-      if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-      else el.style.display = '';
-    } catch(e) {}
-  });
-}, 0);
-` : "";
-
-  // Build the expression registry as a JS array
-  const exprArrayJS = opts.exprRegistry && opts.exprRegistry.length > 0
-    ? `var __X = [${opts.exprRegistry.map((js) => {
-        return `function(_ctx){ return ${js}; }`;
-      }).join(",")}];\n`
-    : "";
-
-  return `// Sinth compiled runtime
-${varLines}
-${needsFor ? `function hashString(str) {
+    helpers += `
+function hashString(str) {
   var hash = 0, i, chr;
   for (i = 0; i < str.length; i++) {
     chr = str.charCodeAt(i);
@@ -3064,10 +2908,187 @@ ${needsFor ? `function hashString(str) {
   }
   return String(hash);
 }
-` : ""}
+function sinthForBlock(t) {
+  var source = window[t.dataset.sinthFor];
+  if (source === undefined) source = [];
+  var newHash = '';
+  try { newHash = hashString(JSON.stringify(source)); } catch(e) { newHash = ''; }
+  if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) {
+    return;
+  }
+  t.dataset.sinthForHash = newHash;
+  var isObj = (typeof source === 'object' && source !== null && !Array.isArray(source));
+  var entries;
+  if (isObj) {
+    entries = Object.entries(source);
+  } else {
+    if (!Array.isArray(source)) source = [];
+    entries = source.map(function(item, index) { return [index, item]; });
+  }
+  var anchor = t.parentNode ? t.parentNode.querySelector('[data-sinth-for-anchor="' + t.dataset.sinthFor + '"]') : null;
+  if (anchor) {
+    var cur2 = anchor.nextSibling;
+    while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
+    anchor.remove();
+  }
+  var fa = document.createElement('span');
+  fa.style.display = 'none';
+  fa.dataset.sinthForAnchor = t.dataset.sinthFor;
+  t.parentNode && t.parentNode.insertBefore(fa, t);
+  var _loopIdx = 0;
+  entries.forEach(function(entry) {
+    var _k = entry[0];
+    var _v = entry[1];
+    var _item = (t.dataset && t.dataset.sinthItem) ? t.dataset.sinthItem : '__item__';
+    var _key = t.dataset && t.dataset.sinthKey ? t.dataset.sinthKey : null;
+    var _idx = t.dataset && t.dataset.sinthIndex ? t.dataset.sinthIndex : null;
+    _loopIdx++;
+    if (t.dataset.sinthIfReplace) {
+      var _rp = document.getElementById(t.dataset.sinthIfReplace);
+      if (_rp) _rp.parentNode.removeChild(_rp);
+    }
+    var frag = document.createRange().createContextualFragment(t.innerHTML);
+    frag.querySelectorAll('.sinth-expr').forEach(function(el) {
+      try {
+        var exprFn = __X[el.dataset.exprId];
+        if (!exprFn) return;
+        var _ctx = {};
+        if (_item) _ctx[_item] = _v;
+        if (_key)  _ctx[_key]  = _k;
+        if (_idx)  _ctx[_idx]  = _loopIdx - 1;
+        el.textContent = exprFn(_ctx);
+        el.classList.remove('sinth-expr');
+      } catch(e) {}
+    });
+    frag.querySelectorAll('template[data-sinth-if-expr]').forEach(function(ifT) {
+      var condFn = __X[ifT.dataset.sinthIfExpr];
+      var _ctx = {};
+      if (_item) _ctx[_item] = _v;
+      if (_key)  _ctx[_key]  = _k;
+      if (_idx)  _ctx[_idx]  = _loopIdx - 1;
+      var cond = false;
+      try { if (condFn) cond = condFn(_ctx); } catch(e) {}
+      if (cond) {
+        var ifContent = document.createRange().createContextualFragment(ifT.innerHTML);
+        ifContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
+          try {
+            var exprFn2 = __X[el2.dataset.exprId];
+            if (exprFn2) el2.textContent = exprFn2(_ctx);
+          } catch(e) {}
+        });
+        ifT.parentNode.insertBefore(ifContent, ifT);
+      } else {
+        var elseT = ifT.nextElementSibling;
+        if (elseT && elseT.hasAttribute('data-sinth-else')) {
+          var elseContent = document.createRange().createContextualFragment(elseT.innerHTML);
+          elseContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
+            try {
+              var exprFn2 = __X[el2.dataset.exprId];
+              if (exprFn2) el2.textContent = exprFn2(_ctx);
+            } catch(e) {}
+          });
+          ifT.parentNode.insertBefore(elseContent, ifT);
+        }
+      }
+    });
+    if (${needsDelay}) {
+      frag.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+      frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
+    }
+    t.parentNode && t.parentNode.insertBefore(frag, t);
+  });
+}
+`;
+  }
+
+  if (needsMixed) {
+    helpers += `
+function sinthMixedBlock(el, condId, ifJS, ifHTML, elseJS, elseHTML) {
+  var condFn = __X[condId];
+  var cond = condFn ? condFn() : false;
+  if (cond) {
+    if (ifJS) eval(ifJS);
+    el.innerHTML = ifHTML;
+  } else {
+    if (elseJS) eval(elseJS);
+    el.innerHTML = elseHTML;
+  }
+  el.querySelectorAll('.sinth-expr').forEach(sinthExpr);
+  el.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);
+  if (${needsDelay}) {
+    el.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+    el.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
+  }
+}
+`;
+  }
+
+  const exprArrayJS = exprRegistry.length > 0
+    ? `var __X = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
+    : "";
+
+  let renderBody = "";
+  renderBody += `  var _sx = window.scrollX, _sy = window.scrollY;\n`;
+
+  if (needsLogic) {
+    renderBody += logicBlocks.map(b => b.replace(/^/gm, "  ")).join("\n") + "\n";
+  }
+
+  if (needsMixed) {
+    for (const mb of mixedBlocks) {
+      renderBody += `  (function() {
+    var __el = document.getElementById(${JSON.stringify(mb.replaceId || mb.id)});
+    if (__el) sinthMixedBlock(__el, ${mb.conditionJS}, ${JSON.stringify(mb.ifJS)}, ${JSON.stringify(mb.ifHTML)}, ${JSON.stringify(mb.elseJS)}, ${JSON.stringify(mb.elseHTML)});
+  })();\n`;
+    }
+  }
+
+  renderBody += `  document.querySelectorAll('[data-sinth-remove]').forEach(function(el) {
+    var target = document.getElementById(el.dataset.sinthRemove);
+    if (target) target.remove();
+  });\n`;
+
+  if (needsIf) {
+    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
+  }
+  if (needsFor) {
+    renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
+  }
+  renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
+    try { el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
+  });\n`;
+  renderBody += `  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
+    try { el.checked = !!window[el.dataset.sinthChecked]; } catch(e) {}
+  });\n`;
+  if (needsExpr) {
+    renderBody += `  document.querySelectorAll('.sinth-expr').forEach(sinthExpr);\n`;
+  }
+  if (needsDelay) {
+    renderBody += `  setTimeout(function() {
+    document.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+    document.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
+  }, 0);\n`;
+  }
+  renderBody += `  window.scrollTo(_sx, _sy);\n`;
+
+  const renderFunc = needsRender ? `function sinthRender() {\n${renderBody}}\nsinthRender();` : "";
+
+  const pageCode = `// Sinth page runtime
+${varLines}
 ${exprArrayJS}
-${needsRender ? `function sinthRender() {\n${renderBody}}\nsinthRender();` : ""}
-${delayBlock}`;
+${renderFunc}`;
+
+  if (opts.sharedRuntime && helpers.trim()) {
+    const sharedCode = `// Sinth shared runtime
+${helpers}`;
+    return { page: pageCode, shared: sharedCode };
+  }
+
+  return `// Sinth compiled runtime
+${varLines}
+${helpers}
+${exprArrayJS}
+${renderFunc}`;
 }
 
 // main compilation pipeline
@@ -3078,9 +3099,10 @@ interface CompileOptions {
   libraryPaths: string[];
   minify:       boolean;
   checkOnly:    boolean;
+  sharedRuntime: boolean;
 }
 
-function compileFile(filePath: string, opts: CompileOptions): string | null {
+function compileFile(filePath: string, opts: CompileOptions): { html: string; shared?: string } | null {
   const absPath = path.resolve(filePath);
   const file    = parseFile(absPath);
 
@@ -3107,7 +3129,7 @@ function compileFile(filePath: string, opts: CompileOptions): string | null {
     const body    = file.uses.map(u => renderCompUse(u, ctx, new Map(), 0)).join("\n");
     const pageCSS = file.styles.map(s => processStyleBlock(s, hash)).join("\n");
     const allCSS  = [pageCSS, ...ctx.extraCSS].join("\n");
-    return `${body}\n<style>\n${allCSS}\n</style>`;
+    return { html: `${body}\n<style>\n${allCSS}\n</style>` };
   }
 
   const headData = buildHeadData(file.meta);
@@ -3141,18 +3163,23 @@ function compileFile(filePath: string, opts: CompileOptions): string | null {
     })(),
   }));
 
-  const head = renderHead(headData, relativeCssLinks, relativeJsLinks, scopedCSS, companionJS);
-
-  // build tree-shaken runtime
-  const runtimeJS = buildRuntime({
+  const runtimeResult = buildRuntime({
     varDecls:     allVarDecls,
     bodyHTML,
     logicBlocks:  ctx.logicBlocks,
     mixedBlocks:  ctx.mixedBlocks,
     assignedVars,
     exprRegistry: ctx.exprRegistry,
+    sharedRuntime: opts.sharedRuntime,
   });
+  const runtimeJS = typeof runtimeResult === 'string' ? runtimeResult : runtimeResult.page;
+  const sharedJS = typeof runtimeResult === 'string' ? null : runtimeResult.shared;
 
+  const sharedRuntimeTag = opts.sharedRuntime && sharedJS
+    ? `<script src="./sinth-runtime.js"></script>`
+    : "";
+
+  const head = renderHead(headData, relativeCssLinks, relativeJsLinks, scopedCSS, companionJS);
   const scriptTags: string[] = [];
   if (componentScripts.length > 0) {
     scriptTags.push(`<script>\n${componentScripts.join("\n\n")}\n</script>`);
@@ -3172,13 +3199,15 @@ function compileFile(filePath: string, opts: CompileOptions): string | null {
     head,
     `<body data-s="${hash}">`,
     bodyHTML,
+    sharedRuntimeTag,
     runtimeJS.trim() ? `<script>\n${runtimeJS}\n</script>` : "",
     scriptTags.join("\n"),
     "</body>",
     "</html>",
   ].filter(Boolean).join("\n");
 
-  return opts.minify ? minifyHTML(html) : html;
+  const finalHTML = opts.minify ? minifyHTML(html) : html;
+  return sharedJS ? { html: finalHTML, shared: sharedJS } : { html: finalHTML };
 }
 
 function minifyHTML(html: string): string {
@@ -3348,6 +3377,7 @@ async function main(): Promise<void> {
   const portIdx      = args.indexOf("--port");
   const port         = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : (cfg.port as number | undefined) ?? 3000;
   const minify       = args.includes("--prod") || Boolean(cfg.minify);
+  const sharedRuntime = args.includes("--shared-runtime") || Boolean(cfg.sharedRuntime);
   const libraryPaths = (cfg.libraryPaths as string[] | undefined) ?? [path.join(cwd, "libraries")];
 
   const flagValues = new Set<string>();
@@ -3355,7 +3385,7 @@ async function main(): Promise<void> {
   if (portIdx   !== -1) flagValues.add(args[portIdx + 1]);
   const cleanArgs = args.filter(a => !a.startsWith("--") && !flagValues.has(a));
 
-  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, minify, checkOnly: false };
+  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, minify, checkOnly: false, sharedRuntime };
 
   switch (command) {
     case "build": {
@@ -3371,10 +3401,15 @@ async function main(): Promise<void> {
 
       let hadError = false, built = 0;
 
+      const sharedRuntimes: string[] = [];
       for (const p of pages) {
         try {
-          const html = compileFile(p, opts);
-          if (!html) continue;
+          const result = compileFile(p, opts);
+          if (!result) continue;
+          const html = result.html;
+          if (result.shared) {
+            sharedRuntimes.push(result.shared);
+          }
           const rel = path.relative(cwd, p).replace(/\.sinth$/, ".html");
           const out = path.join(outDir, rel);
           fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -3385,6 +3420,12 @@ async function main(): Promise<void> {
           process.stderr.write(`  \x1b[31m✗\x1b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
           hadError = true;
         }
+      }
+
+      if (sharedRuntimes.length > 0) {
+        const combined = sharedRuntimes.join("\n");
+        fs.writeFileSync(path.join(outDir, "sinth-runtime.js"), combined);
+        process.stdout.write(`  \x1b[32m✓\x1b[0m sinth-runtime.js (shared)\n`);
       }
 
       // copies to output
@@ -3457,8 +3498,24 @@ async function main(): Promise<void> {
     }
 
     default: {
+      let version = "1.0.0";
+      const paths = [
+        path.resolve(__dirname, "..", "package.json"),
+        path.resolve(__dirname, "package.json"),
+        path.resolve(process.cwd(), "package.json"),
+        path.resolve(process.cwd(), "..", "package.json"),
+      ];
+      for (const p of paths) {
+        if (fs.existsSync(p)) {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(p, "utf-8"));
+            version = pkg.version;
+            break;
+          } catch {}
+        }
+      }
       process.stdout.write(`
-\x1b[1mSinth Compiler v1.0.0\x1b[0m
+\x1b[1mSinth Compiler v${version}\x1b[0m
 
 \x1b[1mCommands:\x1b[0m
   sinth build   [files] [--out ./dist] [--prod]   Compile .sinth pages
@@ -3466,23 +3523,6 @@ async function main(): Promise<void> {
   sinth check                                      Lint without emitting
   sinth init    [name]                             Scaffold a new project
   sinth version                                    Print version
-
-\x1b[1mConfig:\x1b[0m sinth.config.json
-  { "outDir": "./dist", "libraryPaths": ["./libraries"], "minify": false }
-
-\x1b[1mSinth Style v1.0.0:\x1b[0m
-  style Paragraph { color: "red"; onHover { color: "blue" } }
-  style { Hero { padding: "4rem"; media(maxWidth: "600px") { padding: "1rem" } } }
-  Paragraph(color: "red", fontSize: "1.2rem") { "Inline shorthand" }
-
-\x1b[1mMixed if/else:\x1b[0m
-  if guess == target {
-    result = "Correct!"
-    Paragraph(id: "msg") { result }
-  } else {
-    result = "Wrong!"
-    Paragraph(id: "msg") { "Nope!" }
-  }
 `);
       break;
     }

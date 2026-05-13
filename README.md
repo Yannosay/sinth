@@ -1,13 +1,16 @@
-﻿# Sinth
+﻿# Sinth 
 
 The language that fixes HTML. Declarative. Reactive. Compiles to pure HTML.
 
 
+[![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
+[![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
+[![license](https://img.shields.io/npm/l/@yannosay/sinth)](https://github.com/Yannosay/sinth/blob/main/LICENSE)
 
 ## Why Sinth?
 
 #### Reactive forms in one line.
-```
+```ts
 Input(bind: userName, placeholder: "Enter your name")
 Paragraph { "Hello, " + userName }
 ```
@@ -15,7 +18,7 @@ Paragraph { "Hello, " + userName }
 No useState. No onChange. No e.target.value. Just bind.
 
 #### Logic and UI live together.
-```TS
+```ts
 if user.isAdmin {
 Button(onClick: "deletePost()") { "Delete" }
 }
@@ -36,9 +39,6 @@ Staggered animations. One expression. No useEffect. No setTimeout chains.
 Ready to upload wherever you want.
 
 
-
-
-
 # Install
 npm install -g @yannosay/sinth
 
@@ -56,7 +56,7 @@ Open your browser. Edit your .sinth file. Watch it update live.
 
 
 ## Your First Sinth File
-```TS
+```ts
 page
 title = "My Sinth Project"
 
