@@ -1,46 +1,45 @@
 {
-    "name": "@yannosay/sinth",
-    "version": "0.8.0",
-    "description": "A declarative language that compiles to pure HTML, CSS, and JavaScript.",
-    "author": "Yannosay Productions",
-    "license": "AGPL-3.0",
-    "homepage": "https://sinth.yannosay.com",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/yannosay/sinth.git"
-    },
-    "keywords": [
-        "html",
-        "css",
-        "javascript",
-        "compiler",
-        "declarative",
-        "web",
-        "components",
-        "scss",
-        "reactive"
-    ],
-    "bin": {
-        "sinth": "bin/sinth.js"
-    },
-    "files": [
-        "bin/",
-        "src/",
-        "assets/",
-        "tsconfig.json",
-        "README.md",
-        "LICENSE"
-    ],
-    "dependencies": {
-        "@yannosay/sinth": "^0.0.9",
-        "sass": "^1.70.0",
-        "ts-node": "^10.9.0"
-    },
-    "devDependencies": {
-        "@types/node": "^20.19.40",
-        "typescript": "^5.3.0"
-    },
-    "engines": {
-        "node": ">=18.0.0"
-    }
+  "name": "@yannosay/sinth",
+  "version": "0.10.0",
+  "description": "A declarative language that compiles to pure HTML, CSS, and JavaScript.",
+  "author": "Yannosay Productions",
+  "license": "AGPL-3.0",
+  "homepage": "https://sinth.yannosay.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yannosay/sinth.git"
+  },
+  "keywords": [
+    "html",
+    "css",
+    "javascript",
+    "compiler",
+    "declarative",
+    "web",
+    "components",
+    "scss",
+    "reactive"
+  ],
+  "bin": {
+    "sinth": "bin/sinth.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "assets/",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "sass": "^1.70.0",
+    "ts-node": "^10.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.40",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

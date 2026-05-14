@@ -1,6 +1,7 @@
 ﻿# Sinth 
 
 The language that fixes HTML. Declarative. Reactive. Compiles to pure HTML.
+Find out more: https://www.youtube.com/watch?v=W0tOMTiIF0Q
 
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
@@ -24,6 +25,21 @@ Button(onClick: "deletePost()") { "Delete" }
 }
 ```
 
+#### Functions - easy as you know it
+```ts
+page
+
+title = "Function test"
+
+function greet(str name) -> str {    -- New! (0.10.0)
+  "Hello, " + name
+}
+
+Div {
+  (greet("Sinth")) + " - welcome!"
+}
+```
+
 No JSX ternaries. No v-if. No separate script tags. Mixed logic. Clean.
 
 #### Animations that make sense.
@@ -35,8 +51,22 @@ Paragraph(delay: index * 300) { item.name }
 
 Staggered animations. One expression. No useEffect. No setTimeout chains.
 
-#### Compiles to pure HTML.
-Ready to upload wherever you want.
+#### Multiple actions, single handler.
+```ts
+Button(onClick: show = not show; deleted = true) { "Toggle & Delete" }
+Chain statements with ;. No wrapper functions. No script blocks.
+```
+
+```ts
+if done == true {
+    remove "myElement"
+}
+```
+Delete elements for good. No virtual DOM diffing.
+
+Compiles to pure HTML.
+
+#### Ready to upload wherever you want.
 
 
 # Install
@@ -47,8 +77,9 @@ npm install -g @yannosay/sinth
 
 
 ## Quick Start
-sinth init
-sinth dev pages/index.sinth
+`sinth init`
+
+`sinth dev pages/index.sinth`
 
 
 
@@ -89,6 +120,16 @@ Main {
 
 ###### Nothing you like? Give us feedback on our [Discord Server](https://discord.gg/SUvcrafTQm)!
 
+## Shared Runtime
+
+For multi-page projects, extract helpers into a cached file:
+`sinth build --shared-runtime`
+
+
+This creates a `sinth-runtime.js` file shared across all pages. Each page shrinks to ~25 lines of render logic. The browser caches the helpers once.
+
+Helpful when working on big projects.
+
 ## Security
 
 Sinth's reactive runtime does not use eval(). Every expression is pre-compiled into optimized JavaScript functions at build time. No code injection possible. No runtime string evaluation. The most secure way to power reactive UI.
@@ -100,6 +141,7 @@ Sinth's reactive runtime does not use eval(). Every expression is pre-compiled i
 - sinth init — scaffold a new project
 - sinth dev [file] — start dev server with live reload
 - sinth build — compile to static files
+- sinth build --shared-runtime — build with shared runtime (useful when using a heavier runtime)
 - sinth check — lint without output
 - sinth version — print version
 
@@ -110,6 +152,7 @@ Sinth's reactive runtime does not use eval(). Every expression is pre-compiled i
 - GitHub: [Official Sinth Repo](https://github.com/yannosay/sinth)
 - Website: [Sinth](https://sinth.yannosay.com) (not active at this moment)
 - Discord: [Join here!](https://discord.gg/SUvcrafTQm)
+- VS Code Extension: [Download here](https://marketplace.visualstudio.com/items?itemName=YannosayProductions.sinth-vscode)
 
 
 

@@ -1,0 +1,13 @@
+page
+
+title = "Function test"
+
+
+
+function greet(str name) -> str {    -- New! (0.10.0)
+  "Hello, " + name
+}
+
+Div {
+  (greet("Sinth")) + " - welcome!"
+}
