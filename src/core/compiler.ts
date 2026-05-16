@@ -1,440 +1,23 @@
 import * as path from "path";
 import * as fs from "fs";
-import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types.ts";import { Lexer } from "./lexer.ts";
+import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types.ts";
 import { Parser } from "./parser.ts";
-import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal } from "../utils.ts";
+import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal, interpolateAttr, renderText } from "../utils.ts";
 import { compileExprToJS, compileIfToJS, bodyToJS } from "./expr.ts";
 import { FunctionDef } from "./types.ts";
 import { parseFile, resolveImports, ResolverConfig, ResolvedImports } from "../resolver.ts";
+import { compileFunctionDef } from "./runtime/functions.ts";
+import { generateHelpers } from "./runtime/helpers.ts";
+import { buildRenderBody } from "./runtime/render.ts";
+import { BUILTIN_MAP, VOID_TAGS, BuiltinInfo } from "./builtins.ts";
+import { processStyleBlock } from "./style-processor.ts";
+import { buildHeadData, renderHead, HeadData } from "./head-builder.ts";
 
-
-
-
-export interface BuiltinInfo { tag: string; defaultClass?: string; voidEl?: boolean }
-
-export const BUILTIN_MAP: Record<string, BuiltinInfo> = {
-  // structural
-  Main:        { tag: "main" },
-  Header:      { tag: "header" },
-  Footer:      { tag: "footer" },
-  Nav:         { tag: "nav" },
-  Section:     { tag: "section" },
-  Article:     { tag: "article" },
-  Aside:       { tag: "aside" },
-  Div:         { tag: "div" },
-  Span:        { tag: "span" },
-  Hero:        { tag: "section", defaultClass: "hero" },
-  Container:   { tag: "div",     defaultClass: "container" },
-  Grid:        { tag: "div",     defaultClass: "grid" },
-  Flex:        { tag: "div",     defaultClass: "flex" },
-  Stack:       { tag: "div",     defaultClass: "stack" },
-  Row:         { tag: "div",     defaultClass: "row" },
-  Column:      { tag: "div",     defaultClass: "col" },
-  CardGrid:    { tag: "div",     defaultClass: "card-grid" },
-  // typography
-  Heading:     { tag: "h1" },
-  SubHeading:  { tag: "p",      defaultClass: "subheading" },
-  Paragraph:   { tag: "p" },
-  Lead:        { tag: "p",      defaultClass: "lead" },
-  Small:       { tag: "small" },
-  Strong:      { tag: "strong" },
-  Em:          { tag: "em" },
-  Code:        { tag: "code" },
-  Pre:         { tag: "pre" },
-  Blockquote:  { tag: "blockquote" },
-  Mark:        { tag: "mark" },
-  Label:       { tag: "label" },
-  Abbr:        { tag: "abbr" },
-  Del:         { tag: "del" },
-  Ins:         { tag: "ins" },
-  Sub:         { tag: "sub" },
-  Sup:         { tag: "sup" },
-  Data:        { tag: "data" },
-  Time:        { tag: "time" },
-  Bdi:         { tag: "bdi" },
-  Bdo:         { tag: "bdo" },
-  Cite:        { tag: "cite" },
-  Dfn:         { tag: "dfn" },
-  Kbd:         { tag: "kbd" },
-  Samp:        { tag: "samp" },
-  Var:         { tag: "var" },
-  Address:     { tag: "address" },
-  Ruby:        { tag: "ruby" },
-  Rt:          { tag: "rt" },
-  Rp:          { tag: "rp" },
-  // interactive
-  Button:      { tag: "button" },
-  Link:        { tag: "a" },
-  NavLink:     { tag: "a" },
-  Select:      { tag: "select" },
-  Form:        { tag: "form" },
-  Fieldset:    { tag: "fieldset" },
-  Legend:      { tag: "legend" },
-  Details:     { tag: "details" },
-  Summary:     { tag: "summary" },
-  Dialog:      { tag: "dialog" },
-  Textarea:    { tag: "textarea" },
-  Datalist:    { tag: "datalist" },
-  Optgroup:    { tag: "optgroup" },
-  Option:      { tag: "option" },
-  Progress:    { tag: "progress" },
-  Meter:       { tag: "meter" },
-  Output:      { tag: "output" },
-  Map:         { tag: "map" },
-  // media
-  Picture:     { tag: "picture" },
-  Video:       { tag: "video" },
-  Audio:       { tag: "audio" },
-  Figure:      { tag: "figure" },
-  Figcaption:  { tag: "figcaption" },
-  Canvas:      { tag: "canvas" },
-  Svg:         { tag: "svg" },
-  IFrame:      { tag: "iframe" },
-  Object:      { tag: "object" },
-  // void elements
-  Img:         { tag: "img",    voidEl: true },
-  Logo:        { tag: "img",    voidEl: true },
-  Input:       { tag: "input",  voidEl: true },
-  Checkbox:    { tag: "input",  voidEl: true },
-  Hr:          { tag: "hr",     voidEl: true },
-  Br:          { tag: "br",     voidEl: true },
-  Wbr:         { tag: "wbr",   voidEl: true },
-  Source:      { tag: "source", voidEl: true },
-  Embed:       { tag: "embed",  voidEl: true },
-  Col:         { tag: "col",    voidEl: true },
-  Area:        { tag: "area",   voidEl: true },
-  // lists
-  Ul: { tag: "ul" }, Ol: { tag: "ol" }, Li: { tag: "li" },
-  Dl: { tag: "dl" }, Dt: { tag: "dt" }, Dd: { tag: "dd" },
-  // tables
-  Table:       { tag: "table" },
-  Caption:     { tag: "caption" },
-  Thead:       { tag: "thead" },
-  Tbody:       { tag: "tbody" },
-  Tfoot:       { tag: "tfoot" },
-  Tr:          { tag: "tr" },
-  Th:          { tag: "th" },
-  Td:          { tag: "td" },
-  Colgroup:    { tag: "colgroup" },
-  // utility
-  Template:    { tag: "template" },
-  Slot:        { tag: "slot" },
-  NoScript:    { tag: "noscript" },
-  RawHTML:     { tag: "__RAW__" },
-};
-
-export const VOID_TAGS = new Set([
-  "area","base","br","col","embed","hr","img","input",
-  "link","meta","param","source","track","wbr",
-]);
 
 const EVENT_RE = /^on[A-Z]/;
 function eventAttrName(name: string): string | null {
   return EVENT_RE.test(name) ? name.toLowerCase() : null;
 }
-
-// preprocessor
-
-/**
- * for who's reading this: This maps Sinth Style pseudo-class shorthand keywords to real CSS pseudo-classes.
- * these are used inside component style blocks, for example:  onHover { color: "blue" }
- */
-export const SINTH_PSEUDO_CLASS: Record<string, string> = {
-  onHover:           ":hover",
-  onFocus:           ":focus",
-  onActive:          ":active",
-  onVisited:         ":visited",
-  onChecked:         ":checked",
-  onDisabled:        ":disabled",
-  onEnabled:         ":enabled",
-  onRequired:        ":required",
-  onOptional:        ":optional",
-  onValid:           ":valid",
-  onInvalid:         ":invalid",
-  onPlaceholderShown:":placeholder-shown",
-  onFocusWithin:     ":focus-within",
-  onFocusVisible:    ":focus-visible",
-  onFirst:           ":first-child",
-  onLast:            ":last-child",
-  onFirstOfType:     ":first-of-type",
-  onLastOfType:      ":last-of-type",
-  onEmpty:           ":empty",
-  onTarget:          ":target",
-  onLink:            ":link",
-};
-
-export const SINTH_PSEUDO_ELEMENT: Record<string, string> = {
-  before:       "::before",
-  after:        "::after",
-  placeholder:  "::placeholder",
-  selection:    "::selection",
-  firstLine:    "::first-line",
-  firstLetter:  "::first-letter",
-  marker:       "::marker",
-  backdrop:     "::backdrop",
-};
-
-export function sinthCompToSelector(name: string): string {
-  const info = BUILTIN_MAP[name];
-  if (!info) return name.toLowerCase();
-  if (info.defaultClass) {
-    const classes = info.defaultClass.split(" ").map(c => `.${c}`).join("");
-    return `${info.tag}${classes}`;
-  }
-  return info.tag;
-}
-
-/**
- * supported conversions:
- *   - component names as selectors: `Paragraph { ... }` → `p { ... }`
- *   - pseudo-class shorthands: `onHover { ... }` → `&:hover { ... }`
- *   - pseudo-element shorthands: `before { ... }` → `&::before { ... }`
- *   - media queries: `media(maxWidth: "600px") { ... }` → `@media (max-width: 600px) { ... }`
- *   - CSS custom properties: `var --primary: "#3b82f6"` → `--primary: #3b82f6;`
- */
-export function preprocessSinthStyle(raw: string): string {
-  const lines  = raw.split("\n");
-  const result: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const indent  = line.match(/^(\s*)/)?.[1] ?? "";
-
-    if (!trimmed) { result.push(line); continue; }
-
-    if (trimmed.startsWith("--") && !trimmed.startsWith("--[")) { continue; }
-    // Standard comments pass through
-    if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) {
-      result.push(line); continue;
-    }
-
-    const mediaMatch = trimmed.match(/^media\s*\(([^)]+)\)\s*(\{?\s*)$/);
-    if (mediaMatch) {
-      const params = parseSinthMediaParams(mediaMatch[1]);
-      result.push(`${indent}@media (${params}) {`);
-      continue;
-    }
-
-    const blockMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9]*)(\s*\{\s*)$/);
-    if (blockMatch) {
-      const keyword = blockMatch[1];
-
-      const pseudoCls = SINTH_PSEUDO_CLASS[keyword];
-      if (pseudoCls) {
-        result.push(`${indent}&${pseudoCls} {`);
-        continue;
-      }
-
-      const pseudoEl = SINTH_PSEUDO_ELEMENT[keyword];
-      if (pseudoEl) {
-        result.push(`${indent}&${pseudoEl} {`);
-        continue;
-      }
-
-      if (/^[A-Z]/.test(keyword) && BUILTIN_MAP[keyword]) {
-        result.push(`${indent}${sinthCompToSelector(keyword)} {`);
-        continue;
-      }
-    }
-
-    const varPropMatch = trimmed.match(/^var\s+(--[a-zA-Z][a-zA-Z0-9-]*)\s*:\s*["']?([^"';]+)["']?\s*;?\s*$/);
-    if (varPropMatch) {
-      result.push(`${indent}${varPropMatch[1]}: ${varPropMatch[2].trim()};`);
-      continue;
-    }
-
-    result.push(line);
-  }
-
-  return result.join("\n");
-}
-
-export function parseSinthMediaParams(params: string): string {
-  const parts = params.split(",").map(p => {
-    const m = p.trim().match(/^([a-zA-Z]+)\s*:\s*["']?([^"',]+)["']?\s*$/);
-    if (!m) return p.trim();
-    return `${camelToKebab(m[1])}: ${m[2].trim()}`;
-  });
-  return parts.join(") and (");
-}
-
-// style processor
-
-
-export function convertCSSProps(css: string): string {
-  return css.split("\n").map(line => {
-    const trimmed = line.trim();
-    if (!trimmed)                        return line;
-    if (trimmed === "}" || trimmed.startsWith("}")) return line;
-    if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) return line;
-    if (trimmed.startsWith("@"))         return line;
-    if (trimmed.includes("{"))           return line;
-
-    const m = line.match(/^(\s*)([a-zA-Z][a-zA-Z0-9-]*)(\s*:\s*)(.+?)(\s*;?\s*)$/);
-    if (!m) return line;
-
-    const [, indent, rawProp, , rawVal] = m;
-
-    const hasCamelCase = /[a-z][A-Z]/.test(rawProp) || /^[A-Z]/.test(rawProp);
-    const hasQuotedVal = /^["']/.test(rawVal.trim());
-    if (!hasCamelCase && !hasQuotedVal) return line;
-
-    let val = rawVal.trim();
-    if (val.endsWith(";")) val = val.slice(0, -1).trimEnd();
-    if ((val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-
-    return `${indent}${camelToKebab(rawProp)}: ${val};`;
-  }).join("\n");
-}
-
-export function processStyleBlock(
-  block:  StyleBlock,
-  hash:   string,
-  params: Map<string, string> = new Map(),
-): string {
-  let raw = block.raw;
-
-  // 1. interpolate {param} placeholders
-  if (params.size > 0) raw = interpolateAttr(raw, params);
-
-  // 2. sinth style preprocessing
-  raw = preprocessSinthStyle(raw);
-
-  // 3. warn if & in plain CSS
-  if (block.lang === "css" && raw.includes("&")) {
-    SinthWarning.emit(
-      `'&' (CSS nesting) found in style block. Nested selectors require a modern browser or lang="scss".`,
-      block.loc,
-    );
-  }
-
-  // 4. camelCase → kebab-case
-  let css = convertCSSProps(raw);
-
-  // 5. SCSS compilation
-  if (block.lang === "scss") {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const sass: { compileString: (src: string) => { css: string } } = require("sass");
-      css = sass.compileString(css).css;
-    } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      if (err.code === "MODULE_NOT_FOUND" || err.message?.includes("Cannot find module")) {
-        throw new SinthError("SCSS requires the 'sass' package. Install with: npm install sass");
-      }
-      throw new SinthError(`SCSS compilation failed: ${err.message ?? String(e)}`);
-    }
-  }
-
-  // 6. if target component given, wrap content in its CSS selector
-  if (block.target) {
-    const selector = sinthCompToSelector(block.target);
-    css = `${selector} {\n${css}\n}`;
-  }
-
-  // 7. scope (except it's global)
-  if (!block.global) css = scopeCSS(css, hash);
-
-  return css;
-}
-
-export function scopeCSS(css: string, hash: string): string {
-  return processRules(css, `[data-s="${hash}"]`);
-}
-
-export function processRules(css: string, attr: string): string {
-  let out = "", i = 0;
-
-  while (i < css.length) {
-    if (/\s/.test(css[i])) { out += css[i++]; continue; }
-
-    if (css[i] === "/" && css[i + 1] === "*") {
-      const end = css.indexOf("*/", i + 2);
-      if (end === -1) { out += css.substring(i); break; }
-      out += css.substring(i, end + 2);
-      i = end + 2;
-      continue;
-    }
-
-    const braceIdx = findCSSBrace(css, i);
-    if (braceIdx === -1) { out += css.substring(i); break; }
-
-    const selector         = css.substring(i, braceIdx).trim();
-    const { content, end } = extractCSSBlock(css, braceIdx);
-
-    if (/^@(-webkit-|-moz-)?keyframes/.test(selector)) {
-      out += `${selector} {${content}}\n`;
-    } else if (/^@(media|supports|layer|container)/.test(selector)) {
-      out += `${selector} {\n${processRules(content, attr)}\n}\n`;
-    } else if (selector.startsWith("@")) {
-      out += `${selector} {${content}}\n`;
-    } else if (selector.length > 0) {
-      out += `${scopeSelectors(selector, attr)} {${content}}\n`;
-    }
-
-    i = end;
-  }
-  return out;
-}
-
-export function scopeSelectors(selList: string, attr: string): string {
-  return selList
-    .split(",")
-    .map(s => {
-      s = s.trim();
-      if (!s) return "";
-      if (/^(html|body|:root)(\s|$|{|,)/.test(s)) return s;
-      const m = s.match(/^(.*?)((?::{1,2}[a-zA-Z-]+(?:\([^)]*\))?)+)$/);
-      if (m && m[1].trim()) {
-        return `${attr} ${m[1].trimEnd()}${m[2]}, ${m[1].trimEnd()}${attr}${m[2]}`;
-      }
-      return `${attr} ${s}, ${s}${attr}`;
-    })
-    .filter(Boolean)
-    .join(",\n");
-}
-
-export function findCSSBrace(css: string, from: number): number {
-  let i = from;
-  while (i < css.length) {
-    if (css[i] === '"' || css[i] === "'") {
-      const q = css[i++];
-      while (i < css.length && css[i] !== q) { if (css[i] === "\\") i++; i++; }
-      i++;
-    } else if (css[i] === "{") {
-      return i;
-    } else { i++; }
-  }
-  return -1;
-}
-
-export function extractCSSBlock(css: string, openBrace: number): { content: string; end: number } {
-  let i = openBrace + 1, depth = 1;
-  while (i < css.length && depth > 0) {
-    if (css[i] === '"' || css[i] === "'") {
-      const q = css[i++];
-      while (i < css.length && css[i] !== q) { if (css[i] === "\\") i++; i++; }
-      i++;
-    } else if (css[i] === "/" && css[i + 1] === "*") {
-      i += 2;
-      while (i < css.length - 1 && !(css[i] === "*" && css[i + 1] === "/")) i++;
-      i += 2;
-    } else if (css[i] === "{") { depth++; i++; }
-    else if (css[i] === "}") { depth--; if (depth > 0) i++; else break; }
-    else { i++; }
-  }
-  return { content: css.substring(openBrace + 1, i), end: i + 1 };
-}
-
-
-
-
-
-
-// the HTML generator
 
 /**
  * CSS property names that are allowed as inline style shorthand attributes on
@@ -505,20 +88,39 @@ if (name === "model" && value?.kind === "str") {
 
 if (name === "delay") {
     if (value.kind === "num") {
-      return `data-sinth-delay="${value.value}" style="display:none"`;
+      return `data-sinth-delay="${value.value}"`;
     }
     const v = litToString(value);
-    if (/^\d+$/.test(v)) return `data-sinth-delay="${escAttr(v)}" style="display:none"`;
+    if (/^\d+$/.test(v)) return `data-sinth-delay="${escAttr(v)}"`;
     if (v.startsWith("__EXPR__")) {
       try {
         const expr: Expression = JSON.parse(v.substring(8));
         const id = registerExpr(ctx, expr);
-        return `data-sinth-delay-expr-id="${id}" style="display:none"`;
+        return `data-sinth-delay-expr-id="${id}"`;
       } catch {}
     }
-    // plain variable name – register as expression
     const id = registerExpr(ctx, { kind: "variable", name: v });
-    return `data-sinth-delay-expr-id="${id}" style="display:none"`;
+    return `data-sinth-delay-expr-id="${id}"`;
+  }
+
+  if (name === "hide") {
+    if (value === null) return `data-sinth-hide=""`;
+    if (value && (value as any).kind === "bool") {
+      return (value as any).value ? `data-sinth-hide=""` : "";
+    }
+    if (value?.kind === "str") {
+      const v = value.value;
+      if (v === "true") return `data-sinth-hide=""`;
+      if (v === "false") return "";
+      if (v.startsWith("__EXPR__")) {
+        try {
+          const expr: Expression = JSON.parse(v.substring(8));
+          const id = registerExpr(ctx, expr);
+          return `data-sinth-hide="${id}"`;
+        } catch { return ""; }
+      }
+    }
+    return "";
   }
 
   if (name === "checked") {
@@ -543,7 +145,7 @@ if (name === "delay") {
     const exprJson = raw.substring("__EXPR__".length);
     try {
       const expr: Expression = JSON.parse(exprJson);
-      const jsExpr = compileExprToJS(expr);
+      const jsExpr = compileExprToJS(expr, ctx?.loopVars);
       const ev = eventAttrName(name);
       if (ev) return `${ev}="(function(){ ${jsExpr.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
       return `${name}="${escAttr(jsExpr)}"`;
@@ -560,45 +162,36 @@ if (name === "delay") {
   return `${name}="${escAttr(raw)}"`;
 }
 
-export function renderText(text: string, params: Map<string, string>): string {
-  const rawSlots = new Map<string, string>();
-  let counter = 0;
 
-  let s = text.replace(/\\\$/g, "\x00DOLLAR\x00");
 
-  s = s.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g, (_, n) => {
-    const val = params.get(n);
-    if (val === undefined) return `$${n}`;
-    if (n === "slot") {
-      const ph = `\x00RAW${counter++}\x00`;
-      rawSlots.set(ph, val);
-      return ph;
+
+
+
+function substituteParamsInExpr(expr: Expression, params: Map<string, string>): Expression {
+  if (expr.kind === "variable" && expr.name && params.has(expr.name)) {
+    const val = params.get(expr.name)!;
+    if (val.startsWith("__LIT__")) {
+      return { kind: "literal", value: { kind: "str", value: val.slice(7) } };
     }
-    return val;
-  });
-
-  s = esc(s);
-
-  for (const [ph, val] of rawSlots) s = s.replace(ph, val);
-  s = s.replace(/\x00DOLLAR\x00/g, "$");
-
-  const braceRe = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = braceRe.exec(s)) !== null) {
-    SinthWarning.emit(
-      `Use $param for text interpolation; {param} is for attributes. Found '${m[0]}' in text.`
-    );
+    if (val.startsWith("__EXPR__")) {
+      try {
+        return JSON.parse(val.substring(8));
+      } catch { return expr; }
+    }
+    return { kind: "literal", value: { kind: "str", value: val } };
   }
-
-  return s;
+  if (expr.kind === "binary") {
+    return {
+      ...expr,
+      left: expr.left ? substituteParamsInExpr(expr.left, params) : undefined,
+      right: expr.right ? substituteParamsInExpr(expr.right, params) : undefined,
+    };
+  }
+  if (expr.kind === "unary" && expr.operand) {
+    return { ...expr, operand: substituteParamsInExpr(expr.operand, params) };
+  }
+  return expr;
 }
-
-export function interpolateAttr(text: string, params: Map<string, string>): string {
-  let s = text.replace(/\\\{/g, "\x00LB\x00");
-  s = s.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, n) => params.get(n) ?? `{${n}}`);
-  return s.replace(/\x00LB\x00/g, "{");
-}
-
 
 export function renderChild(
   child:  Child,
@@ -613,6 +206,88 @@ export function renderChild(
       return renderText(child.value, params);
 
     case "expr": {
+      if (!child.expression) return "";
+      
+      if (child.expression.kind === "variable" && child.expression.name && params.has(child.expression.name)) {
+        const val = params.get(child.expression.name)!;
+        if (val.startsWith("__LIT__")) {
+          return esc(val.slice(7));
+        }
+        if (val.startsWith("__RAW__")) {
+          return val.slice(7);
+        }        
+        if (val.startsWith("__VAR__")) {
+          const exprId = registerExpr(ctx, { kind: "variable", name: val.slice(7) });
+          return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
+        }
+        if (val.startsWith("__EXPR__")) {
+          try {
+            const expr: Expression = JSON.parse(val.substring(8));
+            const exprId = registerExpr(ctx, expr);
+            return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
+          } catch { return esc(val); }
+        }
+        return esc(val);
+      }
+      if (child.expression.kind === "call" && child.expression.callee?.kind === "variable") {
+        const fnName = child.expression.callee.name;
+        const fnDef = fnName ? ctx.functionDefs.find(f => f.name === fnName) : undefined;
+        if (fnDef && fnDef.returnType === "ui") {
+          const callArgs = child.expression.args ?? [];
+          const localParams = new Map<string, string>();
+          for (let i = 0; i < fnDef.params.length && i < callArgs.length; i++) {
+            const arg = callArgs[i];
+            if (arg.kind === "literal" && arg.value?.kind === "str") {
+              localParams.set(fnDef.params[i].name, "__LIT__" + arg.value.value);
+            } else if (arg.kind === "variable" && arg.name) {
+              localParams.set(fnDef.params[i].name, "__VAR__" + arg.name);
+            }
+          }
+          const substituteExpr = (expr: Expression, pm: Map<string, string>): Expression => {
+            if (expr.kind === "variable" && pm.has(expr.name!)) {
+              const pv = pm.get(expr.name!)!;
+              if (pv.startsWith("__LIT__")) return { kind: "literal", value: { kind: "str", value: pv.slice(7) } };
+              return { kind: "variable", name: pv.slice(7) };
+            }
+            if (expr.kind === "binary") return { ...expr, left: substituteExpr(expr.left!, pm), right: substituteExpr(expr.right!, pm) };
+            if (expr.kind === "unary") return { ...expr, operand: substituteExpr(expr.operand!, pm) };
+            if (expr.kind === "call") return { ...expr, callee: substituteExpr(expr.callee!, pm), args: expr.args?.map(a => substituteExpr(a, pm)) };
+            if (expr.kind === "index") return { ...expr, object: substituteExpr(expr.object!, pm), key: substituteExpr(expr.key!, pm) };
+            if (expr.kind === "assign") return { ...expr, right: expr.right ? substituteExpr(expr.right, pm) : undefined };
+            return expr;
+          };
+          const substituteChild = (c: Child, pm: Map<string, string>): Child => {
+            if (c.kind === "expr") return { ...c, expression: substituteExpr(c.expression, pm) };
+            if (c.kind === "assign_stmt") return { ...c, expression: substituteExpr(c.expression, pm) as Expression };
+            if (c.kind === "return" && (c as ReturnStmt).expression) return { ...c, expression: substituteExpr((c as ReturnStmt).expression!, pm) } as Child;
+            if (c.kind === "if") {
+              const ib = c as IfBlock;
+              return { ...ib, condition: substituteExpr(ib.condition, pm), body: ib.body.map(bc => substituteChild(bc, pm)), elseBody: ib.elseBody?.map(bc => substituteChild(bc, pm)) };
+            }
+            if (c.kind === "for") {
+              const fl = c as ForLoop;
+              return { ...fl, body: fl.body.map(bc => substituteChild(bc, pm)) };
+            }
+            if (c.kind === "use") {
+              const u = c as CompUse;
+              const sa: Attr[] = u.attrs.map(a => {
+                if (a.value?.kind === "str") {
+                  let raw = a.value.value;
+                  for (const [pn, pv] of pm) {
+                    if (pv.startsWith("__LIT__")) raw = raw.replace(new RegExp(`\\b${pn}\\b`, 'g'), pv.slice(7));
+                    if (pv.startsWith("__VAR__")) raw = raw.replace(new RegExp(`\\b${pn}\\b`, 'g'), pv.slice(7));
+                  }
+                  return { ...a, value: { kind: "str" as const, value: raw } };
+                }
+                return a;
+              });
+              return { ...u, attrs: sa, children: u.children.map(cc => substituteChild(cc, pm)) };
+            }
+            return c;
+          };
+          return fnDef.body.map(c => renderChild(substituteChild(c, localParams), ctx, localParams, depth + 1)).join("");
+        }
+      }
       if (child.expression.kind === "literal" && child.expression.value) {
         return esc(litToString(child.expression.value));
       }
@@ -620,7 +295,11 @@ export function renderChild(
         const exprId = registerExpr(ctx, child.expression);
         return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
       }
-      const exprId = registerExpr(ctx, child.expression);
+      let expr = child.expression;
+      if (params.size > 0) {
+        expr = substituteParamsInExpr(expr, params);
+      }
+      const exprId = registerExpr(ctx, expr);
       return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
     }
 
@@ -631,22 +310,25 @@ export function renderChild(
 
     case "remove": {
       return `<span data-sinth-remove="${esc((child as RemoveStmt).target)}"></span>`;
-    }
+    } 
+
+    case "return":
+      return "";    
+
+    
 
     case "if":
       return renderIfBlock(child, ctx, params, depth);
 
     case "for": {
-      // collect loop‑variable names
       const loopVars = new Set<string>();
       loopVars.add(child.itemVar);
       if (child.keyVar) loopVars.add(child.keyVar);
       if (child.indexVar) loopVars.add(child.indexVar);
-      // set them on ctx for compilation of the body
       const prev = ctx.loopVars;
       ctx.loopVars = loopVars;
       const bodyHTML = child.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
-      ctx.loopVars = prev;   // restore
+      ctx.loopVars = prev;
       const keyAttr = child.keyVar ? ` data-sinth-key="${escAttr(child.keyVar)}"` : "";
       const idxAttr = child.indexVar ? ` data-sinth-index="${escAttr(child.indexVar)}"` : "";
       return (
@@ -656,6 +338,9 @@ export function renderChild(
 
     case "use":
       return renderCompUse(child, ctx, params, depth);
+
+    case "component_expr":
+      return child.children.map(c => renderChild(c, ctx, params, depth + 1)).join("");
   }
 }
 
@@ -694,9 +379,40 @@ depth:   number,
         replaceAttr = ` data-sinth-if-replace="${escAttr(idAttr.value.value)}"`;
       }
     }
+    let delayAttr = "";
+    let delayHideAttr = "";
+    if (firstComp) {
+      const delayA = firstComp.attrs.find(a => a.name === "delay");
+      const hideA = firstComp.attrs.find(a => a.name === "hide");
+      if (delayA && hideA && hideA.value && (hideA.value as any).kind === "bool" && !(hideA.value as any).value) {
+        if (delayA.value?.kind === "num") {
+          delayAttr = ` data-sinth-if-delay="${delayA.value.value}"`;
+        } else if (delayA.value?.kind === "str") {
+          const v = litToString(delayA.value);
+          if (/^\d+$/.test(v)) delayAttr = ` data-sinth-if-delay="${v}"`;
+        }
+        delayHideAttr = ` data-sinth-if-delay-hide="false"`;
+      }
+    }
+    let elseDelayAttr = "";
+    let elseDelayHideAttr = "";
+    const elseFirstComp = (ifBlock.elseBody ?? []).find(c => c.kind === "use") as CompUse | undefined;
+    if (elseFirstComp) {
+      const delayA = elseFirstComp.attrs.find(a => a.name === "delay");
+      const hideA = elseFirstComp.attrs.find(a => a.name === "hide");
+      if (delayA && hideA && hideA.value && (hideA.value as any).kind === "bool" && !(hideA.value as any).value) {
+        if (delayA.value?.kind === "num") {
+          elseDelayAttr = ` data-sinth-if-delay="${delayA.value.value}"`;
+        } else if (delayA.value?.kind === "str") {
+          const v = litToString(delayA.value);
+          if (/^\d+$/.test(v)) elseDelayAttr = ` data-sinth-if-delay="${v}"`;
+        }
+        elseDelayHideAttr = ` data-sinth-if-delay-hide="false"`;
+      }
+    }
     return (
-      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${replaceAttr}>${bodyHTML}</template>` +
-      (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}">${elseHTML}</template>` : "")
+      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${replaceAttr}${delayAttr}${delayHideAttr}>${bodyHTML}</template>` +
+      (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}"${elseDelayAttr}${elseDelayHideAttr}>${elseHTML}</template>` : "")
     );
   }
 
@@ -758,7 +474,6 @@ export function renderCompUse(
   params: Map<string, string>,
   depth:  number,
 ): string {
-  // transparent wrapper inserted by flattenIfToUses()
   if (use.name === "__IF_ROOT__") {
     return use.children.map(c => renderChild(c, ctx, params, depth)).join("");
   }
@@ -809,6 +524,12 @@ export function renderCompUse(
       if (attr.value?.kind === "str") userClass = interpolateAttr(attr.value.value, params);
       continue;
     }
+    if (use.name === "Checkbox" && (attr.name === "checked" || attr.name === "onChange" || attr.name === "label")) continue;
+    if (attr.name === "hide") {
+      const rendered = renderAttr(attr, params, ctx);
+      if (rendered) attrParts.push(rendered);
+      continue;
+    }
     const rendered = renderAttr(attr, params, ctx);
     if (rendered) attrParts.push(rendered);
   }
@@ -836,17 +557,61 @@ export function renderCompUse(
   }
   if (use.name === "Checkbox") {
     if (!use.attrs.some(a => a.name === "type")) attrParts.push(`type="checkbox"`);
-    const bindAttr = use.attrs.find(a => a.name === "bind");
-    if (bindAttr?.value?.kind === "str") {
-      let vName = bindAttr.value.value;
-      if (vName.startsWith("__EXPR__")) {
-        try {
-          const expr: Expression = JSON.parse(vName.substring(8));
-          if (expr.kind === "variable" && expr.name) vName = expr.name;
-        } catch {}
+    
+    const checkedAttr = use.attrs.find(a => a.name === "checked");
+    if (checkedAttr && checkedAttr.value) {
+      if (checkedAttr.value.kind === "bool") {
+        if (checkedAttr.value.value) attrParts.push(`checked`);
+      } else if (checkedAttr.value.kind === "str") {
+        let raw = checkedAttr.value.value;
+        if (raw.startsWith("__EXPR__")) {
+          try {
+            const expr: Expression = JSON.parse(raw.substring(8));
+            if (expr.kind === "variable" && expr.name) {
+              attrParts.push(`data-sinth-checked="${escAttr(expr.name)}"`);
+            } else {
+              const exprId = registerExpr(ctx, expr);
+              attrParts.push(`data-sinth-checked-expr="${exprId}"`);
+            }
+          } catch {}
+        } else {
+          attrParts.push(`data-sinth-checked="${escAttr(raw)}"`);
+        }
       }
-      attrParts.push(`onchange="(function(e){ ${vName} = e.target.checked; sinthRender(); })(event)"`);
-      attrParts.push(`data-sinth-checked="${escAttr(vName)}"`);
+    }
+    
+    const onChangeAttr = use.attrs.find(a => a.name === "onChange");
+    if (onChangeAttr && onChangeAttr.value?.kind === "str") {
+      let raw = onChangeAttr.value.value;
+      if (raw.startsWith("__EXPR__")) {
+        try {
+          const expr: Expression = JSON.parse(raw.substring(8));
+          const jsExpr = compileExprToJS(expr);
+          attrParts.push(`onchange="(function(){ ${jsExpr}; sinthRender(); })(event)"`);
+        } catch {}
+      } else {
+        attrParts.push(`onchange="${escAttr(raw)};sinthRender()"`);
+      }
+    } else if (!onChangeAttr && checkedAttr) {
+      const raw = checkedAttr.value?.kind === "str" ? checkedAttr.value.value : "";
+      if (raw.startsWith("__EXPR__")) {
+        try {
+          const expr: Expression = JSON.parse(raw.substring(8));
+          if (expr.kind === "variable" && expr.name) {
+            attrParts.push(`onchange="(function(e){ ${expr.name} = e.target.checked; sinthRender(); })(event)"`);
+          }
+        } catch {}
+      } else if (raw.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+        attrParts.push(`onchange="(function(e){ ${raw} = e.target.checked; sinthRender(); })(event)"`);
+      }
+    }
+    
+    const labelAttr = use.attrs.find(a => a.name === "label");
+    const labelText = labelAttr?.value?.kind === "str" ? esc(interpolateAttr(labelAttr.value.value, params)) : "";
+    
+    if (labelText) {
+      const checkAttrStr = attrParts.length ? " " + attrParts.join(" ") : "";
+      return `<label data-s="${ctx.scopeHash}"><input${checkAttrStr}> ${labelText}</label>`;
     }
   }
 
@@ -868,7 +633,7 @@ export function expandUserComp(
   params: Map<string, string>,
   depth:  number,
 ): string {
-  if (use.name === def.name && depth > 1) {
+  if (use.name === def.name && depth > 4) {
     throw new SinthError(`Recursive component '${def.name}' is not allowed.`, use.loc);
   }
 
@@ -883,7 +648,11 @@ export function expandUserComp(
       local.set(attr.name, "true");
     } else if (attr.value.kind !== "null") {
       const raw = litToString(attr.value);
-      local.set(attr.name, attr.value.kind === "str" ? interpolateAttr(raw, params) : raw);
+      if (raw.startsWith("__EXPR__")) {
+        local.set(attr.name, raw);
+      } else {
+        local.set(attr.name, attr.value.kind === "str" ? interpolateAttr(raw, params) : raw);
+      }
     }
   }
 
@@ -897,7 +666,7 @@ export function expandUserComp(
   }
 
   const slotHTML = use.children.map(c => renderChild(c, ctx, params, depth)).join("");
-  local.set("slot", slotHTML);
+  local.set("slot", "__RAW__" + slotHTML);
 
   for (const block of def.styles) {
     ctx.extraCSS.push(processStyleBlock(block, ctx.scopeHash, local));
@@ -906,7 +675,7 @@ export function expandUserComp(
   return def.body.map(c => renderChild(c, ctx, local, depth)).join("");
 }
 
-// script collector
+
 
 export function collectScripts(
   file:    SinthFile,
@@ -946,114 +715,10 @@ export function extractFunctionNames(js: string): string[] {
 }
 
 
-// head gen
-
-export interface HeadData {
-  title?: string; fav?: string;
-  lang:   string; charset: string; viewport: string;
-  metaTags:  { name: string; content: string }[];
-  metaProps: { property: string; content: string }[];
-}
-
-export function buildHeadData(meta: MetaEntry[]): HeadData {
-  let title: string | undefined, fav: string | undefined;
-  let lang = "en", charset = "UTF-8", viewport = "width=device-width, initial-scale=1.0";
-  const metaTags:  { name: string; content: string }[]     = [];
-  const metaProps: { property: string; content: string }[] = [];
-
-  for (const m of meta) {
-    const val = litToString(m.value);
-    switch (m.key) {
-      case "title":    title    = val; break;
-      case "fav":      fav      = val; break;
-      case "lang":     lang     = val; break;
-      case "charset":  charset  = val; break;
-      case "viewport": viewport = val; break;
-      case "descr":    metaTags.push({ name: "description", content: val }); break;
-      case "author":   metaTags.push({ name: "author",      content: val }); break;
-      case "keywords": metaTags.push({ name: "keywords",    content: val }); break;
-      case "robots":   metaTags.push({ name: "robots",      content: val }); break;
-      default:
-        if (m.key.startsWith("og") || m.key.startsWith("twitter")) {
-          const prop = m.key
-            .replace(/^og([A-Z])/, (_: string, c: string) => `og:${c.toLowerCase()}`)
-            .replace(/^twitter([A-Z])/, (_: string, c: string) => `twitter:${c.toLowerCase()}`);
-          metaProps.push({ property: prop, content: val });
-        } else {
-          metaTags.push({ name: camelToKebab(m.key), content: val });
-        }
-    }
-  }
-
-  return { title, fav, lang, charset, viewport, metaTags, metaProps };
-}
-
-export function faviconType(p: string): string {
-  switch (path.extname(p).toLowerCase()) {
-    case ".ico":  return "image/x-icon";
-    case ".png":  return "image/png";
-    case ".svg":  return "image/svg+xml";
-    case ".gif":  return "image/gif";
-    case ".webp": return "image/webp";
-    case ".jpg":
-    case ".jpeg": return "image/jpeg";
-    default:
-      SinthWarning.emit(`Unknown favicon extension '${path.extname(p)}', defaulting to image/x-icon`);
-      return "image/x-icon";
-  }
-}
-
-export function renderHead(
-  hd:          HeadData,
-  cssLinks:    string[],
-  jsLinks:     { src: string; attrs: Record<string, string> }[],
-  scopedCSS:   string,
-  companionJS: string | undefined,
-): string {
-  const lines: string[] = [];
-  lines.push(`  <meta charset="${escAttr(hd.charset)}">`);
-  lines.push(`  <meta name="viewport" content="${escAttr(hd.viewport)}">`);
-  if (hd.title) lines.push(`  <title>${esc(hd.title)}</title>`);
-  if (hd.fav)   lines.push(`  <link rel="icon" href="${escAttr(hd.fav)}" type="${faviconType(hd.fav)}">`);
-  for (const m of hd.metaTags)  lines.push(`  <meta name="${escAttr(m.name)}" content="${escAttr(m.content)}">`);
-  for (const m of hd.metaProps) lines.push(`  <meta property="${escAttr(m.property)}" content="${escAttr(m.content)}">`);
-  for (const css of cssLinks)   lines.push(`  <link rel="stylesheet" href="${escAttr(css)}">`);
-  if (scopedCSS.trim())          lines.push(`  <style>\n${scopedCSS}\n  </style>`);
-  for (const js of jsLinks) {
-    const extra = Object.entries(js.attrs)
-      .map(([k, v]) => v === "true" ? k : `${k}="${escAttr(v)}"`)
-      .join(" ");
-    lines.push(`  <script src="${escAttr(js.src)}"${extra ? " " + extra : ""}></script>`);
-  }
-  if (companionJS) lines.push(`  <script src="${escAttr(companionJS)}"></script>`);
-  return `<head>\n${lines.join("\n")}\n</head>`;
-}
 
 
 // sinth runtime
 
-function compileFunctionDef(fn: FunctionDef): string {
-  const paramsJS = fn.params.map(p => p.name).join(", ");
-  const bodyStatements: string[] = [];
-  for (const child of fn.body) {
-    switch (child.kind) {
-      case "text":
-        break;
-      case "expr":
-        bodyStatements.push(`return ${compileExprToJS(child.expression)};`);
-        break;
-      case "assign_stmt":
-        bodyStatements.push(`${compileExprToJS(child.expression)};`);
-        break;
-      case "if":
-        bodyStatements.push(compileIfToJS(child as IfBlock));
-        break;
-      case "for":
-        break;
-    }
-  }
-  return `function ${fn.name}(${paramsJS}) {\n${bodyStatements.map(s => `  ${s}`).join("\n")}\n}`;
-}
 
 export function buildRuntime(opts: {
   varDecls:     VarDeclaration[];
@@ -1073,7 +738,7 @@ export function buildRuntime(opts: {
   const needsDelay  = bodyHTML.includes("data-sinth-delay") || bodyHTML.includes("data-sinth-delay-expr-id") || mixedBlocks.some(mb => mb.ifHTML.includes("data-sinth-delay") || mb.ifHTML.includes("data-sinth-delay-expr-id") || mb.elseHTML.includes("data-sinth-delay") || mb.elseHTML.includes("data-sinth-delay-expr-id"));
   const needsMixed  = mixedBlocks.length > 0;
   const needsLogic  = logicBlocks.length > 0;
-  const needsRender = needsExpr || needsIf || needsFor || needsMixed || needsLogic;
+  const needsRender = needsExpr || needsIf || needsFor || needsMixed || needsLogic || bodyHTML.includes("data-sinth-hide");
 
   const varLines = varDecls.map(v => {
     if (!v.value) {
@@ -1105,330 +770,17 @@ export function buildRuntime(opts: {
     return varLines ? `// Sinth compiled runtime\n${varLines}` : "";
   }
 
-  let helpers = "";
 
-  if (needsExpr || needsIf || needsFor) {
-    helpers += `
-function sinthExpr(el) {
-  try {
-    var exprFn = __X[el.dataset.exprId];
-    if (exprFn) el.textContent = exprFn({});
-  } catch(e) {}
-}
-`;
-  }
+  const helpers = generateHelpers({ needsExpr, needsIf, needsFor, needsDelay, needsMixed });
 
-  if (needsIf || needsMixed) {
-    helpers += `
-function sinthReplaceInsert(t, anchor, ifId, replaceId) {
-  if (anchor) {
-    var cur = anchor.nextSibling;
-    while (cur && cur !== t) { var nx = cur.nextSibling; cur.remove(); cur = nx; }
-  } else {
-    anchor = document.createElement('span');
-    anchor.style.display = 'none';
-    anchor.dataset.sinthIfAnchor = ifId;
-    t.parentNode.insertBefore(anchor, t);
-  }
-  var _rp = null, _rpParent = null, _rpNext = null;
-  if (replaceId) {
-    _rp = document.getElementById(replaceId);
-    if (_rp) {
-      _rpParent = _rp.parentNode;
-      _rpNext = _rp.nextSibling;
-      _rp.parentNode.removeChild(_rp);
-      anchor._sinthReplaced = _rp;
-      anchor._sinthReplacedParent = _rpParent;
-      anchor._sinthReplacedNext = _rpNext;
-    }
-  }
-  var frag = document.createRange().createContextualFragment(t.innerHTML);
-  frag.querySelectorAll('.sinth-expr').forEach(sinthExpr);
-  if (${needsDelay}) {
-    frag.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-    frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
-  }
-  var fragFirst = frag.firstChild;
-  var fragLast = frag.lastChild;
-  if (_rpParent && _rpNext) {
-    _rpParent.insertBefore(frag, _rpNext);
-  } else if (_rpParent) {
-    _rpParent.appendChild(frag);
-  } else {
-    t.parentNode.insertBefore(frag, t);
-  }
-  if (replaceId && anchor) {
-    anchor._sinthInsertedFirst = fragFirst;
-    anchor._sinthInsertedLast = fragLast;
-  }
-  return anchor;
-}
-`;
-  }
-
-  if (needsDelay) {
-    helpers += `
-function sinthDelay(el) {
-  if (el.dataset.sinthDelayDone) { el.style.display = ''; return; }
-  el.dataset.sinthDelayDone = '1';
-  var ms = parseInt(el.dataset.sinthDelay) || 0;
-  el.style.display = 'none';
-  if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-  else el.style.display = '';
-}
-function sinthDelayExpr(el) {
-  try {
-    var fn = __X[el.dataset.sinthDelayExprId];
-    var ms = fn ? parseInt(fn()) || 0 : 0;
-    el.style.display = '';
-    if (ms > 0) setTimeout(function() { el.style.display = ''; }, ms);
-  } catch(e) {}
-}
-`;
-  }
-
-  if (needsIf) {
-    helpers += `
-function sinthIfBlock(t) {
-  var ifId = t.dataset.sinthIfId;
-  var anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
-  var condFn = __X[t.dataset.sinthIfExpr];
-  var cond = condFn ? condFn() : false;
-  if (cond) {
-    anchor = sinthReplaceInsert(t, anchor, ifId, t.dataset.sinthIfReplace);
-  } else {
-    if (anchor) {
-      if (anchor._sinthReplaced) {
-        var insFirst = anchor._sinthInsertedFirst;
-        var insLast = anchor._sinthInsertedLast;
-        var rpParent = anchor._sinthReplacedParent;
-        var rpNext = anchor._sinthReplacedNext;
-        if (insFirst && insLast) {
-          var cur = insFirst;
-          while (cur && cur !== insLast) {
-            var next = cur.nextSibling;
-            cur.remove();
-            cur = next;
-          }
-          if (insLast) insLast.remove();
-        }
-        if (rpParent && rpNext) {
-          rpParent.insertBefore(anchor._sinthReplaced, rpNext);
-        } else if (rpParent) {
-          rpParent.appendChild(anchor._sinthReplaced);
-        }
-      } else {
-        var cur2 = anchor.nextSibling;
-        while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
-      }
-      anchor.remove();
-    }
-    var elseT = t.nextElementSibling;
-    if (elseT && elseT.hasAttribute('data-sinth-else')) {
-      var elseIfId = elseT.dataset.sinthIfId;
-      var ea = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + elseIfId + '"]');
-      if (ea) {
-        var cur3 = ea.nextSibling;
-        while (cur3 && cur3 !== t) { var nx3 = cur3.nextSibling; cur3.remove(); cur3 = nx3; }
-      } else {
-        ea = document.createElement('span');
-        ea.style.display = 'none';
-        ea.dataset.sinthIfAnchor = '__else__' + elseIfId;
-        t.parentNode.insertBefore(ea, t);
-      }
-      var ef = document.createRange().createContextualFragment(elseT.innerHTML);
-      ef.querySelectorAll('.sinth-expr').forEach(sinthExpr);
-      if (${needsDelay}) {
-        ef.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-        ef.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
-      }
-      t.parentNode.insertBefore(ef, t);
-    } else {
-      var ea2 = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]');
-      if (ea2) {
-        var ec = ea2.nextSibling;
-        while (ec && ec !== t) { var en = ec.nextSibling; ec.remove(); ec = en; }
-        ea2.remove();
-      }
-    }
-  }
-}
-`;
-  }
-
-  if (needsFor) {
-    helpers += `
-function hashString(str) {
-  var hash = 0, i, chr;
-  for (i = 0; i < str.length; i++) {
-    chr = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + chr;
-    hash |= 0;
-  }
-  return String(hash);
-}
-function sinthForBlock(t) {
-  var source = window[t.dataset.sinthFor];
-  if (source === undefined) source = [];
-  var newHash = '';
-  try { newHash = hashString(JSON.stringify(source)); } catch(e) { newHash = ''; }
-  if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) {
-    return;
-  }
-  t.dataset.sinthForHash = newHash;
-  var isObj = (typeof source === 'object' && source !== null && !Array.isArray(source));
-  var entries;
-  if (isObj) {
-    entries = Object.entries(source);
-  } else {
-    if (!Array.isArray(source)) source = [];
-    entries = source.map(function(item, index) { return [index, item]; });
-  }
-  var anchor = t.parentNode ? t.parentNode.querySelector('[data-sinth-for-anchor="' + t.dataset.sinthFor + '"]') : null;
-  if (anchor) {
-    var cur2 = anchor.nextSibling;
-    while (cur2 && cur2 !== t) { var nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
-    anchor.remove();
-  }
-  var fa = document.createElement('span');
-  fa.style.display = 'none';
-  fa.dataset.sinthForAnchor = t.dataset.sinthFor;
-  t.parentNode && t.parentNode.insertBefore(fa, t);
-  var _loopIdx = 0;
-  entries.forEach(function(entry) {
-    var _k = entry[0];
-    var _v = entry[1];
-    var _item = (t.dataset && t.dataset.sinthItem) ? t.dataset.sinthItem : '__item__';
-    var _key = t.dataset && t.dataset.sinthKey ? t.dataset.sinthKey : null;
-    var _idx = t.dataset && t.dataset.sinthIndex ? t.dataset.sinthIndex : null;
-    _loopIdx++;
-    if (t.dataset.sinthIfReplace) {
-      var _rp = document.getElementById(t.dataset.sinthIfReplace);
-      if (_rp) _rp.parentNode.removeChild(_rp);
-    }
-    var frag = document.createRange().createContextualFragment(t.innerHTML);
-    frag.querySelectorAll('.sinth-expr').forEach(function(el) {
-      try {
-        var exprFn = __X[el.dataset.exprId];
-        if (!exprFn) return;
-        var _ctx = {};
-        if (_item) _ctx[_item] = _v;
-        if (_key)  _ctx[_key]  = _k;
-        if (_idx)  _ctx[_idx]  = _loopIdx - 1;
-        el.textContent = exprFn(_ctx);
-        el.classList.remove('sinth-expr');
-      } catch(e) {}
-    });
-    frag.querySelectorAll('template[data-sinth-if-expr]').forEach(function(ifT) {
-      var condFn = __X[ifT.dataset.sinthIfExpr];
-      var _ctx = {};
-      if (_item) _ctx[_item] = _v;
-      if (_key)  _ctx[_key]  = _k;
-      if (_idx)  _ctx[_idx]  = _loopIdx - 1;
-      var cond = false;
-      try { if (condFn) cond = condFn(_ctx); } catch(e) {}
-      if (cond) {
-        var ifContent = document.createRange().createContextualFragment(ifT.innerHTML);
-        ifContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-          try {
-            var exprFn2 = __X[el2.dataset.exprId];
-            if (exprFn2) el2.textContent = exprFn2(_ctx);
-          } catch(e) {}
-        });
-        ifT.parentNode.insertBefore(ifContent, ifT);
-      } else {
-        var elseT = ifT.nextElementSibling;
-        if (elseT && elseT.hasAttribute('data-sinth-else')) {
-          var elseContent = document.createRange().createContextualFragment(elseT.innerHTML);
-          elseContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-            try {
-              var exprFn2 = __X[el2.dataset.exprId];
-              if (exprFn2) el2.textContent = exprFn2(_ctx);
-            } catch(e) {}
-          });
-          ifT.parentNode.insertBefore(elseContent, ifT);
-        }
-      }
-    });
-    if (${needsDelay}) {
-      frag.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-      frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
-    }
-    t.parentNode && t.parentNode.insertBefore(frag, t);
+  const renderBody = buildRenderBody({
+    bodyHTML, logicBlocks, mixedBlocks,
+    needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay
   });
-}
-`;
-  }
-
-  if (needsMixed) {
-    helpers += `
-function sinthMixedBlock(el, condId, ifJS, ifHTML, elseJS, elseHTML) {
-  var condFn = __X[condId];
-  var cond = condFn ? condFn() : false;
-  if (cond) {
-    if (ifJS) eval(ifJS);
-    el.innerHTML = ifHTML;
-  } else {
-    if (elseJS) eval(elseJS);
-    el.innerHTML = elseHTML;
-  }
-  el.querySelectorAll('.sinth-expr').forEach(sinthExpr);
-  el.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);
-  if (${needsDelay}) {
-    el.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-    el.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
-  }
-}
-`;
-  }
 
   const exprArrayJS = exprRegistry.length > 0
     ? `var __X = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
     : "";
-
-  let renderBody = "";
-  renderBody += `  var _sx = window.scrollX, _sy = window.scrollY;\n`;
-
-  if (needsLogic) {
-    renderBody += logicBlocks.map(b => b.replace(/^/gm, "  ")).join("\n") + "\n";
-  }
-
-  if (needsMixed) {
-    for (const mb of mixedBlocks) {
-      renderBody += `  (function() {
-    var __el = document.getElementById(${JSON.stringify(mb.replaceId || mb.id)});
-    if (__el) sinthMixedBlock(__el, ${mb.conditionJS}, ${JSON.stringify(mb.ifJS)}, ${JSON.stringify(mb.ifHTML)}, ${JSON.stringify(mb.elseJS)}, ${JSON.stringify(mb.elseHTML)});
-  })();\n`;
-    }
-  }
-
-  renderBody += `  document.querySelectorAll('[data-sinth-remove]').forEach(function(el) {
-    var target = document.getElementById(el.dataset.sinthRemove);
-    if (target) target.remove();
-  });\n`;
-
-  if (needsIf) {
-    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
-  }
-  if (needsFor) {
-    renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
-  }
-  renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
-  });\n`;
-  renderBody += `  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
-    try { el.checked = !!window[el.dataset.sinthChecked]; } catch(e) {}
-  });\n`;
-  if (needsExpr) {
-    renderBody += `  document.querySelectorAll('.sinth-expr').forEach(sinthExpr);\n`;
-  }
-  if (needsDelay) {
-    renderBody += `  setTimeout(function() {
-    document.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-    document.querySelectorAll('[data-sinth-delay-expr-id]').forEach(sinthDelayExpr);
-  }, 0);\n`;
-  }
-  renderBody += `  window.scrollTo(_sx, _sy);\n`;
 
   const renderFunc = needsRender ? `function sinthRender() {\n${renderBody}}\nsinthRender();` : "";
 
@@ -1470,10 +822,10 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   const hash = fnv1a(absPath);
 
   const allVarDecls: VarDeclaration[] = file.varDecls;
-  const functionDefs: FunctionDef[]   = file.functions;   // ← new
+  const functionDefs: FunctionDef[]   = file.functions;
 
   const ctx: CompileCtx = {
-    allDefs, customEls, cssLinks, jsLinks,
+    allDefs, functionDefs, customEls, cssLinks, jsLinks,
     scopeHash:    hash,
     pageFile:     absPath,
     extraCSS:     [],
@@ -1506,8 +858,16 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   }
   for (const v of file.varDecls) { if (v.value) assignedVars.add(v.name); }
 
+  // warn about reserved browser globals
+  const RESERVED_GLOBALS = new Set(["name", "location", "history", "status", "closed", "length", "top", "self", "parent", "frames", "origin"]);
+  for (const v of file.varDecls) {
+    if (RESERVED_GLOBALS.has(v.name)) {
+      SinthWarning.emit(`Variable '${v.name}' shadows a reserved browser global. This may cause unexpected behavior. Consider renaming.`, v.loc);
+    }
+  }
+
   // compile function definitions to JS
-  const compiledFunctions = functionDefs.map(f => compileFunctionDef(f)).join("\n");
+  const compiledFunctions = functionDefs.map(f => compileFunctionDef(f, ctx)).join("\n");
 
   // companion JS file (needs same name as .sinth, adds support for JS libraries)
   const companionJS = (() => {

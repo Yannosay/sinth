@@ -1,4 +1,4 @@
-import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, RemoveStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, SinthWarning, AssignOp, VarType, BinaryOp } from "./types.ts";
+import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, SinthWarning, AssignOp, VarType, BinaryOp } from "./types.ts";
 import { Lexer } from "./lexer.ts";
 import { compileExprToJS, compileIfToJS } from "./expr.ts";
 import { tagNameToPascal } from "../utils.ts";
@@ -60,6 +60,15 @@ export class Parser {
       else if (this.check(TT.KW_FOR)) {
         const forNode = this.parseForLoop();
         uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [forNode], loc: forNode.loc });
+      }
+      else if (this.check(TT.LPAREN)) {
+        const loc = this.peek().loc;
+        this.consume(TT.LPAREN);
+        const expr = this.parseExpression();
+        if (!expr) throw new SinthError("Expected expression after '('", loc);
+        if (!this.check(TT.RPAREN)) throw new SinthError("Expected ')'", loc);
+        this.consume(TT.RPAREN);
+        uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc }], loc });
       }
 else if (this.check(TT.IDENT)) {
 const savedPos = this.pos;
@@ -171,8 +180,8 @@ uses.push(this.parseCompUse());
       this.consume(TT.LBRACKET); this.consume(TT.RBRACKET);
       typeStr = "str[]";
     }
-    if (!["int", "str", "bool", "str[]", "obj"].includes(typeStr)) {
-      throw new SinthError(`Unknown type '${typeStr}'. Expected: int, str, bool, str[], obj`, typeTok.loc);
+    if (!["int", "str", "bool", "str[]", "obj", "ui"].includes(typeStr)) {
+      throw new SinthError(`Unknown type '${typeStr}'. Expected: int, str, bool, str[], obj, component`, typeTok.loc);
     }
 
     const nameTok = this.consume(TT.IDENT);
@@ -253,8 +262,8 @@ private parseArrayLiteral(): Literal {
     const tok = this.peek();
 
     // Unary 'not'
-    if (tok.type === TT.IDENT && tok.value === "not") {
-      this.consume(TT.IDENT);
+    if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT) {
+      if (tok.type === TT.IDENT) this.consume(TT.IDENT); else this.consume(TT.OP_NOT);
       const operand = this.parseExpression();
       if (!operand) throw new SinthError("Expected expression after 'not'", tok.loc);
       const unaryExpr: Expression = { kind: "unary", op: "not", operand };
@@ -393,8 +402,8 @@ private parseArrayLiteral(): Literal {
     if (this.check(TT.OP_ARROW)) {
       this.consume(TT.OP_ARROW);
       const typeTok = this.consume(TT.IDENT);
-      if (!["int","str","bool","str[]","obj"].includes(typeTok.value)) {
-        throw new SinthError(`Unknown return type '${typeTok.value}'. Expected: int, str, bool, str[], obj`, typeTok.loc);
+      if (!["int","str","bool","str[]","obj","ui"].includes(typeTok.value)) {
+        throw new SinthError(`Unknown return type '${typeTok.value}'. Expected: int, str, bool, str[], obj, ui`, typeTok.loc);
       }
       returnType = typeTok.value as VarType;
     }
@@ -422,6 +431,15 @@ private parseArrayLiteral(): Literal {
     const sinthName = tagNameToPascal(tagName);
     const params    = this.parseParamDecls();
     return { sinthName, tagName, params, loc };
+  }
+
+    private parseReturnStmt(): ReturnStmt {
+    const loc = this.consume(TT.KW_RETURN).loc;
+    let expression: Expression | undefined;
+    if (!this.check(TT.RBRACE) && !this.check(TT.EOF) && !this.check(TT.KW_IF) && !this.check(TT.KW_FOR) && !this.check(TT.KW_RETURN)) {
+      expression = this.parseExpression() ?? undefined;
+    }
+    return { kind: "return", expression, loc };
   }
 
   private parseParamDecls(): ParamDecl[] {
@@ -472,6 +490,7 @@ private parseArrayLiteral(): Literal {
         if (vd) this._varDecls.push(vd);
         continue;
       }
+      else if (this.check(TT.KW_RETURN)){ body.push(this.parseReturnStmt()); }
       else if (this.check(TT.KW_IF))    { body.push(this.parseIfBlock()); }
       else if (this.check(TT.KW_FOR))   { body.push(this.parseForLoop()); }
       else if (this.check(TT.IDENT))    { body.push(this.parseCompUse()); }
@@ -515,6 +534,7 @@ private parseArrayLiteral(): Literal {
     const children: Child[] = [];
 
     while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+      if (this.check(TT.KW_RETURN)) { children.push(this.parseReturnStmt()); continue; }
       if (this.check(TT.KW_IF))  { children.push(this.parseIfBlock());  continue; }
       if (this.check(TT.KW_FOR)) { children.push(this.parseForLoop());  continue; }
       if (this.check(TT.LPAREN)) {
@@ -524,6 +544,23 @@ private parseArrayLiteral(): Literal {
           children.push({ kind: "expr", expression: expr, loc });
         }
         continue;
+      }
+      if (this.check(TT.IDENT)) {
+        const savedPos = this.pos;
+        const name = this.peek().value;
+        const nextType = this.tokens[this.pos + 1]?.type;
+        if (nextType === TT.EQUALS || (nextType === TT.OP_PLUS && this.tokens[this.pos + 2]?.type === TT.EQUALS) || (nextType === TT.OP_MINUS && this.tokens[this.pos + 2]?.type === TT.EQUALS)) {
+          this.consume(TT.IDENT);
+          let op: AssignOp = "=";
+          if (this.check(TT.OP_PLUS)) { this.consume(TT.OP_PLUS); op = "+="; }
+          else if (this.check(TT.OP_MINUS)) { this.consume(TT.OP_MINUS); op = "-="; }
+          this.consume(TT.EQUALS);
+          const rhs = this.parseExpression();
+          if (!rhs) throw new SinthError("Expected expression after assignment", this.peek().loc);
+          children.push({ kind: "assign_stmt", expression: { kind: "assign", target: name, op, right: rhs }, loc: this.peek().loc });
+          continue;
+        }
+        this.pos = savedPos;
       }
       if (this.check(TT.STRING)) {
         const loc = this.peek().loc;
@@ -661,7 +698,6 @@ private parseArrayLiteral(): Literal {
     return children;
   }
 
-  // for loops
 
   private parseForLoop(): ForLoop {
     const loc     = this.consume(TT.KW_FOR).loc;
@@ -673,31 +709,31 @@ private parseArrayLiteral(): Literal {
       this.consume(TT.COMMA);
       const secondVar = this.consume(TT.IDENT).value;
       if (this.check(TT.COMMA)) {
-        // three variables: key, value, index
         this.consume(TT.COMMA);
         keyVar = firstVar;
         itemVar = secondVar;
         indexVar = this.consume(TT.IDENT).value;
       } else {
-        // two variables – tentatively value, index; fix after seeing source type
         itemVar = firstVar;
         indexVar = secondVar;
       }
     } else {
-      // one variable: item only
       itemVar = firstVar;
     }
     if (!this.check(TT.KW_IN)) throw new SinthError("Expected 'in' after loop variable", this.peek().loc);
     this.consume(TT.KW_IN);
     const arrayVar = this.consume(TT.IDENT).value;
 
-    // If two variables and the source is an object, swap to key, value
     if (keyVar === undefined && indexVar !== undefined) {
       const srcDecl = this._varDecls.find(d => d.name === arrayVar);
       if (srcDecl && srcDecl.varType === "obj") {
-        keyVar = itemVar;      // first → key
-        itemVar = indexVar;    // second → value
-        indexVar = undefined;
+        const val = srcDecl.value;
+        const isArray = val && val.kind === "str" && val.value.startsWith("__ARR__");
+        if (!isArray) {
+          keyVar = itemVar;
+          itemVar = indexVar;
+          indexVar = undefined;
+        }
       }
     }
 
@@ -711,7 +747,7 @@ private parseArrayLiteral(): Literal {
     return { kind: "for", keyVar, itemVar, indexVar, arrayVar, body, loc };
   }
 
-  // component usages
+
 
   private parseCompUse(): CompUse {
     const loc  = this.peek().loc;
@@ -804,32 +840,34 @@ private parseArrayLiteral(): Literal {
     while (!this.check(TT.EOF) && !this.check(TT.RBRACE)) {
       if (this.check(TT.LPAREN)) {
         const loc = this.peek().loc;
+        this.consume(TT.LPAREN);
         let expr = this.parseExpression();
-        if (expr) {
-          while (this.check(TT.OP_PLUS)) {
-            this.consume(TT.OP_PLUS);
-            let rhs: Expression | null = null;
-            if (this.check(TT.STRING)) {
-              rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
-            } else if (this.check(TT.IDENT)) {
-              const rhsName = this.consume(TT.IDENT).value;
-              if (this.check(TT.DOT)) {
-                this.consume(TT.DOT);
-                rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-              } else if (this.check(TT.LBRACKET)) {
-                const rhsVar: Expression = { kind: "variable", name: rhsName };
-                rhs = this.parsePostfix(rhsVar);
-              } else {
-                rhs = { kind: "variable", name: rhsName };
-              }
+        if (!expr) throw new SinthError("Expected expression after '('", this.peek().loc);
+        if (!this.check(TT.RPAREN)) throw new SinthError("Expected ')'", this.peek().loc);
+        this.consume(TT.RPAREN);
+        while (this.check(TT.OP_PLUS)) {
+          this.consume(TT.OP_PLUS);
+          let rhs: Expression | null = null;
+          if (this.check(TT.STRING)) {
+            rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+          } else if (this.check(TT.IDENT)) {
+            const rhsName = this.consume(TT.IDENT).value;
+            if (this.check(TT.DOT)) {
+              this.consume(TT.DOT);
+              rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+            } else if (this.check(TT.LBRACKET)) {
+              const rhsVar: Expression = { kind: "variable", name: rhsName };
+              rhs = this.parsePostfix(rhsVar);
             } else {
-              rhs = this.parseExpression();
+              rhs = { kind: "variable", name: rhsName };
             }
-            if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
-            expr = { kind: "binary", left: expr, op: "+", right: rhs };
+          } else {
+            rhs = this.parseExpression();
           }
-          children.push({ kind: "expr", expression: expr, loc });
+          if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
+          expr = { kind: "binary", left: expr, op: "+", right: rhs };
         }
+        children.push({ kind: "expr", expression: expr, loc });
         continue;
       }
       if (this.check(TT.STRING)) {
@@ -864,12 +902,25 @@ private parseArrayLiteral(): Literal {
         if (vd) this._varDecls.push(vd);
         continue;
       }
+      else if (this.check(TT.KW_RETURN)) { children.push(this.parseReturnStmt()); continue; }
       else if (this.check(TT.KW_IF))  { children.push(this.parseIfBlock());  }
       else if (this.check(TT.KW_FOR)) { children.push(this.parseForLoop());  }
       else if (this.check(TT.IDENT))  {
         const loc  = this.peek().loc;
         const rawName = this.peek().value;
         const nextType = this.tokens[this.pos + 1]?.type;
+        
+        if (nextType === TT.EQUALS || (nextType === TT.OP_PLUS && this.tokens[this.pos + 2]?.type === TT.EQUALS) || (nextType === TT.OP_MINUS && this.tokens[this.pos + 2]?.type === TT.EQUALS)) {
+          this.consume(TT.IDENT);
+          let op: AssignOp = "=";
+          if (this.check(TT.OP_PLUS)) { this.consume(TT.OP_PLUS); op = "+="; }
+          else if (this.check(TT.OP_MINUS)) { this.consume(TT.OP_MINUS); op = "-="; }
+          this.consume(TT.EQUALS);
+          const rhs = this.parseExpression();
+          if (!rhs) throw new SinthError("Expected expression after assignment", this.peek().loc);
+          children.push({ kind: "assign_stmt", expression: { kind: "assign", target: rawName, op, right: rhs }, loc });
+          continue;
+        }
         
         if (nextType === TT.DOT) {
           let fullName = this.consume(TT.IDENT).value;
@@ -942,7 +993,6 @@ private parseArrayLiteral(): Literal {
           const name = this.consume(TT.IDENT).value;
           const varExpr: Expression = { kind: "variable", name };
           let indexedExpr = this.parsePostfix(varExpr);
-          // support concatenation: data[prop] + "..."
           if (this.check(TT.OP_PLUS)) {
             let leftExpr: Expression = indexedExpr;
             while (this.check(TT.OP_PLUS)) {

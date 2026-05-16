@@ -1,4 +1,4 @@
-import { Literal } from "./core/types.ts";
+import { Literal, SinthWarning } from "./core/types.ts";
 
 
 export function fnv1a(s: string): string {
@@ -35,4 +35,43 @@ export function litToString(lit: Literal): string {
     case "bool": return String(lit.value);
     case "null": return "";
   }
+}
+
+export function interpolateAttr(text: string, params: Map<string, string>): string {
+  let s = text.replace(/\\\{/g, "\x00LB\x00");
+  s = s.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, n) => params.get(n) ?? `{${n}}`);
+  return s.replace(/\x00LB\x00/g, "{");
+}
+
+export function renderText(text: string, params: Map<string, string>): string {
+  const rawSlots = new Map<string, string>();
+  let counter = 0;
+
+  let s = text.replace(/\\\$/g, "\x00DOLLAR\x00");
+
+  s = s.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g, (_, n) => {
+    const val = params.get(n);
+    if (val === undefined) return `$${n}`;
+    if (n === "slot") {
+      const ph = `\x00RAW${counter++}\x00`;
+      rawSlots.set(ph, val);
+      return ph;
+    }
+    return val;
+  });
+
+  s = esc(s);
+
+  for (const [ph, val] of rawSlots) s = s.replace(ph, val);
+  s = s.replace(/\x00DOLLAR\x00/g, "$");
+
+  const braceRe = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = braceRe.exec(s)) !== null) {
+    SinthWarning.emit(
+      `Use $param for text interpolation; {param} is for attributes. Found '${m[0]}' in text.`
+    );
+  }
+
+  return s;
 }

@@ -22,6 +22,7 @@ const KEYWORDS: Record<string, TT> = {
   "in":             TT.KW_IN,
   "remove":         TT.KW_REMOVE,
   "function":       TT.KW_FUNCTION,
+  "return":         TT.KW_RETURN,
 };
 
 export class Lexer {
@@ -53,6 +54,7 @@ export class Lexer {
       // two-character operators ->
       if (ch === "=" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_EQEQ, value: "==", loc }); continue; }
       if (ch === "!" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_NEQ,  value: "!=", loc }); continue; }
+      if (ch === "!") { tokens.push(this.single(TT.OP_NOT, loc)); continue; }
       if (ch === ">" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_GTEQ, value: ">=", loc }); continue; }
       if (ch === "<" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_LTEQ, value: "<=", loc }); continue; }
 

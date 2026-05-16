@@ -1,7 +1,9 @@
 ﻿# Sinth 
 
 The language that fixes HTML. Declarative. Reactive. Compiles to pure HTML.
+
 Find out more: https://www.youtube.com/watch?v=W0tOMTiIF0Q
+Discord: [Join here!](https://discord.gg/SUvcrafTQm)
 
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
@@ -16,7 +18,19 @@ Input(bind: userName, placeholder: "Enter your name")
 Paragraph { "Hello, " + userName }
 ```
 
-No useState. No onChange. No e.target.value. Just bind.
+No useState. No onChange. No e.target.value.
+
+```ts
+page
+title = "Counter"
+
+var int count = 0
+
+Main {
+  Heading(level: 1) {count}
+  Button(onClick: count = count + 1) {"Increment"}
+}
+```
 
 #### Logic and UI live together.
 ```ts
@@ -25,22 +39,60 @@ Button(onClick: "deletePost()") { "Delete" }
 }
 ```
 
+No JSX ternaries. No v-if. No separate script tags. Mixed logic. Clean.
+
 #### Functions - easy as you know it
 ```ts
 page
 
-title = "Function test"
+title = "Full Test"
 
-function greet(str name) -> str {    -- New! (0.10.0)
+var str userName = "Sinths User"
+
+function greet(str name) -> str {
   "Hello, " + name
 }
 
+function renderHeading(str label) -> ui {
+  Heading(level: 2) {
+    (label)
+  }
+}
+
 Div {
-  (greet("Sinth")) + " - welcome!"
+  (greet(userName)) + " — welcome back!"
+}
+
+(renderHeading(userName))
+(renderHeading("This renders!"))
+```
+or
+
+```ts
+page
+
+title = "Checkbox Test"
+
+var bool isAdmin = false
+
+function toggleAdmin() {
+  isAdmin = not isAdmin
+}
+
+function getStatus() -> str {
+  if (isAdmin) {
+    return "ON"
+  }
+  return "OFF"
+}
+
+Checkbox(checked: isAdmin, onChange: toggleAdmin(), label: "Admin mode?")
+
+Paragraph {
+  "Admin mode is " + (getStatus()) + "! :D"
 }
 ```
 
-No JSX ternaries. No v-if. No separate script tags. Mixed logic. Clean.
 
 #### Animations that make sense.
 ```ts
@@ -108,6 +160,8 @@ Main {
 
 - Mixed logic — if, for, and expressions right in your UI
 - Two-way binding — Input(bind: variable) in one line
+- Reactivity
+- Import own Components
 - Expression-based delays ("delay: index * 300") for staggered animations
 - Object support: var obj with dot notation (user.name)
 - Object iteration: for key, value, index in object
@@ -145,7 +199,22 @@ Sinth's reactive runtime does not use eval(). Every expression is pre-compiled i
 - sinth check — lint without output
 - sinth version — print version
 
+## Imports
 
+Importing made easy!
+
+```ts
+page
+
+import components/MyComponent.sinth as Navbar
+
+
+Navbar
+
+Main {
+
+}
+```
 
 ## Links
 

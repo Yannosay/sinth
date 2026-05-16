@@ -1,13 +1,36 @@
 page
-
-title = "Function test"
-
-
-
-function greet(str name) -> str {    -- New! (0.10.0)
-  "Hello, " + name
+title = "Checkbox Test"
+var bool isAdmin = false
+var bool isCool = false
+function toggleAdmin() {
+  isAdmin = !isAdmin
 }
-
-Div {
-  (greet("Sinth")) + " - welcome!"
+function toggleCool() {
+  isCool = !isCool
 }
+function getStatus() -> str {
+  if (isAdmin) {
+    return "ON"
+  }
+  return "OFF"
+}
+function getCool() -> str {
+  if (isCool) {
+    return "ON"
+  }
+  return "OFF"
+}
+Checkbox(checked: isAdmin, onChange: toggleAdmin(), label: "Admin mode?")
+Checkbox(checked: isCool, onChange: toggleCool(), label: "Cool mode?")
+Paragraph {
+  "Admin mode is " + (getStatus()) + "! :D"
+}
+Paragraph {
+  "Cool mode is " + (getCool()) + "! :3"
+}
+if isCool == true {
+  Paragraph(id: "msg", replace, delay: 1000, hide: false) {"Cool!!!"}  
+} else {
+  Paragraph(id: "msg", delay: 1000, hide: false) {"Uncool!!! D:"} 
+}
+Paragraph(delay: 1000) {"test"}

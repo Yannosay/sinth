@@ -1,4 +1,5 @@
-import { Expression, Child, AssignStmt, IfBlock, LitStr, LitNum, LitBool } from "./types.ts";
+import { Expression, Child, AssignStmt, IfBlock, ReturnStmt, LitStr, LitNum, LitBool } from "./types.ts";
+
 
 export function compileExprToJS(expr: Expression, loopVars?: Set<string>): string {
   switch (expr.kind) {
@@ -9,8 +10,12 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>): strin
       if (expr.value.kind === "bool") return String((expr.value as LitBool).value);
       return "null";
     case "variable":
-      if (loopVars && expr.name && loopVars.has(expr.name)) {
-        return `_ctx.${expr.name}`;
+      if (loopVars && expr.name) {
+        const dotIdx = expr.name.indexOf('.');
+        const root = dotIdx !== -1 ? expr.name.substring(0, dotIdx) : expr.name;
+        if (loopVars.has(root)) {
+          return `_ctx.${expr.name}`;
+        }
       }
       return expr.name ?? "undefined";
     case "binary": {
@@ -55,9 +60,10 @@ export function compileIfToJS(ifBlock: IfBlock): string {
 
 export function bodyToJS(children: Child[]): string {
   return children
-    .filter(c => c.kind === "assign_stmt" || c.kind === "if")
+    .filter(c => c.kind === "assign_stmt" || c.kind === "if" || c.kind === "return")
     .map(c => {
       if (c.kind === "assign_stmt") return `  ${compileExprToJS((c as AssignStmt).expression)};\n`;
+      if (c.kind === "return")      return `  return ${(c as ReturnStmt).expression ? compileExprToJS((c as ReturnStmt).expression!) : ""};\n`;
       if (c.kind === "if")          return compileIfToJS(c as IfBlock).replace(/^/gm, "  ") + "\n";
       return "";
     })

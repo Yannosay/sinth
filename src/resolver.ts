@@ -3,7 +3,7 @@ import * as path from "path";
 import { SinthFile, CompDef, CustomElInfo, SinthError, SinthWarning } from "./core/types.ts";
 import { Lexer } from "./core/lexer.ts";
 import { Parser } from "./core/parser.ts";
-import { BUILTIN_MAP } from "./core/compiler.ts";
+import { BUILTIN_MAP } from "./core/builtins.ts";
 
 
 

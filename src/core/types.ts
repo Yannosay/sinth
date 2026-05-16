@@ -19,10 +19,11 @@ export enum TT {
   KW_GLOBAL, KW_PAGE, KW_LANG,
   KW_CUSTOM_EL, KW_CUSTOM,
   KW_IF, KW_ELSE, KW_FOR, KW_IN, KW_REMOVE,
-  KW_FUNCTION,
+  KW_FUNCTION, KW_RETURN,
   OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH, OP_SEMI,
   OP_LT, OP_GT, OP_NEQ, OP_EQEQ, OP_LTEQ, OP_GTEQ,
   OP_ARROW,
+  OP_NOT,
   EOF,
 }
 
@@ -62,9 +63,11 @@ export interface AssignStmt { kind: "assign_stmt"; expression: Expression;      
 export interface IfBlock    { kind: "if";          condition: Expression; body: Child[]; elseBody?: Child[]; loc: Loc }
 export interface ForLoop    { kind: "for";         keyVar?: string; itemVar: string; indexVar?: string; arrayVar: string; body: Child[]; loc: Loc }
 export interface RemoveStmt  { kind: "remove";      target: string; loc: Loc }
+export interface ReturnStmt  { kind: "return";      expression?: Expression; loc: Loc }
+export interface ComponentExpr { kind: "component_expr"; children: Child[]; loc: Loc }
 
 
-export type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt;
+export type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt | ReturnStmt | ComponentExpr;
 
 export interface ParamDecl   { name: string; defaultVal?: Literal; loc: Loc }
 
@@ -82,7 +85,7 @@ export interface CompDef      { name: string; params: ParamDecl[]; body: Child[]
 export interface CustomElDecl { sinthName: string; tagName: string; params: ParamDecl[]; loc: Loc }
 export interface CustomElInfo { tagName: string; params: ParamDecl[] }
 
-export type VarType = "int" | "str" | "bool" | "str[]" | "obj";
+export type VarType = "int" | "str" | "bool" | "str[]" | "obj" | "ui";
 export interface VarDeclaration { kind: "var"; name: string; varType: VarType; value: Literal | null; loc: Loc }
 
 export type ImportNode =
@@ -126,6 +129,7 @@ export interface MixedBlockEntry {
 
 export interface CompileCtx {
   allDefs:      Map<string, CompDef>;
+  functionDefs: FunctionDef[];
   customEls:    Map<string, CustomElInfo>;
   cssLinks:     string[];
   jsLinks:      { src: string; attrs: Record<string, string> }[];
