@@ -45,7 +45,7 @@ No JSX ternaries. No v-if. No separate script tags. Mixed logic. Clean.
 ```ts
 page
 
-title = "Full Test"
+title = "Functions"
 
 var str userName = "Sinths User"
 
@@ -92,6 +92,45 @@ Paragraph {
   "Admin mode is " + (getStatus()) + "! :D"
 }
 ```
+#### NEW (0.13.5): Fullscreen activation + if-else inside Component
+
+```ts
+page
+title = "Fullscreen"
+
+var bool isFullscreen = false
+var str userName = ""
+
+Main {
+    Button(onClick: isFullscreen = !isFullscreen, fullscreen: isFullscreen) {
+        if isFullscreen {
+            "Exit Fullscreen"
+        } else {
+            "Enter Fullscreen"
+        }
+    }
+    Input(bind: userName)
+    Paragraph {
+        if userName == "Sinth" {
+            "Oh, welcome back!"
+        } else {
+            "Hello, " + userName + "!"
+        }
+    }
+}
+```
+
+#### Fullscreen Sync (0.13.6)
+
+Opt-in Escape key handling. `fullscreenSync` keeps your variable in sync with the browser's fullscreen state.
+
+```ts
+Button(onClick: isFullscreen = !isFullscreen, fullscreen: isFullscreen, fullscreenSync: isFullscreen) {
+    if isFullscreen { "Exit Fullscreen" } else { "Enter Fullscreen" }
+}
+```
+Without fullscreenSync, pressing Escape exits fullscreen but the variable stays true.
+With it, Escape resets the variable to false — button text updates automatically.
 
 
 #### Animations that make sense.
@@ -114,11 +153,74 @@ if done == true {
     remove "myElement"
 }
 ```
-Delete elements for good. No virtual DOM diffing.
+Delete elements. No virtual DOM diffing!
 
 Compiles to pure HTML.
 
-#### Ready to upload wherever you want.
+#### Reactivity at its finest
+```ts
+page
+title = "Reactivity but easy"
+
+var str begForFullscreen = ""
+var bool doFullscreen = false
+
+Main {
+    Input(bind: begForFullscreen, fullscreen: doFullscreen) 
+    if begForFullscreen == "do fullscreen pls!!" {
+        doFullscreen = true
+    } else {
+        doFullscreen = false
+    }
+}
+```
+
+
+
+```ts
+page
+title = "Counter Demo"
+
+var int count = 0
+var int addVar = 1
+var int stepSize = 1
+
+Main {
+  Heading(level: 1) {count}
+  
+  Paragraph {"Increment by:"}
+  Input(bind: addVar, step: stepSize)
+  
+  Br()
+  Button(onClick: count = count + addVar) {"Increment"}
+  
+  Br()
+  Br()
+  Paragraph {"Step size for arrows:"}
+  Input(bind: stepSize, step: 1)
+}
+```
+##### NEW! (0.14.0): 
+Sinth now supports Reactivity in Functions!
+```ts
+page
+title = "Reactive Counter"
+
+var int apples = 1
+var int bananas = 2
+var int oranges = -6
+
+function Counter(int value) -> ui {
+  Heading(level: 1) {"Count is at: " + (value) + "!"}
+  Button(onClick: value = value + 1) {"Increment"}
+}
+
+Main {
+  (Counter(apples))
+  (Counter(bananas))
+  (Counter(oranges))
+}
+```
 
 
 # Install
@@ -143,11 +245,10 @@ Open your browser. Edit your .sinth file. Watch it update live.
 page
 title = "My Sinth Project"
 
-var str name = "World"
 
 Main {
-   var str name = "User"
-   Heading(level: 1) { "Hello, " + name }
+   var str nameVar = "User"
+   Heading(level: 1) { "Hello, " + nameVar }
    Paragraph { "Welcome to Sinth." }
 }
 ```

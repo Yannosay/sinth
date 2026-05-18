@@ -564,7 +564,30 @@ private parseArrayLiteral(): Literal {
       }
       if (this.check(TT.STRING)) {
         const loc = this.peek().loc;
-        children.push({ kind: "text", value: this.consume(TT.STRING).value, loc });
+        let leftExpr: Expression = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+        while (this.check(TT.OP_PLUS)) {
+          this.consume(TT.OP_PLUS);
+          let rhs: Expression | null = null;
+          if (this.check(TT.STRING)) {
+            rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+          } else if (this.check(TT.IDENT)) {
+            const rhsName = this.consume(TT.IDENT).value;
+            if (this.check(TT.DOT)) {
+              this.consume(TT.DOT);
+              rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
+            } else if (this.check(TT.LBRACKET)) {
+              const rhsVar: Expression = { kind: "variable", name: rhsName };
+              rhs = this.parsePostfix(rhsVar);
+            } else {
+              rhs = { kind: "variable", name: rhsName };
+            }
+          } else {
+            rhs = this.parseExpression();
+          }
+          if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
+          leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
+        }
+        children.push({ kind: "expr", expression: leftExpr, loc });
         continue;
       }
 

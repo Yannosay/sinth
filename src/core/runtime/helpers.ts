@@ -73,15 +73,19 @@ function sinthDelay(el) {
   if (el.dataset.sinthDelayDone) { return; }
   el.dataset.sinthDelayDone = '1';
   var ms = parseInt(el.dataset.sinthDelay) || 0;
-  if (el.dataset.sinthDelayHide !== 'false') {
-    el.style.display = 'none';
-  }
+  var hideEl = el.dataset.sinthDelayHide !== 'false';
   var show = function() {
-    el.style.display = '';
+    if (hideEl) el.style.display = '';
     el.querySelectorAll('.sinth-expr').forEach(sinthExpr);
   };
-  if (ms > 0) setTimeout(show, ms);
-  else show();
+  if (hideEl) {
+    el.style.display = 'none';
+    if (ms > 0) setTimeout(show, ms);
+    else show();
+  } else {
+    if (ms > 0) setTimeout(show, ms);
+    else show();
+  }
 }
 function sinthDelayExpr(el, _ctx) {
   _ctx = _ctx || {};

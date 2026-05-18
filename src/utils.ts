@@ -25,7 +25,7 @@ export function esc(s: string): string {
 }
 
 export function escAttr(s: string): string {
-  return esc(s).replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 export function litToString(lit: Literal): string {

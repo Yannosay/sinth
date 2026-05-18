@@ -43,19 +43,21 @@ export function buildRenderBody(opts: {
     }
   }
 
+  if (needsIf) {
+    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
+  }
   renderBody += `  document.querySelectorAll('[data-sinth-remove]').forEach(function(el) {
     var target = document.getElementById(el.dataset.sinthRemove);
     if (target) target.remove();
   });\n`;
-
-  if (needsIf) {
-    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
-  }
   if (needsFor) {
     renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
+    try { if (document.activeElement !== el) el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
+  });\n`;
+  renderBody += `  document.querySelectorAll('[data-sinth-step]').forEach(function(el) {
+    try { el.step = window[el.dataset.sinthStep] || 1; } catch(e) {}
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
     try { el.checked = !!window[el.dataset.sinthChecked]; } catch(e) {}
@@ -68,8 +70,28 @@ export function buildRenderBody(opts: {
     } catch(e) {}
   });\n`;
   }
+  if (needsDelay) {
+    renderBody += `  document.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
+    var newContent = '';
+    el.querySelectorAll('.sinth-expr').forEach(function(exprEl) {
+      var exprFn = __X[exprEl.dataset.exprId];
+      if (exprFn) newContent += exprFn({});
+    });
+    if (el._sinthLastContent === undefined) {
+      el._sinthLastContent = newContent;
+    } else if (el._sinthLastContent !== newContent) {
+      el._sinthLastContent = newContent;
+      delete el.dataset.sinthDelayDone;
+    }
+  });\n`;
+  }
   if (needsExpr) {
-    renderBody += `  document.querySelectorAll('.sinth-expr').forEach(sinthExpr);\n`;
+    renderBody += `  document.querySelectorAll('.sinth-expr').forEach(function(el) {
+    var delayParent = el.closest('[data-sinth-delay]');
+    if (!delayParent || delayParent.dataset.sinthDelayDone) {
+      sinthExpr(el);
+    }
+  });\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-hide]').forEach(function(el) {
     var exprId = el.dataset.sinthHide;
@@ -80,6 +102,21 @@ export function buildRenderBody(opts: {
       } catch(e) {}
     } else {
       el.style.display = 'none';
+    }
+  });\n`;
+  renderBody += `  document.querySelectorAll('[data-sinth-fullscreen]').forEach(function(el) {
+    var exprId = el.dataset.sinthFullscreen;
+    if (exprId) {
+      try {
+        var exprFn = __X[exprId];
+        if (exprFn) {
+          if (exprFn({})) {
+            if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+          } else {
+            if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+          }
+        }
+      } catch(e) {}
     }
   });\n`;
   if (needsDelay) {

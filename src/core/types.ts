@@ -41,7 +41,7 @@ export type AssignOp = "=" | "+=" | "-=";
 export type PostfixOp = "++" | "--";
 
 export interface Expression {
-  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index" | "call";
+  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index" | "call" | "expr_ref";
   value?:   Literal;
   name?:    string;
   op?:      UnaryOp | BinaryOp | AssignOp | PostfixOp;
@@ -53,6 +53,7 @@ export interface Expression {
   key?:     Expression;
   callee?:  Expression;
   args?:    Expression[];
+  exprId?:  number;   // for "expr_ref" kind
 }
 
 export interface Attr       { name: string; value: Literal | null; loc: Loc }
@@ -142,6 +143,8 @@ export interface CompileCtx {
   ifIdCounter:  number;
   exprRegistry: string[];
   exprMap:      Map<string, number>;
+  varDecls?:    VarDeclaration[];
+  actionButtons: { qid: string; delayMs: number; hide: boolean }[];
   loopVars?:    Set<string>;
 }
 

@@ -1,4 +1,4 @@
-import { CompileCtx, FunctionDef } from "../types.ts";
+import { CompileCtx, FunctionDef, IfBlock } from "../types.ts";
 import { compileExprToJS, compileIfToJS } from "../expr.ts";
 
 export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
