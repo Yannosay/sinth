@@ -18,6 +18,7 @@ const KEYWORDS: Record<string, TT> = {
   "custom":         TT.KW_CUSTOM,
   "if":             TT.KW_IF,
   "else":           TT.KW_ELSE,
+  "elif":           TT.KW_ELSE,
   "for":            TT.KW_FOR,
   "in":             TT.KW_IN,
   "remove":         TT.KW_REMOVE,
@@ -62,6 +63,7 @@ export class Lexer {
       if (ch === "+") { tokens.push(this.single(TT.OP_PLUS,  loc)); continue; }
       if (ch === "*") { tokens.push(this.single(TT.OP_STAR,  loc)); continue; }
       if (ch === "/") { tokens.push(this.single(TT.OP_SLASH, loc)); continue; }
+      if (ch === "%") { tokens.push(this.single(TT.OP_MOD, loc)); continue; }      
       if (ch === ";") { tokens.push(this.single(TT.OP_SEMI, loc)); continue; }
       if (ch === "<") { tokens.push(this.single(TT.OP_LT,    loc)); continue; }
       if (ch === ">") { tokens.push(this.single(TT.OP_GT,    loc)); continue; }

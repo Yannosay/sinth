@@ -13,7 +13,7 @@ export function buildRenderBody(opts: {
 }): string {
   const { bodyHTML, logicBlocks, mixedBlocks, needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay } = opts;
   let renderBody = "";
-  renderBody += `  var _sx = window.scrollX, _sy = window.scrollY;\n`;
+  renderBody += `  let _sx = window.scrollX, _sy = window.scrollY;\n`;
 
   if (needsLogic) {
     renderBody += logicBlocks.map(b => b.replace(/^/gm, "  ")).join("\n") + "\n";
@@ -24,9 +24,9 @@ export function buildRenderBody(opts: {
       const ifJS = mb.ifJS ? mb.ifJS.trim() : "";
       const elseJS = mb.elseJS ? mb.elseJS.trim() : "";
       renderBody += `  (function() {
-    var __el = document.getElementById(${JSON.stringify(mb.replaceId || mb.id)});
+    let __el = document.getElementById(${JSON.stringify(mb.replaceId || mb.id)});
     if (__el) {
-      var __condFn = __X[${mb.conditionJS}];
+      let __condFn = __X[${mb.conditionJS}];
       if (__condFn ? __condFn() : false) {
         ${ifJS}
         __el.innerHTML = ${JSON.stringify(mb.ifHTML)};
@@ -35,6 +35,7 @@ export function buildRenderBody(opts: {
         __el.innerHTML = ${JSON.stringify(mb.elseHTML)};
       }
       __el.querySelectorAll('.sinth-expr').forEach(sinthExpr);
+      __el.querySelectorAll('.sinth-expr').forEach(function(el) { el.classList.remove('sinth-expr'); });      
       __el.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);
       ${needsDelay ? `__el.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
       __el.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) { sinthDelayExpr(el, {}); });` : ""}
@@ -47,14 +48,14 @@ export function buildRenderBody(opts: {
     renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-remove]').forEach(function(el) {
-    var target = document.getElementById(el.dataset.sinthRemove);
+    let target = document.getElementById(el.dataset.sinthRemove);
     if (target) target.remove();
   });\n`;
   if (needsFor) {
     renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { if (document.activeElement !== el) el.value = window[el.dataset.sinthValue] || ''; } catch(e) {}
+    try { if (document.activeElement !== el) { el.value = Function('"use strict"; return (' + el.dataset.sinthValue + ')')(); } } catch(e) {}
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-step]').forEach(function(el) {
     try { el.step = window[el.dataset.sinthStep] || 1; } catch(e) {}
@@ -65,16 +66,16 @@ export function buildRenderBody(opts: {
   if (bodyHTML.includes("data-sinth-checked-expr")) {
     renderBody += `  document.querySelectorAll('[data-sinth-checked-expr]').forEach(function(el) {
     try {
-      var exprFn = __X[el.dataset.sinthCheckedExpr];
+      let exprFn = __X[el.dataset.sinthCheckedExpr];
       if (exprFn) el.checked = !!exprFn({});
     } catch(e) {}
   });\n`;
   }
   if (needsDelay) {
     renderBody += `  document.querySelectorAll('[data-sinth-delay]').forEach(function(el) {
-    var newContent = '';
+    let newContent = '';
     el.querySelectorAll('.sinth-expr').forEach(function(exprEl) {
-      var exprFn = __X[exprEl.dataset.exprId];
+      let exprFn = __X[exprEl.dataset.exprId];
       if (exprFn) newContent += exprFn({});
     });
     if (el._sinthLastContent === undefined) {
@@ -87,17 +88,17 @@ export function buildRenderBody(opts: {
   }
   if (needsExpr) {
     renderBody += `  document.querySelectorAll('.sinth-expr').forEach(function(el) {
-    var delayParent = el.closest('[data-sinth-delay]');
+    let delayParent = el.closest('[data-sinth-delay]');
     if (!delayParent || delayParent.dataset.sinthDelayDone) {
       sinthExpr(el);
     }
   });\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-hide]').forEach(function(el) {
-    var exprId = el.dataset.sinthHide;
+    let exprId = el.dataset.sinthHide;
     if (exprId) {
       try {
-        var exprFn = __X[exprId];
+        let exprFn = __X[exprId];
         if (exprFn) el.style.display = exprFn({}) ? 'none' : '';
       } catch(e) {}
     } else {
@@ -105,10 +106,10 @@ export function buildRenderBody(opts: {
     }
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-fullscreen]').forEach(function(el) {
-    var exprId = el.dataset.sinthFullscreen;
+    let exprId = el.dataset.sinthFullscreen;
     if (exprId) {
       try {
-        var exprFn = __X[exprId];
+        let exprFn = __X[exprId];
         if (exprFn) {
           if (exprFn({})) {
             if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();

@@ -20,7 +20,7 @@ export enum TT {
   KW_CUSTOM_EL, KW_CUSTOM,
   KW_IF, KW_ELSE, KW_FOR, KW_IN, KW_REMOVE,
   KW_FUNCTION, KW_RETURN,
-  OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH, OP_SEMI,
+  OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH, OP_MOD, OP_SEMI,
   OP_LT, OP_GT, OP_NEQ, OP_EQEQ, OP_LTEQ, OP_GTEQ,
   OP_ARROW,
   OP_NOT,
@@ -36,7 +36,7 @@ export type LitNull = { kind: "null" };
 export type Literal = LitStr | LitNum | LitBool | LitNull;
 
 export type UnaryOp  = "not" | "-";
-export type BinaryOp = "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or";
+export type BinaryOp = "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or";
 export type AssignOp = "=" | "+=" | "-=";
 export type PostfixOp = "++" | "--";
 
@@ -61,7 +61,7 @@ export interface TextNode   { kind: "text";        value: string;               
 export interface CompUse    { kind: "use";         name: string; attrs: Attr[]; children: Child[]; loc: Loc }
 export interface ExprNode   { kind: "expr";        expression: Expression;              loc: Loc }
 export interface AssignStmt { kind: "assign_stmt"; expression: Expression;              loc: Loc }
-export interface IfBlock    { kind: "if";          condition: Expression; body: Child[]; elseBody?: Child[]; loc: Loc }
+export interface IfBlock    { kind: "if";          condition: Expression; body: Child[]; elseBody?: Child[]; persist?: boolean; loc: Loc }
 export interface ForLoop    { kind: "for";         keyVar?: string; itemVar: string; indexVar?: string; arrayVar: string; body: Child[]; loc: Loc }
 export interface RemoveStmt  { kind: "remove";      target: string; loc: Loc }
 export interface ReturnStmt  { kind: "return";      expression?: Expression; loc: Loc }
@@ -126,6 +126,7 @@ export interface MixedBlockEntry {
   elseJS:      string;
   elseHTML:    string;
   replaceId?:  string;
+  persist?:    boolean;
 }
 
 export interface CompileCtx {

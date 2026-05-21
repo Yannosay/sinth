@@ -46,6 +46,71 @@ export const INLINE_STYLE_PROPS = new Set([
   "content","quotes",
 ]);
 
+function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: CompileCtx): string | null {
+  const paramMap = new Map<string, string>();
+  for (let i = 0; i < fnDef.params.length && i < args.length; i++) {
+    paramMap.set(fnDef.params[i].name, compileExprToJS(args[i]));
+  }
+  const subExpr = (expr: Expression): Expression => {
+    if (expr.kind === "variable" && expr.name && paramMap.has(expr.name)) {
+      return { kind: "variable", name: paramMap.get(expr.name)! };
+    }
+    if (expr.kind === "binary") {
+      return { ...expr, left: expr.left ? subExpr(expr.left) : undefined, right: expr.right ? subExpr(expr.right) : undefined };
+    }
+    if (expr.kind === "unary") {
+      return { ...expr, operand: expr.operand ? subExpr(expr.operand) : undefined };
+    }
+    if (expr.kind === "assign") {
+      if (expr.target && paramMap.has(expr.target)) {
+        return { ...expr, target: paramMap.get(expr.target)!, right: expr.right ? subExpr(expr.right) : undefined };
+      }
+      return { ...expr, right: expr.right ? subExpr(expr.right) : undefined };
+    }
+    if (expr.kind === "postfix" && expr.target && paramMap.has(expr.target)) {
+      return { ...expr, target: paramMap.get(expr.target)!, op: expr.op };
+    }
+    if (expr.kind === "index") {
+      return { ...expr, object: expr.object ? subExpr(expr.object) : undefined, key: expr.key ? subExpr(expr.key) : undefined };
+    }
+    if (expr.kind === "call") {
+      return { ...expr, callee: expr.callee ? subExpr(expr.callee) : undefined, args: expr.args?.map(a => subExpr(a)) };
+    }
+    return expr;
+  };
+  const subChild = (child: Child): Child => {
+    switch (child.kind) {
+      case "assign_stmt":
+        return { ...child, expression: subExpr(child.expression) as Expression };
+      case "if": {
+        const ib = child as IfBlock;
+        return {
+          ...ib,
+          condition: subExpr(ib.condition),
+          body: ib.body.map(subChild),
+          elseBody: ib.elseBody?.map(subChild),
+        };
+      }
+      case "return":
+        return { ...child, expression: child.expression ? subExpr(child.expression) : undefined };
+      default:
+        return child;
+    }
+  };
+  const statements: string[] = [];
+  for (const c of fnDef.body) {
+    const substituted = subChild(c);
+    if (substituted.kind === "assign_stmt") {
+      statements.push(compileExprToJS(substituted.expression) + ";");
+    } else if (substituted.kind === "if") {
+      statements.push(compileIfToJS(substituted as IfBlock));
+    } else if (substituted.kind === "return") {
+    }
+  }
+  if (statements.length === 0) return null;
+  return statements.join(" ");
+}
+
 export function resolveBuiltinTag(
   name:  string,
   attrs: Attr[],
@@ -177,6 +242,12 @@ if (name === "delay") {
 
   let raw = value.value;
 
+  if (raw.startsWith("__ACTION_JS__")) {
+    const js = raw.substring("__ACTION_JS__".length);
+    const ev = eventAttrName(name);
+    if (ev) return `${ev}="(function(){ ${js.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
+    return `${name}="${escAttr(js)}"`;
+  }  
   if (raw.startsWith("__MULTI_EXPR__")) {
     const exprJson = raw.substring("__MULTI_EXPR__".length);
     try {
@@ -191,8 +262,18 @@ if (name === "delay") {
     const exprJson = raw.substring("__EXPR__".length);
     try {
       const expr: Expression = JSON.parse(exprJson);
-      const jsExpr = compileExprToJS(expr, ctx?.loopVars);
       const ev = eventAttrName(name);
+      if (ev && expr.kind === "call" && expr.callee?.kind === "variable") {
+        const fnName = expr.callee.name;
+        const fnDef = fnName ? ctx.functionDefs.find(f => f.name === fnName) : undefined;
+        if (fnDef) {
+          const inlinedJS = inlineFunctionBody(fnDef, expr.args ?? [], ctx);
+          if (inlinedJS) {
+            return `${ev}="(function(){ ${inlinedJS.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
+          }
+        }
+      }
+      const jsExpr = compileExprToJS(expr, ctx?.loopVars);
       if (ev) return `${ev}="(function(){ ${jsExpr.replace(/"/g, "&quot;")}; sinthRender(); })()"`;
       return `${name}="${escAttr(jsExpr)}"`;
     } catch { }
@@ -342,6 +423,9 @@ export function renderChild(
                       return { ...a, value: { kind: "str" as const, value: "__EXPR__" + JSON.stringify(substituted) } };
                     } catch {}
                   }
+                  if (raw.startsWith("__ACTION_JS__")) {
+                    return { ...a, value: { kind: "str" as const, value: raw } };
+                  }                  
                   if (raw.startsWith("__MULTI_EXPR__")) {
                     try {
                       const exprs: Expression[] = JSON.parse(raw.substring("__MULTI_EXPR__".length));
@@ -449,6 +533,7 @@ depth:   number,
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
     const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
     let replaceAttr = "";
+    let persistAttr = ifBlock.persist ? ` data-sinth-if-persist="true"` : "";    
     const firstComp = ifBlock.body.find(c => c.kind === "use") as CompUse | undefined;
     if (firstComp) {
       const idAttr = firstComp.attrs.find(a => a.name === "id");
@@ -490,7 +575,7 @@ depth:   number,
       }
     }
     return (
-      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${replaceAttr}${delayAttr}${delayHideAttr}>${bodyHTML}</template>` +
+      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${replaceAttr}${delayAttr}${delayHideAttr}${persistAttr}>${bodyHTML}</template>` +
       (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}"${elseDelayAttr}${elseDelayHideAttr}>${elseHTML}</template>` : "")
     );
   }
@@ -698,7 +783,9 @@ export function renderCompUse(
       const rhs = (varDecl && varDecl.varType === "int")
         ? `Number(e.target.value) || 0`
         : `e.target.value`;
+      const initialVal = varDecl?.value ? litToString(varDecl.value).replace(/"/g, '&quot;') : "";
       attrParts.push(`oninput="(function(e){ ${vName} = ${rhs}; sinthRender(); })(event)"`);
+      attrParts.push(`value="${escAttr(initialVal)}"`);
       attrParts.push(`data-sinth-value="${escAttr(vName)}"`);
     }
   }
@@ -899,20 +986,20 @@ export function buildRuntime(opts: {
         );
       }
       const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]" };
-      return `var ${v.name} = ${defaults[v.varType] ?? "undefined"};`;
+      return `let ${v.name} = ${defaults[v.varType] ?? "undefined"};`;
     }
     const val = litToString(v.value);
-    if (val.startsWith("__VAR__")) return `var ${v.name} = ${val.slice(7)};`;
-    if (val.startsWith("__ARR__")) return `var ${v.name} = ${val.slice(7)};`;
-    if (v.varType === "obj") return `var ${v.name} = ${val};`;
-    if (v.varType === "str")  return `var ${v.name} = ${JSON.stringify(val)};`;
+    if (val.startsWith("__VAR__")) return `let ${v.name} = ${val.slice(7)};`;
+    if (val.startsWith("__ARR__")) return `let ${v.name} = ${val.slice(7)};`;
+    if (v.varType === "obj") return `let ${v.name} = ${val};`;
+    if (v.varType === "str")  return `let ${v.name} = ${JSON.stringify(val)};`;
     if (v.varType === "str[]" && typeof val === 'string' && val.startsWith("__ARR__")) {
       try {
         const arr = JSON.parse(val.slice(7));
-        return `var ${v.name} = ${JSON.stringify(arr)};`;
-      } catch { return `var ${v.name} = ${val.slice(7)};`; }
+        return `let ${v.name} = ${JSON.stringify(arr)};`;
+      } catch { return `let ${v.name} = ${val.slice(7)};`; }
     }
-    return `var ${v.name} = ${val};`;
+    return `let ${v.name} = ${val};`;
   }).join("\n");
 
   if (!needsRender && !needsDelay) {
@@ -928,7 +1015,7 @@ export function buildRuntime(opts: {
   });
 
   const exprArrayJS = exprRegistry.length > 0
-    ? `var __X = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
+    ? `let __X = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
     : "";
 
   let renderFunc = needsRender ? `function sinthRender() {\n${renderBody}}\nsinthRender();` : "";
@@ -936,9 +1023,9 @@ export function buildRuntime(opts: {
   if (needsFullscreenSync) {
     renderFunc += `
 (function() {
-  var syncedEls = document.querySelectorAll('[data-sinth-fullscreen-sync]');
+  let syncedEls = document.querySelectorAll('[data-sinth-fullscreen-sync]');
   if (syncedEls.length > 0) {
-    var vars = [];
+    let vars = [];
     syncedEls.forEach(function(el) { vars.push(el.dataset.sinthFullscreenSync); });
     document.addEventListener('fullscreenchange', function() {
       if (!document.fullscreenElement) {
@@ -950,7 +1037,7 @@ export function buildRuntime(opts: {
 })();`;
   }
 
-  const pageCode = `// Sinth page runtime
+  const pageCode = `// Sinth Page Runtime
 ${varLines}
 ${exprArrayJS}
 ${renderFunc}`;
@@ -1016,8 +1103,9 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     }
     if (child.kind === "use") {
       (child as CompUse).attrs.forEach(a => {
+        if (a.name === "id") return;
         if (a.value?.kind === "str") {
-          const v = a.value.value;
+          const v = a.value.value;          
           if (v.startsWith("__EXPR__") || v.startsWith("__MULTI_EXPR__")) {
             try {
               const exprs: Expression[] = v.startsWith("__MULTI_EXPR__")
@@ -1141,7 +1229,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     const extra = Object.entries(s.attrs)
       .map(([k, v]) => v === "true" ? k : `${k}="${escAttr(v)}"`)
       .join(" ");
-    const globalised = s.raw.replace(/\b(let|const)\b/g, "var");
+    const globalised = s.raw.replace(/\b(let|const)\b/g, "let");
     scriptTags.push(`<script${extra ? " " + extra : ""}>\n${globalised}\n</script>`);
   }
 

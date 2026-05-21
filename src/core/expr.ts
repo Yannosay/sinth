@@ -39,6 +39,9 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>): strin
     case "call": {
       const callee = compileExprToJS(expr.callee!, loopVars);
       const args = (expr.args ?? []).map(a => compileExprToJS(a, loopVars)).join(", ");
+      if (expr.args && expr.args.length === 0 && /\.length$/.test(callee)) {
+        return callee;
+      }
       return `${callee}(${args})`;
     }
     default:
