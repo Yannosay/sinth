@@ -28,12 +28,33 @@ export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: b
 
   const bodyHTML = cel.body.map(c => renderChild(c, childCtx, new Map(), 0)).join("\n");
   
-  let rewrittenHTML = bodyHTML;
-  for (const name of varNames) {
-    rewrittenHTML = rewrittenHTML.replace(new RegExp(`\\b${name}\\b`, 'g'), `host._${name}`);
+  function replaceVarsOutsideStrings(text: string, varNames: string[], replacement: (name: string) => string): string {
+    const varPattern = varNames.join('|');
+    const regex = new RegExp(`("[^"]*"|'[^']*'|\`[^\`]*\`)|\\b(${varPattern})\\b`, 'g');
+    const parts: string[] = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+      parts.push(text.substring(lastIndex, match.index));
+      if (match[1]) {
+        parts.push(match[1]);
+      } else if (match[2]) {
+        parts.push(replacement(match[2]));
+      }
+      lastIndex = regex.lastIndex;
+    }
+    parts.push(text.substring(lastIndex));
+    return parts.join('');
   }
+
+  let rewrittenHTML = bodyHTML;
+  rewrittenHTML = rewrittenHTML.replace(/onclick="([^"]+)"/g, (match, content) => {
+    const replaced = replaceVarsOutsideStrings(content, varNames, (name) => `host._${name}`);
+    return `data-sinth-click="${replaced}"`;
+  });
+  rewrittenHTML = replaceVarsOutsideStrings(rewrittenHTML, varNames, (name) => `host._${name}`);
   rewrittenHTML = rewrittenHTML.replace(/sinthRender\(\)/g, 'host._render()');
-  rewrittenHTML = rewrittenHTML.replace(/onclick="([^"]+)"/g, 'data-sinth-click="$1"');
   
   const escapedHTML = rewrittenHTML.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
 
@@ -42,11 +63,7 @@ export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: b
 
   const exprArrayJS = childCtx.exprRegistry.length > 0
     ? `let __X = [${childCtx.exprRegistry.map(js => {
-        let fixed = js;
-        for (const name of varNames) {
-          fixed = fixed.replace(new RegExp(`\\b${name}\\b`, 'g'), `_ctx.host._${name}`);
-        }
-        return `function(_ctx){ return ${fixed}; }`;
+        return `function(_ctx){ return ${replaceVarsOutsideStrings(js, varNames, (name) => `_ctx.host._${name}`)}; }`;
       }).join(",")}];\n`
     : "";
 
