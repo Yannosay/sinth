@@ -1071,7 +1071,7 @@ export function buildRuntime(opts: {
     ? `let __X = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
     : "";
 
-  let renderFunc = needsRender ? `var _sinthRenderPending = false;\nfunction sinthRender() {\n  if (_sinthRenderPending) return;\n  _sinthRenderPending = true;\n  requestAnimationFrame(function() {\n    _sinthRenderPending = false;\n${renderBody.replace(/^/gm, "    ")}\n  });\n}\nsinthRender();` : "";
+  let renderFunc = needsRender ? `function sinthRender() {\n${renderBody.replace(/^/gm, "  ")}\n}\nsinthRender();` : "";
 
   if (needsFullscreenSync) {
     renderFunc += `
@@ -1178,9 +1178,10 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   const pageVars = new Set<string>();
   file.uses.forEach(u => collectChildVars(u, pageVars));
   for (const v of pageVars) {
-    if (!declaredVars.has(v)) {
+    const rootVar = v.split('.')[0];
+    if (!declaredVars.has(rootVar)) {
       throw new SinthError(
-        `Variable '${v}' is used but never declared. Add 'var str ${v}' or 'var int ${v}' before using it.`
+        `Variable '${rootVar}' is used but never declared. Add 'var str ${rootVar}' or 'var int ${rootVar}' before using it.`
       );
     }
   }
@@ -1189,9 +1190,10 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     const fnBodyVars = new Set<string>();
     fn.body.forEach(c => collectChildVars(c, fnBodyVars));
     for (const v of fnBodyVars) {
-      if (!fnParamNames.has(v) && !declaredVars.has(v) && !declaredFuncs.has(v)) {
+      const rootVar = v.split('.')[0];
+      if (!fnParamNames.has(rootVar) && !declaredVars.has(rootVar) && !declaredFuncs.has(rootVar)) {
         throw new SinthError(
-          `Variable '${v}' used in function '${fn.name}' is not declared. It must be a parameter or a page-level variable.`
+          `Variable '${rootVar}' used in function '${fn.name}' is not declared. It must be a parameter or a page-level variable.`
         );
       }
     }
