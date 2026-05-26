@@ -10,12 +10,12 @@ export function generateHelpers(opts: {
 
   if (needsExpr || needsIf || needsFor) {
     helpers += `
-function sinthExpr(el) {
+var sinthExpr = function(el) {
   try {
     let exprFn = __X[el.dataset.exprId];
     if (exprFn) el.textContent = exprFn({});
   } catch(e) {}
-}
+};
 `;
   }
 

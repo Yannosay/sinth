@@ -70,7 +70,7 @@ export interface ComponentExpr { kind: "component_expr"; children: Child[]; loc:
 
 export type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt | ReturnStmt | ComponentExpr;
 
-export interface ParamDecl   { name: string; defaultVal?: Literal; loc: Loc }
+export interface ParamDecl   { name: string; paramType?: VarType; defaultVal?: Literal; loc: Loc }
 
 export interface StyleBlock {
   global:     boolean;
@@ -83,8 +83,8 @@ export interface StyleBlock {
 
 export interface ScriptBlock  { raw: string; attrs: Record<string, string>; loc: Loc }
 export interface CompDef      { name: string; params: ParamDecl[]; body: Child[]; styles: StyleBlock[]; scripts: ScriptBlock[]; loc: Loc }
-export interface CustomElDecl { sinthName: string; tagName: string; params: ParamDecl[]; loc: Loc }
-export interface CustomElInfo { tagName: string; params: ParamDecl[] }
+export interface CustomElDecl { sinthName: string; tagName: string; exportTag?: string; params: ParamDecl[]; body: Child[]; styles: StyleBlock[]; scripts: ScriptBlock[]; varDecls: VarDeclaration[]; loc: Loc 
+}export interface CustomElInfo { tagName: string; params: ParamDecl[] }
 
 export type VarType = "int" | "str" | "bool" | "str[]" | "obj" | "ui";
 export interface VarDeclaration { kind: "var"; name: string; varType: VarType; value: Literal | null; loc: Loc }
@@ -147,6 +147,8 @@ export interface CompileCtx {
   varDecls?:    VarDeclaration[];
   actionButtons: { qid: string; delayMs: number; hide: boolean }[];
   loopVars?:    Set<string>;
+  diffingEnabled?: boolean;
+  declaredVars?: Set<string>;
 }
 
 export class SinthError extends Error {

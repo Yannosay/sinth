@@ -1,9 +1,10 @@
 ﻿# Sinth 
 
-The language that fixes HTML. Declarative. Reactive. Compiles to pure HTML.
+The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pure HTML.
 
-Find out more: https://www.youtube.com/watch?v=W0tOMTiIF0Q
-Discord: [Join here!](https://discord.gg/SUvcrafTQm)
+* Introduction: https://www.youtube.com/watch?v=W0tOMTiIF0Q
+* Discord: [Join here!](https://discord.gg/SUvcrafTQm)
+* Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs)
 
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
@@ -32,6 +33,22 @@ Main {
 }
 ```
 
+#### Declare your own HTML tags
+
+```ts
+custom MyCounter(export: <awesome-counter />) {
+  var int count = 0
+  Button(onClick: count += 1) { count }
+}
+```
+
+then you can use it in non-sinth HTML projects
+
+```html
+<awesome-counter />
+<script src="awesome-counter.js"></script>
+```
+
 #### Logic and UI live together.
 ```ts
 if user.isAdmin {
@@ -47,7 +64,7 @@ page
 
 title = "Functions"
 
-var str userName = "Sinths User"
+var str userName = "Sinth User"
 
 function greet(str name) -> str {
   "Hello, " + name
@@ -60,11 +77,11 @@ function renderHeading(str label) -> ui {
 }
 
 Div {
-  (greet(userName)) + " — welcome back!"
+  greet(userName) + " - welcome back!"
 }
 
-(renderHeading(userName))
-(renderHeading("This renders!"))
+renderHeading(userName)
+renderHeading("This renders!")
 ```
 or
 
@@ -86,10 +103,10 @@ function getStatus() -> str {
   return "OFF"
 }
 
-Checkbox(checked: isAdmin, onChange: toggleAdmin(), label: "Admin mode?")
+Checkbox(checked: isAdmin label: "Admin mode?")
 
 Paragraph {
-  "Admin mode is " + (getStatus()) + "! :D"
+  "Admin mode is " + getStatus() + "!"
 }
 ```
 #### NEW (0.13.5): Fullscreen activation + if-else inside Component
@@ -132,6 +149,23 @@ Button(onClick: isFullscreen = !isFullscreen, fullscreen: isFullscreen, fullscre
 Without fullscreenSync, pressing Escape exits fullscreen but the variable stays true.
 With it, Escape resets the variable to false — button text updates automatically.
 
+#### Opt-in DOM Diffing
+
+Skip re-executing expressions when their variables haven't changed. Perfect for expensive calculations or side effects you only want to fire once.
+
+```ts
+page
+domdiffing = true  -- enables expression memoization
+
+var int count = 0
+
+Main {
+  Heading(level: 1) { count }
+  (alert("Fires only once!"))  -- no dependencies, runs once and never again
+  Button(onClick: count += 1) { "Increment" }
+}
+```
+Count updates every click because count changed. The alert fires only on page load — zero dependencies means it's cached forever. Just a meta flag.
 
 #### Animations that make sense.
 ```ts
@@ -149,11 +183,31 @@ Chain statements with ;. No wrapper functions. No script blocks.
 ```
 
 ```ts
-if done == true {
-    remove "myElement"
+page
+
+title = "Remove Test"
+
+var bool show = true
+var bool deleted = false
+
+Main {
+  Button(onClick: show = not show) {
+    if show { "Hide Box" } else { "Show Box" }
+  }
+  
+  Button(onClick: remove("my-box"); deleted = true) {
+    "Delete Box Forever"
+  }
+  
+  if show and not deleted {
+    Div(id: "my-box") {
+      Paragraph { "I'm a box!" }
+    }
+  }
 }
+
 ```
-Delete elements. No virtual DOM diffing!
+Delete elements. Easy.
 
 Compiles to pure HTML.
 
@@ -216,12 +270,69 @@ function Counter(int value) -> ui {
 }
 
 Main {
-  (Counter(apples))
-  (Counter(bananas))
-  (Counter(oranges))
+  Counter(apples)
+  Counter(bananas)
+  Counter(oranges)
 }
 ```
 
+## Use in real life
+```ts
+page
+
+title = "Kick Users Admin Panel"
+
+var str userName = "test username"
+var int count = 0
+
+style lang= "scss"{
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  
+  * {
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+Main {
+  Div(display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", padding: "40px", fontFamily: "Inter") {
+    Heading(level: 1, fontSize: "28px", color: "#000000", fontWeight: "700") {
+      "Kick Counter: " + count
+    }
+    Div(display: "flex", gap: "12px", alignItems: "center") {
+      Input(
+        bind: userName,
+        padding: "10px 14px",
+        fontSize: "16px",
+        borderRadius: "8px",
+        border: "2px solid #6366f1",
+        outline: "none",
+        width: "250px",
+        backgroundColor: "#1e1b4b",
+        color: "#e0e7ff",
+        fontWeight: "400"
+      )
+Button(
+  onClick: alert("Kicked: " + userName); console.log("User kicked"); count += 1,
+  padding: "10px 20px",
+  fontSize: "16px",
+  fontWeight: "600",
+  borderRadius: "8px",
+  border: "none",
+  backgroundColor: "#6366f1",
+  color: "#ffffff",
+  cursor: "pointer",
+  minWidth: "180px",
+  textAlign: "left"
+) {
+  "Kick " + userName
+}
+    }
+    Paragraph(fontSize: "14px", color: "#a5b4fc", fontWeight: "400") {
+      "Total kicks: " + count
+    }
+  }
+}
+```
 
 # Install
 npm install -g @yannosay/sinth
@@ -320,7 +431,7 @@ Main {
 ## Links
 
 - GitHub: [Official Sinth Repo](https://github.com/yannosay/sinth)
-- Website: [Sinth](https://sinth.yannosay.com) (not active at this moment)
+- Website: [Sinth](https://sinth.yannosay.com) (Note: Deep in development; documentation and various other aspects are not yet finalized.)
 - Discord: [Join here!](https://discord.gg/SUvcrafTQm)
 - VS Code Extension: [Download here](https://marketplace.visualstudio.com/items?itemName=YannosayProductions.sinth-vscode)
 
@@ -328,4 +439,4 @@ Main {
 
 ## License
 
-AGPL-3.0
+AGPL-3.0 (Just the compiler, the generated Output is 100% yours)

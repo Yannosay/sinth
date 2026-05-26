@@ -104,9 +104,24 @@ sinthRender();`;
     continue;
 }
 
-// component usage
-this.pos = savedPos;
-uses.push(this.parseCompUse());
+if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
+  this.consume(TT.IDENT);
+  this.consume(TT.LPAREN);
+  const args: Expression[] = [];
+  if (!this.check(TT.RPAREN)) {
+    args.push(this.parseExpression()!);
+    while (this.check(TT.COMMA)) {
+      this.consume(TT.COMMA);
+      args.push(this.parseExpression()!);
+    }
+  }
+  this.consume(TT.RPAREN);
+  const expr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+  uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc: this.peek().loc }], loc: this.peek().loc });
+} else {
+  this.pos = savedPos;
+  uses.push(this.parseCompUse());
+}
 }
       else throw new SinthError(
         `Unexpected token '${this.peek().value}' (${TT[this.peek().type]}) at top level`,
@@ -259,7 +274,8 @@ private parseArrayLiteral(): Literal {
   parseExpression(skipBinary: boolean = false): Expression | null {
     const tok = this.peek();
 
-    // Unary 'not'
+
+    // unary 'not'
     if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT) {
       if (tok.type === TT.IDENT) this.consume(TT.IDENT); else this.consume(TT.OP_NOT);
       const operand = this.parseExpression();
@@ -285,12 +301,18 @@ private parseArrayLiteral(): Literal {
       return this.parseBinaryRHS(this.parseCallExpr(this.parsePostfix(base)));
     }
 
+    // remove as function
+    if ((tok.type as any) === TT.KW_REMOVE) {
+      const name = this.consume(TT.KW_REMOVE).value;
+      return this.parseBinaryRHS(this.parseCallExpr({ kind: "variable", name }));
+    }
+
     // var or assignment
     if (tok.type === TT.IDENT) {
       const name = this.consume(TT.IDENT).value;
       let varExpr: Expression;
 
-      // dot notation -> user.age
+      // dot notation -> e.g. user.age
       if (this.check(TT.DOT)) {
         this.consume(TT.DOT);
         const propName = this.consume(TT.IDENT).value;
@@ -466,6 +488,9 @@ private parseArrayLiteral(): Literal {
   private parseFunctionDef(): FunctionDef {
     const loc    = this.consume(TT.KW_FUNCTION).loc;
     const name   = this.consume(TT.IDENT).value;
+    if (name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase()) {
+      throw new SinthError(`Function '${name}' must start with lowercase. Use 'component' for uppercase names.`, loc);
+    }
     const params = this.parseParamDecls();
     let returnType: VarType | undefined;
     if (this.check(TT.OP_ARROW)) {
@@ -478,7 +503,7 @@ private parseArrayLiteral(): Literal {
     }
     if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after function signature", this.peek().loc);
     this.consume(TT.LBRACE);
-    const body = this.parseChildList();
+    const body = this.parseUnifiedBody();
     this.consume(TT.RBRACE);
     return { name, params, returnType, body, loc };
   }
@@ -496,10 +521,56 @@ private parseArrayLiteral(): Literal {
     const loc = this.peek().loc;
     if      (this.check(TT.KW_CUSTOM_EL)) this.consume(TT.KW_CUSTOM_EL);
     else if (this.check(TT.KW_CUSTOM))    this.consume(TT.KW_CUSTOM);
-    const tagName   = this.consume(TT.IDENT).value;
-    const sinthName = tagNameToPascal(tagName);
-    const params    = this.parseParamDecls();
-    return { sinthName, tagName, params, loc };
+    const sinthName = this.consume(TT.IDENT).value;
+    let exportTag: string | undefined;
+    if (this.check(TT.LPAREN)) {
+      this.consume(TT.LPAREN);
+      while (!this.check(TT.RPAREN)) {
+        const attrName = this.consume(TT.IDENT).value;
+        if (attrName === "export") {
+          this.consume(TT.COLON);
+          if (!this.check(TT.OP_LT)) throw new SinthError("Expected '<tag/>' after 'export:'", this.peek().loc);
+          this.consume(TT.OP_LT);
+          exportTag = this.consume(TT.IDENT).value;
+          if (!this.check(TT.OP_SLASH)) throw new SinthError("Expected '/>' in tag literal", this.peek().loc);
+          this.consume(TT.OP_SLASH);
+          this.consume(TT.OP_GT);
+        }
+        if (!this.check(TT.RPAREN)) this.consume(TT.COMMA);
+      }
+      this.consume(TT.RPAREN);
+    }
+    if (this.check(TT.RAW_BLOCK)) {
+      const rawTok = this.consume(TT.RAW_BLOCK);
+      const tokens = new Lexer(rawTok.value, rawTok.loc.file).tokenize();
+      const sub = new Parser(tokens, rawTok.loc.file);
+      sub._varDecls = this._varDecls;
+      const parsed = sub.parseBodyContents();
+      return { sinthName, tagName: sinthName.toLowerCase(), exportTag, params: [], body: parsed.body, styles: parsed.styles, scripts: parsed.scripts, varDecls: this._varDecls, loc };
+    }
+    if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after custom element declaration", this.peek().loc);
+    this.consume(TT.LBRACE);
+    const body: Child[] = [];
+    const styles: StyleBlock[] = [];
+    const scripts: ScriptBlock[] = [];
+    const varDecls: VarDeclaration[] = [];
+    while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+      if (this.check(TT.KW_STYLE)) { styles.push(this.parseStyleBlock()); }
+      else if (this.check(TT.KW_SCRIPT)) { scripts.push(this.parseScriptBlock()); }
+      else if (this.check(TT.IDENT) && this.peek().value === "var") {
+        const vd = this.parseVarDeclaration();
+        if (vd) varDecls.push(vd);
+      }
+      else if (this.check(TT.KW_IF)) { body.push(this.parseIfBlock()); }
+      else if (this.check(TT.KW_FOR)) { body.push(this.parseForLoop()); }
+      else if (this.check(TT.IDENT)) { body.push(this.parseCompUse()); }
+      else if (this.check(TT.STRING)) {
+        body.push({ kind: "text", value: this.consume(TT.STRING).value, loc: this.peek().loc });
+      }
+      else throw new SinthError(`Unexpected token in custom element body`, this.peek().loc);
+    }
+    this.consume(TT.RBRACE);
+    return { sinthName, tagName: sinthName.toLowerCase(), exportTag, params: [], body, styles, scripts, varDecls, loc };
   }
 
     private parseReturnStmt(): ReturnStmt {
@@ -518,9 +589,10 @@ private parseArrayLiteral(): Literal {
     while (!this.check(TT.RPAREN)) {
       const ploc    = this.peek().loc;
       let pname: string;
+      let paramType: VarType | undefined;
       if (this.check(TT.IDENT) && ["int","str","bool","str[]","obj"].includes(this.peek().value) &&
           this.tokens[this.pos + 1]?.type === TT.IDENT) {
-        this.consume(TT.IDENT); // consume type
+        paramType = this.consume(TT.IDENT).value as VarType;
         pname = this.consume(TT.IDENT).value;
       } else {
         const nameTok = this.check(TT.IDENT) ? this.consume(TT.IDENT) : this.consume(this.peek().type);
@@ -528,7 +600,7 @@ private parseArrayLiteral(): Literal {
       }
       let defaultVal: Literal | undefined;
       if (this.check(TT.EQUALS)) { this.consume(TT.EQUALS); defaultVal = this.parseLiteral(); }
-      params.push({ name: pname, defaultVal, loc: ploc });
+      params.push({ name: pname, paramType, defaultVal, loc: ploc });
       if (!this.check(TT.RPAREN)) this.consume(TT.COMMA);
     }
     this.consume(TT.RPAREN);
@@ -587,43 +659,51 @@ private parseArrayLiteral(): Literal {
     const body = this.parseUnifiedBody();
     this.consume(TT.RBRACE);
 
-    let elseBody: Child[] | undefined;
-    if (this.check(TT.KW_ELSE)) {
-      const elseTok = this.consume(TT.KW_ELSE);
-      if (this.check(TT.KW_IF) || elseTok.value === "elif") {
-        if (elseTok.value === "elif") {
-          const cond = this.parseExpression();
-          if (!cond) throw new SinthError("Expected condition after 'elif'", this.peek().loc);
-          if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after elif condition", this.peek().loc);
-          this.consume(TT.LBRACE);
-          const elifBody = this.parseUnifiedBody();
-          this.consume(TT.RBRACE);
-          const elifBlock: IfBlock = { kind: "if", condition: cond, body: elifBody, loc: elseTok.loc };
-          if (this.check(TT.KW_ELSE)) {
-            const nextElse = this.consume(TT.KW_ELSE);
-            if (this.check(TT.KW_IF) || nextElse.value === "elif") {
-              this.pos--;
-              elifBlock.elseBody = [this.parseIfBlock()];
-            } else {
-              if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after else", this.peek().loc);
-              this.consume(TT.LBRACE);
-              elifBlock.elseBody = this.parseUnifiedBody();
-              this.consume(TT.RBRACE);
-            }
-          }
-          elseBody = [elifBlock];
-        } else {
-          elseBody = [this.parseIfBlock()];
-        }
-      } else {
-        if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after else", this.peek().loc);
-        this.consume(TT.LBRACE);
-        elseBody = this.parseUnifiedBody();
-        this.consume(TT.RBRACE);
-      }
-    }
+    const elseBody = this.parseElseChain();
 
     return { kind: "if", condition, body, elseBody, persist, loc };
+  }
+
+  private parseElseChain(): Child[] | undefined {
+    if (!this.check(TT.KW_ELSE)) return undefined;
+
+    const elseTok = this.consume(TT.KW_ELSE);
+
+    if (this.check(TT.LBRACE)) {
+      this.consume(TT.LBRACE);
+      const body = this.parseUnifiedBody();
+      this.consume(TT.RBRACE);
+      return body;
+    }
+
+    if (this.check(TT.KW_IF) || elseTok.value === "elif") {
+      const ifBlock = this.parseIfContinue(elseTok);
+      return [ifBlock];
+    }
+
+    throw new SinthError("Expected '{', 'if', or 'elif' after 'else'", this.peek().loc);
+  }
+
+  private parseIfContinue(elseTok: Token): IfBlock {
+    let condition: Expression;
+
+    if (elseTok.value === "elif") {
+      condition = this.parseExpression()!;
+      if (!condition) throw new SinthError("Expected condition after 'elif'", this.peek().loc);
+    } else {
+      this.consume(TT.KW_IF);
+      condition = this.parseExpression()!;
+      if (!condition) throw new SinthError("Expected condition after 'if'", this.peek().loc);
+    }
+
+    if (!this.check(TT.LBRACE)) throw new SinthError("Expected '{' after condition", this.peek().loc);
+    this.consume(TT.LBRACE);
+    const body = this.parseUnifiedBody();
+    this.consume(TT.RBRACE);
+
+    const elseBody = this.parseElseChain();
+
+    return { kind: "if", condition, body, elseBody, loc: elseTok.loc };
   }
 
   private parseRawIfStatement(): string {
@@ -804,8 +884,28 @@ private parseArrayLiteral(): Literal {
           continue;
         }
 
-        // Component usage: ident( or ident{ or ident RAW_BLOCK
-        if (nextType === TT.LPAREN || nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
+        if (nextType === TT.LPAREN) {
+          const identName = this.peek().value;
+          if (identName[0] === identName[0].toUpperCase() && identName[0] !== identName[0].toLowerCase()) {
+            children.push(this.parseCompUse());
+          } else {
+            this.consume(TT.IDENT);
+            this.consume(TT.LPAREN);
+            const args: Expression[] = [];
+            if (!this.check(TT.RPAREN)) {
+              args.push(this.parseExpression()!);
+              while (this.check(TT.COMMA)) {
+                this.consume(TT.COMMA);
+                args.push(this.parseExpression()!);
+              }
+            }
+            this.consume(TT.RPAREN);
+            const callExpr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+            children.push({ kind: "expr", expression: callExpr, loc });
+          }
+          continue;
+        }
+        if (nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
           children.push(this.parseCompUse());
           continue;
         }
@@ -836,11 +936,6 @@ private parseArrayLiteral(): Literal {
         continue;
       }
 
-      throw new SinthError(
-        `Unexpected token '${this.peek().value}' in if/else body`,
-        this.peek().loc,
-      );
-
       // reject implicit concatenation only after expression children
       if (children.length > 0) {
         const lastChild = children[children.length - 1];
@@ -855,7 +950,8 @@ private parseArrayLiteral(): Literal {
               this.tokens[this.pos]?.value !== "for" &&
               this.tokens[this.pos]?.value !== "else" &&
               this.tokens[this.pos]?.value !== "and" &&
-              this.tokens[this.pos]?.value !== "or")
+              this.tokens[this.pos]?.value !== "or" &&
+              this.tokens[this.pos]?.value[0] !== this.tokens[this.pos]?.value[0]?.toUpperCase())
           ) {
             throw new SinthError(
               `Unexpected ${TT[nextTT]}. Use '+' to concatenate values.`,
@@ -977,7 +1073,7 @@ private parseArrayLiteral(): Literal {
                 this.check(TT.BOOL_TRUE) || this.check(TT.BOOL_FALSE) ||
                 this.check(TT.NULL_LIT) || this.check(TT.LBRACKET) || this.check(TT.LBRACE)) {
               value = this.parseLiteral();
-            } else if (this.check(TT.IDENT) || this.check(TT.LPAREN)) {
+            } else if (this.check(TT.IDENT) || this.check(TT.LPAREN) || this.check(TT.NUMBER)) {
               const savedPos = this.pos;
               const expr = this.parseExpression();
               if (expr && (this.check(TT.COMMA) || this.check(TT.RPAREN))) {
@@ -1024,6 +1120,7 @@ private parseArrayLiteral(): Literal {
   private parseChildList(): Child[] {
     const children: Child[] = [];
     while (!this.check(TT.EOF) && !this.check(TT.RBRACE)) {
+      
       if (this.check(TT.LPAREN)) {
         const loc = this.peek().loc;
         this.consume(TT.LPAREN);
@@ -1066,7 +1163,19 @@ private parseArrayLiteral(): Literal {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
-            if (this.check(TT.DOT)) {
+            if (this.check(TT.LPAREN)) {
+              this.consume(TT.LPAREN);
+              const args: Expression[] = [];
+              if (!this.check(TT.RPAREN)) {
+                args.push(this.parseExpression()!);
+                while (this.check(TT.COMMA)) {
+                  this.consume(TT.COMMA);
+                  args.push(this.parseExpression()!);
+                }
+              }
+              this.consume(TT.RPAREN);
+              rhs = { kind: "call", callee: { kind: "variable", name: rhsName }, args };
+            } else if (this.check(TT.DOT)) {
               this.consume(TT.DOT);
               rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
             } else if (this.check(TT.LBRACKET)) {
@@ -1089,8 +1198,8 @@ private parseArrayLiteral(): Literal {
         continue;
       }
       else if (this.check(TT.KW_RETURN)) { children.push(this.parseReturnStmt()); continue; }
-      else if (this.check(TT.KW_IF))  { children.push(this.parseIfBlock());  }
-      else if (this.check(TT.KW_FOR)) { children.push(this.parseForLoop());  }
+      else if (this.check(TT.KW_IF))  { children.push(this.parseIfBlock());  continue; }
+      else if (this.check(TT.KW_FOR)) { children.push(this.parseForLoop());  continue; }
       else if (this.check(TT.IDENT))  {
         const loc  = this.peek().loc;
         const rawName = this.peek().value;
@@ -1207,14 +1316,48 @@ private parseArrayLiteral(): Literal {
           } else {
             children.push({ kind: "expr", expression: indexedExpr, loc });
           }
-        } else if (nextType === TT.LPAREN || nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
+        } else if (nextType === TT.LPAREN) {
+          const identName = this.peek().value;
+          if (identName[0] === identName[0].toUpperCase() && identName[0] !== identName[0].toLowerCase()) {
+            children.push(this.parseCompUse());
+            continue;
+          } else {
+            this.consume(TT.IDENT);
+            this.consume(TT.LPAREN);
+            const args: Expression[] = [];
+            if (!this.check(TT.RPAREN)) {
+              args.push(this.parseExpression()!);
+              while (this.check(TT.COMMA)) {
+                this.consume(TT.COMMA);
+                args.push(this.parseExpression()!);
+              }
+            }
+            this.consume(TT.RPAREN);
+            let finalExpr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+            while (this.check(TT.OP_PLUS)) {
+              this.consume(TT.OP_PLUS);
+              let rhs: Expression | null = null;
+              if (this.check(TT.STRING)) {
+                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              } else if (this.check(TT.IDENT)) {
+                rhs = this.parseExpression();
+              } else {
+                rhs = this.parseExpression(true);
+              }
+              if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
+              finalExpr = { kind: "binary", left: finalExpr, op: "+", right: rhs };
+            }
+            children.push({ kind: "expr", expression: finalExpr, loc });
+            continue;
+          }
+        } else if (nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
           children.push(this.parseCompUse());
+          continue;
         } else {
           const name = this.consume(TT.IDENT).value;
           children.push({ kind: "expr", expression: { kind: "variable", name }, loc });
         }
       }
-      else throw new SinthError(`Unexpected token '${this.peek().value}' in children`, this.peek().loc);
       // reject implicit concatenation only after expression children
       if (children.length > 0) {
         const lastChild = children[children.length - 1];
@@ -1229,7 +1372,8 @@ private parseArrayLiteral(): Literal {
               this.tokens[this.pos]?.value !== "for" &&
               this.tokens[this.pos]?.value !== "else" &&
               this.tokens[this.pos]?.value !== "and" &&
-              this.tokens[this.pos]?.value !== "or")
+              this.tokens[this.pos]?.value !== "or" &&
+              this.tokens[this.pos]?.value[0] !== this.tokens[this.pos]?.value[0]?.toUpperCase())
           ) {
             throw new SinthError(
               `Unexpected ${TT[nextTT]}. Use '+' to concatenate values.`,
@@ -1237,6 +1381,9 @@ private parseArrayLiteral(): Literal {
             );
           }
         }
+      }
+      if (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+        throw new SinthError(`Unexpected token '${this.peek().value}' in children`, this.peek().loc);
       }
     }
     return children;

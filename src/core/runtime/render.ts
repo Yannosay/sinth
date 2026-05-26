@@ -55,13 +55,13 @@ export function buildRenderBody(opts: {
     renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { if (document.activeElement !== el) { el.value = Function('"use strict"; return (' + el.dataset.sinthValue + ')')(); } } catch(e) {}
+    try { if (document.activeElement !== el) { let v=el.dataset.sinthValue; el.value = __X[v] ? __X[v]({}) : ''; } } catch(e) {}
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-step]').forEach(function(el) {
-    try { el.step = window[el.dataset.sinthStep] || 1; } catch(e) {}
+    try { let s=el.dataset.sinthStep; el.step = __X[s] ? __X[s]({}) : 1; } catch(e) {}
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
-    try { el.checked = !!window[el.dataset.sinthChecked]; } catch(e) {}
+    try { let c=el.dataset.sinthChecked; el.checked = __X[c] ? !!__X[c]({}) : false; } catch(e) {}
   });\n`;
   if (bodyHTML.includes("data-sinth-checked-expr")) {
     renderBody += `  document.querySelectorAll('[data-sinth-checked-expr]').forEach(function(el) {

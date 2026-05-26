@@ -167,7 +167,7 @@ async function main(): Promise<void> {
 \x1b[1mSinth Compiler v${version}\x1b[0m
 
 \x1b[1mCommands:\x1b[0m
-  sinth build   [files] [--out ./dist] [--prod]   Compile .sinth pages
+  sinth build   [files] [--out ./dist] [--prod] [--shared-runtime]    Compile .sinth pages
   sinth dev     [files] [--port 3000]              Live-reload dev server
   sinth check                                      Lint without emitting
   sinth init    [name]                             Scaffold a new project
@@ -317,7 +317,7 @@ component Card(title, color = "blue") {
     name: path.basename(root).toLowerCase().replace(/\s+/g, "-"),
     version: "1.0.0",
     scripts: { build: "sinth build", dev: "sinth dev" },
-    devDependencies: { "ts-node": "^10.0.0", typescript: "^5.0.0", sass: "^1.70.0" },
+    dependencies: { "ts-node": "^10.0.0", "sass": "^1.70.0" },
   }, null, 2));
 
   process.stdout.write(`

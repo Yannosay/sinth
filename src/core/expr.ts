@@ -38,6 +38,10 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>): strin
       return `${expr.target}${expr.op}`;
     case "call": {
       const callee = compileExprToJS(expr.callee!, loopVars);
+      if (callee === "remove") {
+        const arg = expr.args && expr.args[0] ? compileExprToJS(expr.args[0], loopVars) : "''";
+        return `(function(){ var _el=document.getElementById(${arg}); if(_el)_el.remove(); })()`;
+      }
       const args = (expr.args ?? []).map(a => compileExprToJS(a, loopVars)).join(", ");
       if (expr.args && expr.args.length === 0 && /\.length$/.test(callee)) {
         return callee;
