@@ -103,7 +103,6 @@ export interface FunctionDef {
   body:       Child[];
   loc:        Loc;
 }
-
 export interface SinthFile {
   filePath:  string;
   isPage:    boolean;
@@ -149,6 +148,10 @@ export interface CompileCtx {
   loopVars?:    Set<string>;
   diffingEnabled?: boolean;
   declaredVars?: Set<string>;
+  // custom elements
+  scopePrefix?: string;
+  scopeVar?: string;
+  ceActionHandlers?: string[];
 }
 
 export class SinthError extends Error {

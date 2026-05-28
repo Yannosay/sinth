@@ -239,13 +239,14 @@ function hashString(str) {
   return String(hash);
 }
 function sinthForBlock(t) {
-  let source = window[t.dataset.sinthFor];
+  t.querySelectorAll('template[data-sinth-if-expr]').forEach(function(innerT) {
+    innerT.dataset.sinthForHandled = '1';
+  });
+  let source = _sinthForData[t.dataset.sinthFor];
   if (source === undefined) source = [];
   let newHash = '';
   try { newHash = hashString(JSON.stringify(source)); } catch(e) { newHash = ''; }
-  if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) {
-    return;
-  }
+  if (t.dataset.sinthForHash && t.dataset.sinthForHash === newHash) return;
   t.dataset.sinthForHash = newHash;
   let isObj = (typeof source === 'object' && source !== null && !Array.isArray(source));
   let entries;
@@ -255,7 +256,14 @@ function sinthForBlock(t) {
     if (!Array.isArray(source)) source = [];
     entries = source.map(function(item, index) { return [index, item]; });
   }
-  let anchor = t.parentNode ? t.parentNode.querySelector('[data-sinth-for-anchor="' + t.dataset.sinthFor + '"]') : null;
+  let anchorId = t.dataset.sinthForExpr || t.dataset.sinthFor;
+  let anchor = null;
+  if (t.parentNode) {
+    let all = t.parentNode.querySelectorAll('[data-sinth-for-anchor]');
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].dataset.sinthForAnchor === anchorId) { anchor = all[i]; break; }
+    }
+  }
   if (anchor) {
     let cur2 = anchor.nextSibling;
     while (cur2 && cur2 !== t) { let nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
@@ -263,63 +271,46 @@ function sinthForBlock(t) {
   }
   let fa = document.createElement('span');
   fa.style.display = 'none';
-  fa.dataset.sinthForAnchor = t.dataset.sinthFor;
+  fa.dataset.sinthForAnchor = anchorId;
   t.parentNode && t.parentNode.insertBefore(fa, t);
   let _loopIdx = 0;
+  let tplContent = t.innerHTML;
   entries.forEach(function(entry) {
-    let _k = entry[0];
-    let _v = entry[1];
-    let _item = (t.dataset && t.dataset.sinthItem) ? t.dataset.sinthItem : '__item__';
-    let _key = t.dataset && t.dataset.sinthKey ? t.dataset.sinthKey : null;
-    let _idx = t.dataset && t.dataset.sinthIndex ? t.dataset.sinthIndex : null;
+    let _k = entry[0], _v = entry[1];
+    let _item = t.dataset.sinthItem || '__item__';
+    let _key = t.dataset.sinthKey || null;
+    let _idx = t.dataset.sinthIndex || null;
     _loopIdx++;
-    if (t.dataset.sinthIfReplace) {
-      let _rp = document.getElementById(t.dataset.sinthIfReplace);
-      if (_rp) _rp.parentNode.removeChild(_rp);
-    }
     let loopCtx = {};
     if (_item) loopCtx[_item] = _v;
     if (_key) loopCtx[_key] = _k;
     if (_idx) loopCtx[_idx] = _loopIdx - 1;
-    let frag = document.createRange().createContextualFragment(t.innerHTML);
+    let frag = document.createRange().createContextualFragment(tplContent);
     frag.querySelectorAll('.sinth-expr').forEach(function(el) {
-      try {
-        let exprFn = __X[el.dataset.exprId];
-        if (exprFn) el.textContent = exprFn(loopCtx);
-      } catch(e) {}
+      try { let fn = __X[el.dataset.exprId]; if (fn) el.textContent = fn(loopCtx); } catch(e) {}
       el.classList.remove('sinth-expr');
+    });
+    frag.querySelectorAll('[onclick*="_ctx."]').forEach(function(el) {
+      var onclick = el.getAttribute('onclick');
+      for (var key in loopCtx) {
+        onclick = onclick.split('_ctx.' + key).join(JSON.stringify(loopCtx[key]));
+      }
+      el.setAttribute('onclick', onclick);
     });
     frag.querySelectorAll('template[data-sinth-if-expr]').forEach(function(ifT) {
       let condFn = __X[ifT.dataset.sinthIfExpr];
-      let cond = false;
-      try { if (condFn) cond = condFn(loopCtx); } catch(e) {}
+      let cond = condFn ? condFn(loopCtx) : false;
       if (cond) {
-        let ifContent = document.createRange().createContextualFragment(ifT.innerHTML);
-        ifContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-          try {
-            let exprFn2 = __X[el2.dataset.exprId];
-            if (exprFn2) el2.textContent = exprFn2(loopCtx);
-          } catch(e) {}
+        let ifFrag = document.createRange().createContextualFragment(ifT.innerHTML);
+        ifFrag.querySelectorAll('.sinth-expr').forEach(function(el2) {
+          try { let fn2 = __X[el2.dataset.exprId]; if (fn2) el2.textContent = fn2(loopCtx); } catch(e) {}
+          el2.classList.remove('sinth-expr');
         });
-        ifT.parentNode.insertBefore(ifContent, ifT);
+        ifT.replaceWith(ifFrag);
       } else {
-        let elseT = ifT.nextElementSibling;
-        if (elseT && elseT.hasAttribute('data-sinth-else')) {
-          let elseContent = document.createRange().createContextualFragment(elseT.innerHTML);
-          elseContent.querySelectorAll('.sinth-expr').forEach(function(el2) {
-            try {
-              let exprFn2 = __X[el2.dataset.exprId];
-              if (exprFn2) el2.textContent = exprFn2(loopCtx);
-            } catch(e) {}
-          });
-          ifT.parentNode.insertBefore(elseContent, ifT);
-        }
+        ifT.remove();
       }
     });
-    if (${needsDelay}) {
-      frag.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
-      frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) { sinthDelayExpr(el, loopCtx); });
-    }
     t.parentNode && t.parentNode.insertBefore(frag, t);
   });
 }

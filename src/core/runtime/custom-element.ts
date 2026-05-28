@@ -4,7 +4,6 @@ import { litToString } from "../../utils.ts";
 
 export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: boolean }, hash: string, ctx: CompileCtx): string {
   const varDecls = cel.varDecls;
-  const varNames = varDecls.map(v => v.name);
   
   const varLines = varDecls.map(v => {
     if (v.value) {
@@ -24,46 +23,34 @@ export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: b
     logicBlocks: [],
     mixedBlocks: [],
     customEls: new Map(),
+    scopePrefix: 'host._',
+    scopeVar: 'host',
   };
 
-  const bodyHTML = cel.body.map(c => renderChild(c, childCtx, new Map(), 0)).join("\n");
-  
-  function replaceVarsOutsideStrings(text: string, varNames: string[], replacement: (name: string) => string): string {
-    const varPattern = varNames.join('|');
-    const regex = new RegExp(`("[^"]*"|'[^']*'|\`[^\`]*\`)|\\b(${varPattern})\\b`, 'g');
-    const parts: string[] = [];
-    let lastIndex = 0;
-    let match;
-    
-    while ((match = regex.exec(text)) !== null) {
-      parts.push(text.substring(lastIndex, match.index));
-      if (match[1]) {
-        parts.push(match[1]);
-      } else if (match[2]) {
-        parts.push(replacement(match[2]));
-      }
-      lastIndex = regex.lastIndex;
-    }
-    parts.push(text.substring(lastIndex));
-    return parts.join('');
+  const customVarMap = new Map<string, string>();
+  for (const v of varDecls) {
+    customVarMap.set(v.name, `__VAR__${v.name}`);
   }
 
-  let rewrittenHTML = bodyHTML;
-  rewrittenHTML = rewrittenHTML.replace(/onclick="([^"]+)"/g, (match, content) => {
-    const replaced = replaceVarsOutsideStrings(content, varNames, (name) => `host._${name}`);
-    return `data-sinth-click="${replaced}"`;
-  });
-  rewrittenHTML = replaceVarsOutsideStrings(rewrittenHTML, varNames, (name) => `host._${name}`);
-  rewrittenHTML = rewrittenHTML.replace(/sinthRender\(\)/g, 'host._render()');
-  
-  const escapedHTML = rewrittenHTML.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+  const bodyHTML = cel.body.map(c => renderChild(c, childCtx, customVarMap, 0)).join("\n");
+
+  const escapedHTML = bodyHTML
+    .replace(/sinthRender\(\)/g, 'host._render()')
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g, '\\`')
+    .replace(/\$/g, '\\$')
+    .replace(/__VAR__(\w+)/g, 'host._$$1');
 
   const needsExpr = bodyHTML.includes("sinth-expr");
   const needsIf = bodyHTML.includes("data-sinth-if");
 
   const exprArrayJS = childCtx.exprRegistry.length > 0
     ? `let __X = [${childCtx.exprRegistry.map(js => {
-        return `function(_ctx){ return ${replaceVarsOutsideStrings(js, varNames, (name) => `_ctx.host._${name}`)}; }`;
+        const replaced = varDecls.reduce((acc, v) => {
+          const regex = new RegExp(`\\b${v.name}\\b(?![.\\(])`, 'g');
+          return acc.replace(regex, `_ctx.host._${v.name}`);
+        }, js);
+        return `function(_ctx){ return ${replaced}; }`;
       }).join(",")}];\n`
     : "";
 
@@ -78,36 +65,44 @@ export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: b
     } catch(e) {}
   };
 
-  ${needsIf ? `
-  function sinthIfBlock(t) {
-    let ifId = t.dataset.sinthIfId;
-    let condFn = __X[t.dataset.sinthIfExpr];
-    let cond = condFn ? condFn() : false;
-    if (cond) {
-      let anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
-      if (!anchor) {
-        anchor = document.createElement('span');
-        anchor.style.display = 'none';
-        anchor.dataset.sinthIfAnchor = ifId;
-        t.parentNode.insertBefore(anchor, t);
-      }
-      let frag = document.createRange().createContextualFragment(t.innerHTML);
-      frag.querySelectorAll('.sinth-expr').forEach(sinthExpr);
-      t.parentNode.insertBefore(frag, t);
-    } else {
-      let anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
-      if (anchor) {
-        let c = anchor.nextSibling;
-        while (c && c !== t) { let n = c.nextSibling; c.remove(); c = n; }
-        anchor.remove();
-      }
-    }
-  }
-  ` : ""}
-
   function render(host) {
     ${needsExpr ? `host.shadowRoot.querySelectorAll('.sinth-expr').forEach(function(el) { sinthExpr(el, host); });` : ""}
-    ${needsIf ? `host.shadowRoot.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);` : ""}
+    ${needsIf ? `
+    var templates = host.shadowRoot.querySelectorAll('template[data-sinth-if-expr]');
+    var seen = {};
+    templates.forEach(function(t) {
+      var ifId = t.dataset.sinthIfId;
+      if (seen[ifId]) return;
+      seen[ifId] = true;
+      var condFn = __X[t.dataset.sinthIfExpr];
+      var cond = condFn ? condFn({host: host}) : false;
+      var elseT = host.shadowRoot.querySelector('template[data-sinth-else][data-sinth-if-id="' + ifId + '"]');
+      var sourceT = cond ? t : elseT;
+      var anchor = host.shadowRoot.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
+      if (sourceT) {
+        if (!anchor) {
+          anchor = document.createElement('span');
+          anchor.style.display = 'none';
+          anchor.dataset.sinthIfAnchor = ifId;
+          t.parentNode.insertBefore(anchor, t);
+        }
+        var c = anchor.nextSibling;
+        while (c && c !== t) { var n = c.nextSibling; c.remove(); c = n; }
+        var frag = document.createRange().createContextualFragment(sourceT.innerHTML);
+        frag.querySelectorAll('.sinth-expr').forEach(function(el) { sinthExpr(el, host); });
+        t.parentNode.insertBefore(frag, t);
+      } else {
+        if (anchor) {
+          var c = anchor.nextSibling;
+          while (c && c !== t) { var n = c.nextSibling; c.remove(); c = n; }
+          anchor.remove();
+        }
+      }
+    });
+    ` : ""}
+    host.shadowRoot.querySelectorAll('[data-sinth-value]').forEach(function(el) {
+      try { if (document.activeElement !== el) { let v = el.dataset.sinthValue; el.value = __X[v] ? __X[v]({host: host}) : ''; } } catch(e) {}
+    });
   }
 
   class ${cel.sinthName} extends HTMLElement {
@@ -117,12 +112,20 @@ export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: b
       ${varLines}
     }
     connectedCallback() {
-      var self = this;
-      this._render = function() { render(self); };
+      var host = this;
+      this._render = function() { render(host); };
       this.shadowRoot.innerHTML = \`${escapedHTML}\`;
-      this.shadowRoot.querySelectorAll('[data-sinth-click]').forEach(function(el) {
-        var fn = new Function('host', el.getAttribute('data-sinth-click'));
-        el.addEventListener('click', function() { fn(self); });
+      var _ceHandlers = [${(childCtx.ceActionHandlers || []).join(',')}];
+      this.shadowRoot.querySelectorAll('[data-sinth-ce-click],[data-sinth-ce-input],[data-sinth-ce-change],[data-sinth-ce-submit]').forEach(function(el) {
+        var attrs = el.attributes;
+        for (var i = 0; i < attrs.length; i++) {
+          var name = attrs[i].name;
+          if (name.indexOf('data-sinth-ce-') === 0) {
+            var eventType = name.substring('data-sinth-ce-'.length);
+            var idx = parseInt(attrs[i].value);
+            el.addEventListener(eventType, function(e) { _ceHandlers[idx](e, host); });
+          }
+        }
       });
       render(this);
     }

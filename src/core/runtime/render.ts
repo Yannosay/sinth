@@ -44,15 +44,15 @@ export function buildRenderBody(opts: {
     }
   }
 
-  if (needsIf) {
-    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(sinthIfBlock);\n`;
-  }
   renderBody += `  document.querySelectorAll('[data-sinth-remove]').forEach(function(el) {
     let target = document.getElementById(el.dataset.sinthRemove);
     if (target) target.remove();
   });\n`;
   if (needsFor) {
-    renderBody += `  document.querySelectorAll('template[data-sinth-for]').forEach(sinthForBlock);\n`;
+    renderBody += `  document.querySelectorAll('template[data-sinth-for], template[data-sinth-for-expr]').forEach(sinthForBlock);\n`;
+  }
+  if (needsIf) {
+    renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(function(t) { var p = t.parentElement; while(p && p.tagName !== 'TEMPLATE') p = p.parentElement; if (!p || (!p.hasAttribute('data-sinth-for') && !p.hasAttribute('data-sinth-for-expr'))) sinthIfBlock(t); });\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
     try { if (document.activeElement !== el) { let v=el.dataset.sinthValue; el.value = __X[v] ? __X[v]({}) : ''; } } catch(e) {}

@@ -129,6 +129,7 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
       );
     }
 
+    this._visited.clear();
     return { filePath: this.file, isPage, imports, meta, defs, functions, uses, styles, scripts, customEls, varDecls };
   }
 
@@ -262,6 +263,8 @@ private parseArrayLiteral(): Literal {
       } else if (this.check(TT.NULL_LIT)) {
         this.consume(TT.NULL_LIT);
         obj[key] = null;
+      } else if (this.check(TT.IDENT)) {
+        obj[key] = `__VAR__${this.consume(TT.IDENT).value}`;
       } else {
         throw new SinthError(`Expected literal value for key '${key}'`, this.peek().loc);
       }
@@ -271,7 +274,10 @@ private parseArrayLiteral(): Literal {
     return obj;
   }
 
+  private _visited: Set<number> = new Set();
   parseExpression(skipBinary: boolean = false): Expression | null {
+    if (this._visited.has(this.pos)) throw new SinthError("Circular expression reference", this.peek().loc);
+    this._visited.add(this.pos);
     const tok = this.peek();
 
 
@@ -295,7 +301,7 @@ private parseArrayLiteral(): Literal {
     }
 
     if (this.check(TT.STRING) || this.check(TT.NUMBER) || this.check(TT.BOOL_TRUE) ||
-        this.check(TT.BOOL_FALSE) || this.check(TT.NULL_LIT)) {
+        this.check(TT.BOOL_FALSE) || this.check(TT.NULL_LIT) || this.check(TT.LBRACE) || this.check(TT.LBRACKET)) {
       const lit = this.parseLiteral();
       const base: Expression = { kind: "literal", value: lit };
       return this.parseBinaryRHS(this.parseCallExpr(this.parsePostfix(base)));
@@ -382,6 +388,10 @@ private parseArrayLiteral(): Literal {
       this.consume(TT.RPAREN);
       return inner!;
     }
+    if (tok.type === TT.LBRACE) {
+      const obj = this.parseObjectLiteral();
+      return { kind: "literal", value: { kind: "str", value: JSON.stringify(obj) } };
+    }
     throw new SinthError(`Expected expression`, this.peek().loc);
   }
 
@@ -405,7 +415,8 @@ private parseArrayLiteral(): Literal {
       this.pos = savedPos;
       return left;
     }
-    return this.parseComparison({ kind: "binary", left, op, right });
+    if (this.pos === savedPos) return { kind: "binary", left, op, right };
+    return { kind: "binary", left, op, right };
   }
 
   private parseLogical(left: Expression): Expression {
@@ -438,7 +449,7 @@ private parseArrayLiteral(): Literal {
       const rightPrimary = this.parsePrimary();
       const rightWithPostfix = this.parsePostfix(rightPrimary);
       const rightWithCall = this.parseCallExpr(rightWithPostfix);
-      const right = this.parseArithmetic(rightWithCall);
+      const right = rightWithCall;
       if (!right) throw new SinthError(`Expected expression after '${op}'`, this.peek().loc);
       left = { kind: "binary", left, op, right };
     }
@@ -800,15 +811,7 @@ private parseArrayLiteral(): Literal {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
-            if (this.check(TT.DOT)) {
-              this.consume(TT.DOT);
-              rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-            } else if (this.check(TT.LBRACKET)) {
-              const rhsVar: Expression = { kind: "variable", name: rhsName };
-              rhs = this.parsePostfix(rhsVar);
-            } else {
-              rhs = { kind: "variable", name: rhsName };
-            }
+            rhs = { kind: "variable", name: rhsName };
           } else {
             rhs = this.parseExpression(true);
           }
@@ -916,7 +919,21 @@ private parseArrayLiteral(): Literal {
           let fullName = this.consume(TT.IDENT).value;
           this.consume(TT.DOT);
           fullName = fullName + "." + this.consume(TT.IDENT).value;
-          children.push({ kind: "expr", expression: { kind: "variable", name: fullName }, loc });
+          if (this.check(TT.LPAREN)) {
+            this.consume(TT.LPAREN);
+            const args: Expression[] = [];
+            if (!this.check(TT.RPAREN)) {
+              args.push(this.parseExpression()!);
+              while (this.check(TT.COMMA)) {
+                this.consume(TT.COMMA);
+                args.push(this.parseExpression()!);
+              }
+            }
+            this.consume(TT.RPAREN);
+            children.push({ kind: "expr", expression: { kind: "call", callee: { kind: "variable", name: fullName }, args }, loc });
+          } else {
+            children.push({ kind: "expr", expression: { kind: "variable", name: fullName }, loc });
+          }
           continue;
         }
 
@@ -989,7 +1006,28 @@ private parseArrayLiteral(): Literal {
     }
     if (!this.check(TT.KW_IN)) throw new SinthError("Expected 'in' after loop variable", this.peek().loc);
     this.consume(TT.KW_IN);
-    const arrayVar = this.consume(TT.IDENT).value;
+    let arrayVar = this.consume(TT.IDENT).value;
+    while (this.check(TT.DOT)) {
+      this.consume(TT.DOT);
+      const propName = this.consume(TT.IDENT).value;
+      if (this.check(TT.LPAREN)) {
+        this.consume(TT.LPAREN);
+        const args: string[] = [];
+        if (!this.check(TT.RPAREN)) {
+          if (this.check(TT.STRING)) args.push(this.consume(TT.STRING).value);
+          else if (this.check(TT.NUMBER)) args.push(this.consume(TT.NUMBER).value);
+          while (this.check(TT.COMMA)) {
+            this.consume(TT.COMMA);
+            if (this.check(TT.STRING)) args.push(this.consume(TT.STRING).value);
+            else if (this.check(TT.NUMBER)) args.push(this.consume(TT.NUMBER).value);
+          }
+        }
+        this.consume(TT.RPAREN);
+        arrayVar = arrayVar + "." + propName + "(" + args.map(a => JSON.stringify(a)).join(",") + ")";
+      } else {
+        arrayVar = arrayVar + "." + propName;
+      }
+    }
 
     if (keyVar === undefined && indexVar !== undefined) {
       const srcDecl = this._varDecls.find(d => d.name === arrayVar);
@@ -1119,7 +1157,9 @@ private parseArrayLiteral(): Literal {
 
   private parseChildList(): Child[] {
     const children: Child[] = [];
+    let _iter = 0;
     while (!this.check(TT.EOF) && !this.check(TT.RBRACE)) {
+      if (++_iter > 1000) throw new SinthError("Infinite loop in children", this.peek().loc);
       
       if (this.check(TT.LPAREN)) {
         const loc = this.peek().loc;
@@ -1135,15 +1175,7 @@ private parseArrayLiteral(): Literal {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
-            if (this.check(TT.DOT)) {
-              this.consume(TT.DOT);
-              rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-            } else if (this.check(TT.LBRACKET)) {
-              const rhsVar: Expression = { kind: "variable", name: rhsName };
-              rhs = this.parsePostfix(rhsVar);
-            } else {
-              rhs = { kind: "variable", name: rhsName };
-            }
+            rhs = { kind: "variable", name: rhsName };
           } else {
             rhs = this.parseExpression(true);
           }
@@ -1178,9 +1210,6 @@ private parseArrayLiteral(): Literal {
             } else if (this.check(TT.DOT)) {
               this.consume(TT.DOT);
               rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-            } else if (this.check(TT.LBRACKET)) {
-              const rhsVar: Expression = { kind: "variable", name: rhsName };
-              rhs = this.parsePostfix(rhsVar);
             } else {
               rhs = { kind: "variable", name: rhsName };
             }
@@ -1235,9 +1264,6 @@ private parseArrayLiteral(): Literal {
                 if (this.check(TT.DOT)) {
                   this.consume(TT.DOT);
                   rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-                } else if (this.check(TT.LBRACKET)) {
-                  const rhsVar: Expression = { kind: "variable", name: rhsName };
-                  rhs = this.parsePostfix(rhsVar);
                 } else {
                   rhs = { kind: "variable", name: rhsName };
                 }
@@ -1268,9 +1294,6 @@ private parseArrayLiteral(): Literal {
               if (this.check(TT.DOT)) {
                 this.consume(TT.DOT);
                 rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-              } else if (this.check(TT.LBRACKET)) {
-                const rhsVar: Expression = { kind: "variable", name: rhsName };
-                rhs = this.parsePostfix(rhsVar);
               } else {
                 rhs = { kind: "variable", name: rhsName };
               }
@@ -1300,9 +1323,6 @@ private parseArrayLiteral(): Literal {
                 if (this.check(TT.DOT)) {
                   this.consume(TT.DOT);
                   rhs = { kind: "variable", name: rhsName + "." + this.consume(TT.IDENT).value };
-                } else if (this.check(TT.LBRACKET)) {
-                  const rhsVar: Expression = { kind: "variable", name: rhsName };
-                  rhs = this.parsePostfix(rhsVar);
                 } else {
                   rhs = { kind: "variable", name: rhsName };
                 }
