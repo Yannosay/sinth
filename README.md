@@ -2,6 +2,8 @@
 
 The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pure HTML.
 
+**I need YOUR Help to improve Sinth, please consider joining the Discord so Sinth can be optimized more easy, currently I am doing this alone!**
+
 * Introduction: https://www.youtube.com/watch?v=W0tOMTiIF0Q
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
 * Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs)
@@ -19,7 +21,7 @@ Input(bind: userName, placeholder: "Enter your name")
 Paragraph { "Hello, " + userName }
 ```
 
-No useState. No onChange. No e.target.value.
+No useState, onChange or e.target.value!
 
 ```ts
 page
@@ -56,7 +58,42 @@ Button(onClick: "deletePost()") { "Delete" }
 }
 ```
 
-No JSX ternaries. No v-if. No separate script tags. Mixed logic. Clean.
+No JSX ternaries or v-if. No separate script tags. Mixed logic there where you need it.
+
+#### Sinth Language Syntax Reference
+
+| Syntax                                          | Description                                    |
+|-------------------------------------------------|------------------------------------------------|
+| `--` or --[Hello]--                             | Comment                                        |
+| `page`                                          | Declares a full Sinth page                     |
+| `title = "..."`                                 | Sets the page title                            |
+| `function myFunction`                           | Creates a reusable & reactive function         |
+| `var str myVar = ""`                            | Declares a string variable                     |
+| `var int myVar`                                 | Declares an integer variable                   |
+| `var bool myVar`                                | Declares a boolean variable                    |
+| `var str[] myVar`                               | Declares a string array                        |
+| `var obj myVar`                                 | Declares an object variable                    |
+| `import "./file.sinth"`                         | Imports another Sinth file                     |
+| `import css "./file.css"`                       | Imports a CSS file                             |
+| `import js "./file.js"`                         | Imports a JS file                              |
+| `Heading(level: 1) { "..." }`                   | Renders a heading (h1-h6)                      |
+| `Paragraph { "..." }`                           | Renders a paragraph                            |
+| `Button(onClick: fn) { "..." }`                 | Renders a clickable button                     |
+| `Input(bind: myVar)`                            | Renders a bound input field                    |
+| `Checkbox(checked: myBool)`                     | Renders a checkbox                             |
+| `if condition { ... }`                          | Conditional rendering                          |
+| `if condition { ... } else { ... }`             | Conditional with else branch                   |
+| `for item in array { ... }`                     | Loops over an array                            |
+| `for item, index in array { ... }`              | Loops with index                               |
+| `delay: ms`                                     | Delays rendering of an element                 |
+| `hide: bool`                                    | Conditionally hides an element                 |
+| `style { ... }`                                 | Defines scoped CSS styles                      |
+| `script { ... }`                                | Defines page-level JavaScript                  |
+| `component MyComp { ... }`                      | Defines a reusable component                   |
+| `custom el "my-tag" { ... }`                    | Defines a custom element                       |
+| `custom MyCounter(export: <awesome-counter />)` | Exports a custom element tag                   |
+
+
 
 #### Functions - easy as you know it
 ```ts
@@ -83,8 +120,6 @@ Div {
 renderHeading(userName)
 renderHeading("This renders!")
 ```
-or
-
 ```ts
 page
 
@@ -109,7 +144,56 @@ Paragraph {
   "Admin mode is " + getStatus() + "!"
 }
 ```
-#### NEW (0.13.5): Fullscreen activation + if-else inside Component
+#### Code what you need
+```ts
+page
+title = "For Loop Variable Test"
+
+var obj historyList = []
+var int kickCount = 0
+var str userName = ""
+var obj newList = []
+var int i = 0
+
+function kickUser() {
+    if userName != "" {
+        historyList.push(userName)
+        kickCount = kickCount + 1
+        userName = ""
+    }
+}
+
+function removeUser(index) {
+    newList = []
+    i = 0
+    for user in historyList {
+        if i != index {
+            newList.push(user)
+        }
+        i = i + 1
+    }
+    historyList = newList
+    kickCount = kickCount - 1
+}
+
+Main {
+    Heading(level: 1) { "For Loop Test" }
+    
+    Input(bind: userName, placeholder: "Enter username to kick")
+    Button(onClick: kickUser()) { "Add User" }
+    
+    Paragraph { "Count: " + kickCount }
+    
+    Heading(level: 2) { "Users:" }
+    for kickedUser, index in historyList {
+        Paragraph { kickedUser }
+        Button(onClick: removeUser(index)) { "Remove" }
+    }
+}
+```
+
+
+#### Fullscreen activation + if-else inside Component
 
 ```ts
 page
@@ -137,7 +221,7 @@ Main {
 }
 ```
 
-#### Fullscreen Sync (0.13.6)
+#### Fullscreen Sync
 
 Opt-in Escape key handling. `fullscreenSync` keeps your variable in sync with the browser's fullscreen state.
 
@@ -147,11 +231,11 @@ Button(onClick: isFullscreen = !isFullscreen, fullscreen: isFullscreen, fullscre
 }
 ```
 Without fullscreenSync, pressing Escape exits fullscreen but the variable stays true.
-With it, Escape resets the variable to false — button text updates automatically.
+With it, Escape resets the variable to false and the button text updates automatically.
 
 #### Opt-in DOM Diffing
 
-Skip re-executing expressions when their variables haven't changed. Perfect for expensive calculations or side effects you only want to fire once.
+Skip re-executing expressions when their variables haven't changed. Perfect for expensive calculations or side effects you only want to fire once. No one
 
 ```ts
 page
@@ -169,8 +253,12 @@ Count updates every click because count changed. The alert fires only on page lo
 
 #### Animations that make sense.
 ```ts
+page
+
+var str[] items = ["First", "Second", "Third", "Fourth", "Fifth"]
+
 for item, index in items {
-Paragraph(delay: index * 300) { item.name }
+  Paragraph(delay: (index + 1) * 1000) { item }
 }
 ```
 

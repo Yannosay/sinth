@@ -84,7 +84,8 @@ export function buildRenderBody(opts: {
       el._sinthLastContent = newContent;
       delete el.dataset.sinthDelayDone;
     }
-  });\n`;
+  });
+  document.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) { sinthDelayExpr(el, {}); });\n`;
   }
   if (needsExpr) {
     renderBody += `  document.querySelectorAll('.sinth-expr').forEach(function(el) {
@@ -123,6 +124,7 @@ export function buildRenderBody(opts: {
   if (needsDelay) {
     renderBody += `  setTimeout(function() {
     document.querySelectorAll('[data-sinth-delay]').forEach(sinthDelay);
+    document.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) { sinthDelayExpr(el, {}); });
   }, 0);\n`;
   }
   renderBody += `  window.scrollTo(_sx, _sy);\n`;

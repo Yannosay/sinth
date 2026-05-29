@@ -95,16 +95,25 @@ function sinthDelay(el) {
   }
 }
 function sinthDelayExpr(el, _ctx) {
+  if (el.dataset.sinthDelayDone) return;
+  el.dataset.sinthDelayDone = '1';
   _ctx = _ctx || {};
   try {
     let fn = __X[el.dataset.sinthDelayExprId];
     let ms = fn ? parseInt(fn(_ctx)) || 0 : 0;
+    let hideEl = el.dataset.sinthDelayHide !== 'false';
     let show = function() {
-      el.style.display = '';
+      if (hideEl) el.style.display = '';
       el.querySelectorAll('.sinth-expr').forEach(sinthExpr);
     };
-    if (ms > 0) setTimeout(show, ms);
-    else show();
+    if (hideEl) {
+      el.style.display = 'none';
+      if (ms > 0) setTimeout(show, ms);
+      else show();
+    } else {
+      if (ms > 0) setTimeout(show, ms);
+      else show();
+    }
   } catch(e) {}
 }
 `;
@@ -290,6 +299,9 @@ function sinthForBlock(t) {
       try { let fn = __X[el.dataset.exprId]; if (fn) el.textContent = fn(loopCtx); } catch(e) {}
       el.classList.remove('sinth-expr');
     });
+    frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
+      sinthDelayExpr(el, loopCtx);
+    });    
     frag.querySelectorAll('[onclick*="_ctx."]').forEach(function(el) {
       var onclick = el.getAttribute('onclick');
       for (var key in loopCtx) {

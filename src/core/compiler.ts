@@ -1087,7 +1087,7 @@ export function buildRuntime(opts: {
   const needsLogic  = logicBlocks.length > 0;
   const needsFullscreen = bodyHTML.includes("data-sinth-fullscreen");
   const needsFullscreenSync = bodyHTML.includes("data-sinth-fullscreen-sync");
-  const needsRender = needsExpr || needsIf || needsFor || needsMixed || needsLogic || bodyHTML.includes("data-sinth-hide") || needsFullscreen || needsFullscreenSync;
+  const needsRender = needsExpr || needsIf || needsFor || needsMixed || needsLogic || bodyHTML.includes("data-sinth-hide") || needsFullscreen || needsFullscreenSync || needsDelay;
 
   const varLines = varDecls.map(v => {
     if (!v.value) {
@@ -1115,7 +1115,7 @@ export function buildRuntime(opts: {
     return `let ${v.name} = ${val};`;
   }).join("\n");
 
-  if (!needsRender && !needsDelay) {
+  if (!needsRender) {
     return varLines ? `// Sinth compiled runtime\n${varLines}` : "";
   }
 
