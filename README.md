@@ -6,7 +6,7 @@ The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pu
 
 * Introduction: https://www.youtube.com/watch?v=W0tOMTiIF0Q
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
-* Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs)
+* Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) (HIGHLY WIP, not yet finished at all!)
 
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
