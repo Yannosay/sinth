@@ -10,8 +10,9 @@ export function buildRenderBody(opts: {
   needsFor: boolean;
   needsExpr: boolean;
   needsDelay: boolean;
+  exprVarUpdates?: string;
 }): string {
-  const { bodyHTML, logicBlocks, mixedBlocks, needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay } = opts;
+  const { bodyHTML, logicBlocks, mixedBlocks, needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay, exprVarUpdates } = opts;
   let renderBody = "";
   renderBody += `  let _sx = window.scrollX, _sy = window.scrollY;\n`;
 
@@ -63,6 +64,9 @@ export function buildRenderBody(opts: {
   renderBody += `  document.querySelectorAll('[data-sinth-checked]').forEach(function(el) {
     try { let c=el.dataset.sinthChecked; el.checked = __X[c] ? !!__X[c]({}) : false; } catch(e) {}
   });\n`;
+  if (exprVarUpdates) {
+    renderBody += `  ${exprVarUpdates}\n`;
+  }
   if (bodyHTML.includes("data-sinth-checked-expr")) {
     renderBody += `  document.querySelectorAll('[data-sinth-checked-expr]').forEach(function(el) {
     try {

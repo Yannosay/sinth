@@ -1,5 +1,9 @@
 ﻿# Sinth 
 
+[![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
+[![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
+[![license](https://img.shields.io/npm/l/@yannosay/sinth)](https://github.com/Yannosay/sinth/blob/main/LICENSE)
+
 The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pure HTML.
 
 **I need YOUR Help to improve Sinth, please consider joining the Discord so Sinth can be optimized more easy, currently I am doing this alone!**
@@ -8,10 +12,25 @@ The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pu
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
 * Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) (HIGHLY WIP, not yet finished at all!)
 
+#### Try out Sinth directly in Web! (Beta)
 
-[![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
-[![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
-[![license](https://img.shields.io/npm/l/@yannosay/sinth)](https://github.com/Yannosay/sinth/blob/main/LICENSE)
+```html
+<div id="app"></div>
+<script src="https://lib.yannosay.com/sinth.js/sinth.js"></script>
+<script type="text/sinth">
+page
+title = "Counter"
+var int count = 0
+
+Main {
+  Heading(level: 1) {count}
+  Button(onClick: count = count + 1) {"Increment"}
+}
+
+$entry-point("app")
+</script>
+```
+
 
 ## Why Sinth?
 
@@ -21,7 +40,7 @@ Input(bind: userName, placeholder: "Enter your name")
 Paragraph { "Hello, " + userName }
 ```
 
-No useState, onChange or e.target.value!
+No useState, onChange or e.target.value.
 
 ```ts
 page

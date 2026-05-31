@@ -188,7 +188,7 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
 
   private parseVarDeclaration(): VarDeclaration | null {
     const loc = this.peek().loc;
-    this.consume(TT.IDENT); // consume 'var'
+    this.consume(TT.IDENT);
 
     const typeTok = this.consume(TT.IDENT);
     let typeStr = typeTok.value;
@@ -207,9 +207,17 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
       this.consume(TT.EQUALS);
       if (this.check(TT.LBRACKET)) {
         val = this.parseArrayLiteral();
-      } else if (this.check(TT.IDENT)) {
-        const refName = this.consume(TT.IDENT).value;
-        val = { kind: "str", value: `__VAR__${refName}` };
+      } else if (this.check(TT.IDENT) || this.check(TT.LPAREN)) {
+        const savedPos = this.pos;
+        const expr = this.parseExpression();
+        if (expr && (expr.kind !== "literal" || (expr.kind === "literal" && expr.value?.kind === "str" && expr.value.value.startsWith("__VAR__")))) {
+          val = { kind: "str", value: `__EXPR__${JSON.stringify(expr)}` };
+        } else {
+          this.pos = savedPos;
+          val = this.parseLiteral();
+        }
+      } else if (this.check(TT.NUMBER)) {
+        val = this.parseLiteral();
       } else {
         val = this.parseLiteral();
       }

@@ -1104,6 +1104,15 @@ export function buildRuntime(opts: {
     const val = litToString(v.value);
     if (val.startsWith("__VAR__")) return `let ${v.name} = ${val.slice(7)};`;
     if (val.startsWith("__ARR__")) return `let ${v.name} = ${val.slice(7)};`;
+    if (val.startsWith("__EXPR__")) {
+      try {
+        const expr: Expression = JSON.parse(val.substring(8));
+        const js = compileExprToJS(expr);
+        const id = exprRegistry.length;
+        exprRegistry.push(js);
+        return `let ${v.name} = __X[${id}]({});`;
+      } catch { return `let ${v.name} = ${val};`; }
+    }
     if (v.varType === "obj") return `let ${v.name} = ${val};`;
     if (v.varType === "str")  return `let ${v.name} = ${JSON.stringify(val)};`;
     if (v.varType === "str[]" && typeof val === 'string' && val.startsWith("__ARR__")) {
@@ -1122,9 +1131,23 @@ export function buildRuntime(opts: {
 
   const helpers = generateHelpers({ needsExpr, needsIf, needsFor, needsDelay, needsMixed });
 
+  const exprVarUpdates = varDecls
+    .filter(v => v.value && litToString(v.value).startsWith("__EXPR__"))
+    .map(v => {
+      try {
+        const expr: Expression = JSON.parse(litToString(v.value!).substring(8));
+        const js = compileExprToJS(expr);
+        const idx = exprRegistry.indexOf(js);
+        return `${v.name} = __X[${idx}]({});`;
+      } catch { return ""; }
+    })
+    .filter(Boolean)
+    .join("\n    ");
+
   const renderBody = buildRenderBody({
     bodyHTML, logicBlocks, mixedBlocks,
-    needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay
+    needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay,
+    exprVarUpdates: exprVarUpdates || undefined
   });
 
   let forDataJS = "";
@@ -1172,11 +1195,10 @@ export function buildRuntime(opts: {
   }
 
   const pageCode = `// Sinth Page Runtime
-${varLines}
 ${forDataJS}
 ${exprArrayJS}
+${varLines}
 ${renderFunc}`;
-
   if (opts.sharedRuntime && helpers.trim()) {
     const sharedCode = `// Sinth shared runtime
 ${helpers}`;
@@ -1184,10 +1206,10 @@ ${helpers}`;
   }
 
   return `// Sinth compiled runtime
-${varLines}
 ${forDataJS}
 ${functionsJS ? functionsJS + "\n" : ""}${helpers}
 ${exprArrayJS}
+${varLines}
 ${renderFunc}`;
 }
 
