@@ -42,6 +42,7 @@ export type PostfixOp = "++" | "--";
 
 export interface Expression {
   kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index" | "call" | "expr_ref";
+  memo?:    boolean;
   value?:   Literal;
   name?:    string;
   op?:      UnaryOp | BinaryOp | AssignOp | PostfixOp;

@@ -432,6 +432,18 @@ export function renderChild(
       }
       if (child.expression.kind === "call" && child.expression.callee?.kind === "variable") {
         const fnName = child.expression.callee.name;
+        const isMemo = child.expression.memo === true;
+        if (isMemo) {
+          if (fnName && fnName.includes(".")) {
+            SinthWarning.emit(`'$' on '${fnName}()' has no effect — dotted calls cannot be memoized.`);
+            ctx.logicBlocks.push(compileExprToJS(child.expression) + ";");
+            return "";
+          }
+          const js = compileExprToJS(child.expression);
+          ctx.logicBlocks.push(`if(!_memo_${fnName}_done){_memo_${fnName}=${js};_memo_${fnName}_done=true;}`);
+          const exprId = registerExpr(ctx, { kind: "variable", name: `_memo_${fnName}` });
+          return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
+        }
         if (fnName && fnName.includes(".")) {
           ctx.logicBlocks.push(compileExprToJS(child.expression) + ";");
           return "";
@@ -1124,8 +1136,22 @@ export function buildRuntime(opts: {
     return `let ${v.name} = ${val};`;
   }).join("\n");
 
+  const memoVars = new Set<string>();
+  for (const lb of logicBlocks) {
+    let matches = lb.match(/_memo_(\w+)/g);
+    if (matches) matches.forEach(m => memoVars.add(m));
+    matches = lb.match(/_memo_(\w+)_done/g);
+    if (matches) matches.forEach(m => memoVars.add(m));
+  }
+  for (const e of exprRegistry) {
+    let matches = e.match(/_memo_(\w+)/g);
+    if (matches) matches.forEach(m => memoVars.add(m));
+  }
+  const memoVarDecls = [...memoVars].map(m => `var ${m};`).join("\n");
+
   if (!needsRender) {
-    return varLines ? `// Sinth compiled runtime\n${varLines}` : "";
+    const out = [varLines, memoVarDecls].filter(Boolean).join("\n");
+    return out ? `// Sinth compiled runtime\n${out}` : "";
   }
 
 
@@ -1197,6 +1223,7 @@ export function buildRuntime(opts: {
   const pageCode = `// Sinth Page Runtime
 ${forDataJS}
 ${exprArrayJS}
+${memoVarDecls}
 ${varLines}
 ${renderFunc}`;
   if (opts.sharedRuntime && helpers.trim()) {
@@ -1209,6 +1236,7 @@ ${helpers}`;
 ${forDataJS}
 ${functionsJS ? functionsJS + "\n" : ""}${helpers}
 ${exprArrayJS}
+${memoVarDecls}
 ${varLines}
 ${renderFunc}`;
 }

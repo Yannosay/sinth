@@ -271,6 +271,6 @@ export class Lexer {
 
   private loc(): Loc { return { file: this.file, line: this.line, col: this.col }; }
   private isDigit(c: string)      { return c >= "0" && c <= "9"; }
-  private isIdentStart(c: string) { return /[a-zA-Z_\u00C0-\uFFFF]/.test(c); }
-  private isIdentCont(c: string)  { return /[a-zA-Z0-9_\-\u00C0-\uFFFF]/.test(c); }
+  private isIdentStart(c: string) { return /[a-zA-Z_$\u00C0-\uFFFF]/.test(c); }
+  private isIdentCont(c: string)  { return /[a-zA-Z0-9_$\-\u00C0-\uFFFF]/.test(c); }
 }

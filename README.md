@@ -12,7 +12,7 @@ The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pu
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
 * Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) (HIGHLY WIP, not yet finished at all!)
 
-#### Try out Sinth directly in Web! (Beta)
+#### Try out Sinth directly in Web! (BETA. Uses an older version of Sinth.)
 
 ```html
 <div id="app"></div>
@@ -50,7 +50,7 @@ var int count = 0
 
 Main {
   Heading(level: 1) {count}
-  Button(onClick: count = count + 1) {"Increment"}
+  Button(onClick: count += 1) {"Increment"}
 }
 ```
 
@@ -77,7 +77,7 @@ Button(onClick: "deletePost()") { "Delete" }
 }
 ```
 
-No JSX ternaries or v-if. No separate script tags. Mixed logic there where you need it.
+No JSX ternaries or v-if or separate script tags. Mixed logic there where you need it.
 
 #### Sinth Language Syntax Reference
 
@@ -111,7 +111,7 @@ No JSX ternaries or v-if. No separate script tags. Mixed logic there where you n
 | `component MyComp { ... }`                      | Defines a reusable component                   |
 | `custom el "my-tag" { ... }`                    | Defines a custom element                       |
 | `custom MyCounter(export: <awesome-counter />)` | Exports a custom element tag                   |
-
+| `$myFunction()` (e.g. `$alert("displayed once")`)| Indicator for Memorization - Useful for functions that should only show once |
 
 
 #### Functions - easy as you know it

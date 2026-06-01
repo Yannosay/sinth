@@ -323,7 +323,13 @@ private parseArrayLiteral(): Literal {
 
     // var or assignment
     if (tok.type === TT.IDENT) {
-      const name = this.consume(TT.IDENT).value;
+      let memo = false;
+      let rawName = this.consume(TT.IDENT).value;
+      if (rawName.startsWith("$")) {
+        memo = true;
+        rawName = rawName.substring(1);
+      }
+      const name = rawName;
       let varExpr: Expression;
 
       // dot notation -> e.g. user.age
@@ -380,7 +386,13 @@ private parseArrayLiteral(): Literal {
       return { kind: "literal", value: lit };
     }
     if (tok.type === TT.IDENT) {
-      const name = this.consume(TT.IDENT).value;
+      let memo = false;
+      let rawName = this.consume(TT.IDENT).value;
+      if (rawName.startsWith("$")) {
+        memo = true;
+        rawName = rawName.substring(1);
+      }
+      const name = rawName;
       let expr: Expression;
       if (this.check(TT.DOT)) {
         this.consume(TT.DOT);
@@ -388,6 +400,7 @@ private parseArrayLiteral(): Literal {
       } else {
         expr = { kind: "variable", name };
       }
+      if (memo) expr.memo = true;
       return expr;
     }
     if (tok.type === TT.LPAREN) {
@@ -897,7 +910,9 @@ private parseArrayLiteral(): Literal {
 
         if (nextType === TT.LPAREN) {
           const identName = this.peek().value;
-          if (identName[0] === identName[0].toUpperCase() && identName[0] !== identName[0].toLowerCase()) {
+          const isMemo = identName.startsWith("$");
+          const realName = isMemo ? identName.substring(1) : identName;
+          if (realName[0] === realName[0].toUpperCase() && realName[0] !== realName[0].toLowerCase()) {
             children.push(this.parseCompUse());
           } else {
             this.consume(TT.IDENT);
@@ -911,7 +926,7 @@ private parseArrayLiteral(): Literal {
               }
             }
             this.consume(TT.RPAREN);
-            const callExpr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+            const callExpr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
             children.push({ kind: "expr", expression: callExpr, loc });
           }
           continue;
@@ -1255,9 +1270,11 @@ private parseArrayLiteral(): Literal {
         }
         
         if (nextType === TT.DOT) {
-          let fullName = this.consume(TT.IDENT).value;
+          let rawFirst = this.consume(TT.IDENT).value;
+          const isMemo = rawFirst.startsWith("$");
+          const firstPart = isMemo ? rawFirst.slice(1) : rawFirst;
           this.consume(TT.DOT);
-          fullName = fullName + "." + this.consume(TT.IDENT).value;
+          const fullName = firstPart + "." + this.consume(TT.IDENT).value;
           const afterDotType = this.tokens[this.pos]?.type;
           
           if (afterDotType === TT.OP_PLUS) {
@@ -1284,11 +1301,27 @@ private parseArrayLiteral(): Literal {
             children.push({ kind: "expr", expression: leftExpr, loc });
           } else if (this.loopVar && fullName.split('.')[0] === this.loopVar) {
             children.push({ kind: "expr", expression: { kind: "variable", name: fullName }, loc });
-          } else if (afterDotType === TT.LPAREN || afterDotType === TT.LBRACE || afterDotType === TT.RAW_BLOCK) {
+          } else if (afterDotType === TT.LPAREN) {
+            this.consume(TT.LPAREN);
+            const args: Expression[] = [];
+            if (!this.check(TT.RPAREN)) {
+              args.push(this.parseExpression()!);
+              while (this.check(TT.COMMA)) {
+                this.consume(TT.COMMA);
+                args.push(this.parseExpression()!);
+              }
+            }
+            this.consume(TT.RPAREN);
+            const callExpr: Expression = { kind: "call", callee: { kind: "variable", name: fullName }, args, memo: isMemo || undefined };
+            children.push({ kind: "expr", expression: callExpr, loc });
+          } else if (afterDotType === TT.LBRACE || afterDotType === TT.RAW_BLOCK) {
             throw new SinthError(`Unexpected dot notation before component usage`, loc);
           } else {
-            children.push({ kind: "expr", expression: { kind: "variable", name: fullName }, loc });
+            const varExpr: Expression = { kind: "variable", name: fullName };
+            if (isMemo) varExpr.memo = true;
+            children.push({ kind: "expr", expression: varExpr, loc });
           }
+          continue;
         } else if (nextType === TT.OP_PLUS) {
           const name = this.consume(TT.IDENT).value;
           let leftExpr: Expression = { kind: "variable", name };
@@ -1346,7 +1379,9 @@ private parseArrayLiteral(): Literal {
           }
         } else if (nextType === TT.LPAREN) {
           const identName = this.peek().value;
-          if (identName[0] === identName[0].toUpperCase() && identName[0] !== identName[0].toLowerCase()) {
+          const isMemo = identName.startsWith("$");
+          const realName = isMemo ? identName.substring(1) : identName;
+          if (realName[0] === realName[0].toUpperCase() && realName[0] !== realName[0].toLowerCase()) {
             children.push(this.parseCompUse());
             continue;
           } else {
@@ -1361,7 +1396,7 @@ private parseArrayLiteral(): Literal {
               }
             }
             this.consume(TT.RPAREN);
-            let finalExpr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+            let finalExpr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
               let rhs: Expression | null = null;
