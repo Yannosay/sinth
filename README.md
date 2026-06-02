@@ -1,5 +1,5 @@
-﻿# Sinth 
-
+﻿
+# Sinth <img src="https://sinth.yannosay.com/assets/logosinth.webp" alt="logo" width="48" style="border-radius: 12px; vertical-align: middle; margin-left: 8px;">
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
 [![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
 [![license](https://img.shields.io/npm/l/@yannosay/sinth)](https://github.com/Yannosay/sinth/blob/main/LICENSE)
