@@ -1,4 +1,4 @@
-
+<!-- This is the CONTRIBUTING.md file. It's intended for interested developers on GitHub. -->
 
 
 # Contributing to Sinth
@@ -8,9 +8,10 @@
 ## Ways to contribute
 
 - Report bugs via GitHub Issues
-- Improve documentation (typo fixes count)
+- Improve documentation
 - Suggest features via Issues
 - Test the compiler on your projects
+- Security tests
 
 ## Development setup
 
@@ -22,23 +23,24 @@ node bin/sinth.js build
 
 ```
 
-
-## Project structure
+## Raw Project structure
 
 - `src/compiler/` - Lexer, parser, AST, code generation
 
 - `src/runtime/` - Runtime renderer
 
-- `tests/` - Test cases
+- pregenerated `dist/` - Compiled Sinth Files (HTML)
 
 
 ## Pull requests
 
 1. Add tests if applicable
 
-2. Ensure `npm run test` passes
+2. Ensure `node bin/sinth.js build` runs correctly
 
 3. Open PR against `main`
 
+4. Done!
 
-Small PRs are welcome. A documentation fix is just as valuable as a code change!
+
+Small PRs are also welcome. A documentation fix is just as valuable as a code change!

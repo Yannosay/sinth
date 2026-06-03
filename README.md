@@ -11,7 +11,7 @@
 <!-- * Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) -->
 
 ## Sinth Compiler
-Welcome to Sinth Compiler! Sinth enables faster, easier and reactive HTML coding.
+Welcome to Sinth Compiler. Sinth enables faster, easier and reactive HTML coding.
 
 ## Overview
 #### Reactive forms in one line.
