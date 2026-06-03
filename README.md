@@ -1,12 +1,16 @@
-﻿
-# Sinth <img src="https://sinth.yannosay.com/assets/logosinth.webp" alt="logo" width="48" style="border-radius: 12px; vertical-align: middle; margin-left: 8px;">
-[![npm version](https://img.shields.io/npm/v/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
-[![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth)](https://www.npmjs.com/package/@yannosay/sinth)
-[![license](https://img.shields.io/npm/l/@yannosay/sinth)](https://github.com/Yannosay/sinth/blob/main/LICENSE)
+﻿# ![Sinth Repo Cover](/.github/assets/sinth_repo_cover.png)
+
+[![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=6366f1&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
+[![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth?color=818cf8&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
+[![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&label=&style=for-the-badge)](https://github.com/yannosay/sinth/blob/main/LICENSE)
+
+<br>
+
+![Commits](https://img.shields.io/github/commit-activity/m/yannosay/sinth?color=a78bfa&style=for-the-badge)](https://github.com/yannosay/sinth/commits)
+[![PRs](https://img.shields.io/github/issues-pr-raw/yannosay/sinth?color=818cf8&style=for-the-badge)](https://github.com/yannosay/sinth/pulls)
 
 The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pure HTML.
 
-**I need YOUR Help to improve Sinth, please consider joining the Discord so Sinth can be optimized more easy, currently I am doing this alone!**
 
 * Introduction: https://www.youtube.com/watch?v=W0tOMTiIF0Q
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
