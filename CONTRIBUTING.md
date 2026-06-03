@@ -32,7 +32,6 @@ node bin/sinth.js build
 - `tests/` - Test cases
 
 
-
 ## Pull requests
 
 1. Add tests if applicable
