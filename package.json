@@ -9,6 +9,9 @@
     "type": "git",
     "url": "git+https://github.com/Yannosay/sinth.git"
   },
+  "bugs": {
+    "url": "https://github.com/Yannosay/sinth/issues"
+  },
   "keywords": [
     "html",
     "css",
