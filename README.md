@@ -2,42 +2,18 @@
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=6366f1&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
 [![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth?color=818cf8&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
-[![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&label=&style=for-the-badge)](https://github.com/yannosay/sinth/blob/main/LICENSE)
-
-<br>
-
+[![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&label=&style=for-the-badge)](https://github.com/yannosay/sinth/blob/main/LICENSE)  
 [![Commits](https://img.shields.io/github/commit-activity/m/yannosay/sinth?color=a78bfa&style=for-the-badge)](https://github.com/yannosay/sinth/commits)
 [![PRs](https://img.shields.io/github/issues-pr-raw/yannosay/sinth?color=818cf8&style=for-the-badge)](https://github.com/yannosay/sinth/pulls)
 
-The language that makes HTML feel SO easy. Declarative. Reactive. Compiles to pure HTML.
-
-
 * Introduction: https://www.youtube.com/watch?v=W0tOMTiIF0Q
 * Discord: [Join here!](https://discord.gg/SUvcrafTQm)
-* Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) (HIGHLY WIP, not yet finished at all!)
+<!-- * Documentation: [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs) -->
 
-#### Try out Sinth directly in Web! (BETA. Uses an older version of Sinth.)
+## Sinth Compiler
+Welcome to Sinth Compiler! Sinth enables faster, easier and reactive HTML coding.
 
-```html
-<div id="app"></div>
-<script src="https://lib.yannosay.com/sinth.js/sinth.js"></script>
-<script type="text/sinth">
-page
-title = "Counter"
-var int count = 0
-
-Main {
-  Heading(level: 1) {count}
-  Button(onClick: count = count + 1) {"Increment"}
-}
-
-$entry-point("app")
-</script>
-```
-
-
-## Why Sinth?
-
+## Overview
 #### Reactive forms in one line.
 ```ts
 Input(bind: userName, placeholder: "Enter your name")
