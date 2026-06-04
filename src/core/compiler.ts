@@ -790,10 +790,20 @@ export function renderCompUse(
     if (attr.name === "level" && use.name === "Heading") continue;
 
     if (INLINE_STYLE_PROPS.has(attr.name) && attr.value) {
-      const val = attr.value.kind === "str"
-        ? interpolateAttr(attr.value.value, params)
-        : litToString(attr.value);
-      inlineStyleParts.push(`${camelToKebab(attr.name)}: ${val}`);
+      if (attr.value.kind === "str" && attr.value.value.startsWith("__EXPR__")) {
+        try {
+          const expr: Expression = JSON.parse(attr.value.value.substring(8));
+          const exprId = registerExpr(ctx, expr);
+          inlineStyleParts.push(`${camelToKebab(attr.name)}:__EXPR__${exprId}`);
+        } catch {
+          inlineStyleParts.push(`${camelToKebab(attr.name)}: ${interpolateAttr(attr.value.value, params)}`);
+        }
+      } else {
+        const val = attr.value.kind === "str"
+          ? interpolateAttr(attr.value.value, params)
+          : litToString(attr.value);
+        inlineStyleParts.push(`${camelToKebab(attr.name)}: ${val}`);
+      }
       continue;
     }
 
@@ -813,7 +823,19 @@ export function renderCompUse(
 
   const classes = [defaultClass, userClass].filter(Boolean).join(" ");
   if (classes) attrParts.push(`class="${escAttr(classes)}"`);
-  if (inlineStyleParts.length > 0) attrParts.push(`style="${escAttr(inlineStyleParts.join("; "))}"`);
+  if (inlineStyleParts.length > 0) {
+    const staticParts: string[] = [];
+    const exprParts: string[] = [];
+    for (const p of inlineStyleParts) {
+      if (p.includes(':__EXPR__')) {
+        exprParts.push(p.replace('__EXPR__', ''));
+      } else {
+        staticParts.push(p);
+      }
+    }
+    if (staticParts.length > 0) attrParts.push(`style="${escAttr(staticParts.join("; "))}"`);
+    if (exprParts.length > 0) attrParts.push(`data-sinth-style="${escAttr(exprParts.join(";"))}"`);
+  }
   if (tag === "button" && !use.attrs.some(a => a.name === "type")) attrParts.push(`type="button"`);
   
   const delayAttrVal = use.attrs.find(a => a.name === "delay");

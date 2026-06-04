@@ -99,6 +99,18 @@ export function buildRenderBody(opts: {
     }
   });\n`;
   }
+  renderBody += `  document.querySelectorAll('[data-sinth-style]').forEach(function(el) {
+    try {
+      let d = el.dataset.sinthStyle.split(';');
+      for (let i = 0; i < d.length; i++) {
+        let p = d[i].split(':');
+        if (p.length === 2) {
+          let fn = __X[p[1]];
+          if (fn) el.style[p[0]] = fn({});
+        }
+      }
+    } catch(e) {}
+  });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-hide]').forEach(function(el) {
     let exprId = el.dataset.sinthHide;
     if (exprId) {
