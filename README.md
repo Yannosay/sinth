@@ -6,10 +6,6 @@
 [![Commits](https://img.shields.io/github/commit-activity/m/yannosay/sinth?color=a78bfa&style=for-the-badge)](https://github.com/yannosay/sinth/commits)
 [![PRs](https://img.shields.io/github/issues-pr-raw/yannosay/sinth?color=818cf8&style=for-the-badge)](https://github.com/yannosay/sinth/pulls)
 
-
-
-
-
 ## Sinth Compiler
 
 Sinth enables faster, easier and reactive HTML coding.
@@ -34,7 +30,7 @@ The Sinth compiler is designed as a CLI tool that should work from anywhere. The
   
 ## Documentation
 
-You can find the complete documentation, including all notes and tips [here](https://yannosay.com/sinth)
+You can find the complete documentation, including all notes and tips [here](https://yannosay.com/sinth).
 
 ## Usage
 
@@ -53,8 +49,6 @@ Main {
     Paragraph() { userName + " has reached Count " + count + "!" }
 }
 ```
-
-
 
 ## Feature Overview
 
@@ -102,4 +96,5 @@ If you have encountered a problem and need assistance, please open an issue in [
 ## License
 
 [AGPL-3.0](https://github.com/Yannosay/sinth/blob/main/LICENSE)
-All generated output you made with Sinth is entirely your intellectual property and free of any license obligations of Sinth.
+
+Notice: All generated output you made with Sinth is entirely your intellectual property and free of any license obligations of Sinth.
