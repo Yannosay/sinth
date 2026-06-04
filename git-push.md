@@ -17,6 +17,7 @@ git checkout main
 ```bash
 git stash
 git checkout release/1.10
+git merge main
 git add .
 git commit -m "fix: description"
 git push
