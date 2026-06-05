@@ -42,3 +42,27 @@ git push origin v1.9.1
 git checkout main
 git stash pop
 ```
+
+## via Visual Interface on GitHub
+
+### 1. Work on branch:
+
+```bash
+git add .
+git commit -m "fix: description"
+git push
+```
+
+### 2. Create release on GitHub:
+
+* Go to Releases → "Draft a new release"
+* Choose tag (e.g., v1.9.4)
+* Publish
+
+### 3. Sync main:
+
+```bash
+git checkout main
+git merge release/1.9
+git push
+```
