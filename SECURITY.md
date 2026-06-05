@@ -8,8 +8,7 @@ Sinth follows a coordinated vulnerability disclosure process.
 
 Submit reports via the **GitHub Security Advisory** system (Security tab).
 
-A PGP key for sensitive communications is available [here](./pgp-key.asc)
-(Fingerprint: `710E FF4E 0851 C6FC A65E BCD3 9043 F9F9 09C7 5C31`).
+A PGP key for sensitive communications is available [here](./pgp-key.asc). (Fingerprint: `710E FF4E 0851 C6FC A65E BCD3 9043 F9F9 09C7 5C31`)
 
 **Timeline:**
 

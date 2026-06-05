@@ -17,6 +17,22 @@ git checkout main
 ```bash
 git stash
 git checkout release/1.10
+git add .
+git commit -m "fix: description"
+git push
+git tag -a v1.10.1 -m "release v1.10.1"
+git push origin v1.10.1
+git checkout main
+git merge release/1.10
+git push
+git stash pop
+```
+
+If you need to bring in changes from `main` first (e.g., someone merged a PR there), add `git merge main` before committing:
+
+```bash
+git stash
+git checkout release/1.10
 git merge main
 git add .
 git commit -m "fix: description"
@@ -56,7 +72,7 @@ git push
 ### 2. Create release on GitHub:
 
 * Go to Releases → "Draft a new release"
-* Choose tag (e.g., v1.9.4)
+* Choose tag (e.g., `v1.9.4`)
 * Publish
 
 ### 3. Sync main:
@@ -65,4 +81,5 @@ git push
 git checkout main
 git merge release/1.9
 git push
+git fetch --tags
 ```
