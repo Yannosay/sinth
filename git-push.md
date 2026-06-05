@@ -51,14 +51,14 @@ git stash pop
 ## backport — patch to an older release line (no merge into `main`)
 
 ```bash
-# 1. Bump version in package.json (e.g., "1.9.1")
+# 1. Bump version in package.json (e.g., "1.9.5")
 git stash
 git checkout release/1.9
 git add .
-git commit -m "release v1.9.1"
+git commit -m "release v1.9.5"
 git push
-git tag -a v1.9.1 -m "release v1.9.1"
-git push origin v1.9.1
+git tag -a v1.9.5 -m "release v1.9.5"
+git push origin v1.9.5
 git checkout main
 git stash pop
 ```
