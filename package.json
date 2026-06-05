@@ -1,6 +1,6 @@
 {
   "name": "@yannosay/sinth",
-  "version": "1.9.6",
+  "version": "1.10.0",
   "description": "A declarative & reactive language that compiles to pure HTML, CSS, and JavaScript.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",
