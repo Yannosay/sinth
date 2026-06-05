@@ -76,8 +76,8 @@ git push
 
 ### 2. Create release on GitHub:
 
-* Go to Releases → "Draft a new release"
-* Choose tag (e.g., `v1.9.5`) — must match the version you put in package.json
+* Go to Releases → "Create a new release"
+* Choose tag (e.g., `v1.9.5`) - must match the version you put in package.json
 * Publish
 
 ### 3. Sync main:
