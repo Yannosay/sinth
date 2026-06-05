@@ -29,7 +29,7 @@ The Sinth compiler is designed as a CLI tool that should work from anywhere. The
 * You can initialize your Sinth project via your CLI:
   * `sinth init my-sinth-project`
   * `cd my-sinth-project`
-* After that's done, you can start a Dev Server to preview your chan ge:
+* After that's done, you can start a Dev Server to preview your change:
   * `sinth dev pages/index.sinth`
   
 ## Documentation
