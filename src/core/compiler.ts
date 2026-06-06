@@ -171,6 +171,7 @@ if (name === "model" && value?.kind === "str") {
   if (ctx.scopePrefix && ctx.scopeVar && ctx.varDecls?.some(v => v.name === vName)) {
     vName = `${ctx.scopePrefix}${vName}`;
   }
+  if (ctx.namespace) vName = ctx.namespace + "_" + vName;
   const varDecl = ctx?.varDecls?.find(v => v.name === vName);
   const rhs = (varDecl && varDecl.varType === "int")
     ? `Number(e.target.value) || 0`
@@ -782,7 +783,7 @@ export function renderCompUse(
   const { tag, defaultClass, voidEl } = resolveBuiltinTag(use.name, use.attrs);
   const isVoid = voidEl || VOID_TAGS.has(tag);
 
-  const attrParts: string[] = [`data-s="${ctx.scopeHash}"`];
+  let attrParts: string[] = [`data-s="${ctx.scopeHash}"`];
   let userClass: string | undefined;
   const inlineStyleParts: string[] = [];
 
@@ -923,6 +924,7 @@ export function renderCompUse(
       if (ctx.scopePrefix && ctx.scopeVar && ctx.varDecls?.some(v => v.name === vName)) {
         resolvedName = `${ctx.scopePrefix}${vName}`;
       }
+      if (ctx.namespace) resolvedName = ctx.namespace + "_" + resolvedName;
       const renderCall = ctx.scopeVar ? `${ctx.scopeVar}._render()` : renderFn + "()";
       const handlerBody = `${resolvedName} = ${rhs}; ${renderCall}`;
       if (ctx.scopePrefix) {
@@ -996,7 +998,8 @@ export function renderCompUse(
       return `<label data-s="${ctx.scopeHash}"><input${checkAttrStr}> ${labelText}</label>`;
     }
   }
-
+  
+  attrParts = attrParts.filter(p => !p.startsWith("bind="));
   const attrStr = attrParts.length ? " " + attrParts.join(" ") : "";
 
   if (isVoid) {
