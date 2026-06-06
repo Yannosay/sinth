@@ -30,7 +30,7 @@ The Sinth compiler is designed as a CLI tool that should work from anywhere. The
   
 ## Documentation
 
-You can find the complete documentation, including all notes and tips [here](https://yannosay.com/sinth).
+You can find the complete documentation, including all notes and tips [here](https://sinth.yannosay.com).
 
 ## Usage
 

@@ -282,6 +282,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     actionButtons: [],
     diffingEnabled: enableDiffing,
     declaredVars: declaredVars,
+    namespace: hash,
   };
 
   if (!file.isPage) {
@@ -343,6 +344,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     exprRegistry: ctx.exprRegistry,
     sharedRuntime: opts.sharedRuntime,
     functionsJS:  compiledFunctions,
+    namespace:    hash,
   });
   const runtimeJS = typeof runtimeResult === 'string' ? runtimeResult : runtimeResult.page;
   const sharedJS = typeof runtimeResult === 'string' ? null : runtimeResult.shared;
