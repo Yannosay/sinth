@@ -149,10 +149,14 @@ export interface CompileCtx {
   loopVars?:    Set<string>;
   diffingEnabled?: boolean;
   declaredVars?: Set<string>;
+ 
   // custom elements
   scopePrefix?: string;
   scopeVar?: string;
   ceActionHandlers?: string[];
+
+  // web
+  namespace?: string;
 }
 
 export class SinthError extends Error {

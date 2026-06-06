@@ -4,15 +4,17 @@ export function generateHelpers(opts: {
   needsFor: boolean;
   needsDelay: boolean;
   needsMixed: boolean;
+  ns?: string;
 }): string {
-  const { needsExpr, needsIf, needsFor, needsDelay, needsMixed } = opts;
+  const { needsExpr, needsIf, needsFor, needsDelay, needsMixed, ns } = opts;
+  const X = ns ? "__X" + ns : "__X";
   let helpers = "";
 
   if (needsExpr || needsIf || needsFor) {
     helpers += `
 var sinthExpr = function(el) {
   try {
-    let exprFn = __X[el.dataset.exprId];
+    let exprFn = ${X}[el.dataset.exprId];
     if (exprFn) el.textContent = exprFn({});
   } catch(e) {}
 };
@@ -99,7 +101,7 @@ function sinthDelayExpr(el, _ctx) {
   el.dataset.sinthDelayDone = '1';
   _ctx = _ctx || {};
   try {
-    let fn = __X[el.dataset.sinthDelayExprId];
+    let fn = ${X}[el.dataset.sinthDelayExprId];
     let ms = fn ? parseInt(fn(_ctx)) || 0 : 0;
     let hideEl = el.dataset.sinthDelayHide !== 'false';
     let show = function() {
@@ -124,7 +126,7 @@ function sinthDelayExpr(el, _ctx) {
 function sinthIfBlock(t) {
   let ifId = t.dataset.sinthIfId;
   let anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
-  let condFn = __X[t.dataset.sinthIfExpr];
+  let condFn = ${X}[t.dataset.sinthIfExpr];
   let cond = condFn ? condFn() : false;
   if (cond) {
     let elseA = t.parentNode.querySelector('[data-sinth-if-anchor="__else__' + ifId + '"]');
@@ -296,7 +298,7 @@ function sinthForBlock(t) {
     if (_idx) loopCtx[_idx] = _loopIdx - 1;
     let frag = document.createRange().createContextualFragment(tplContent);
     frag.querySelectorAll('.sinth-expr').forEach(function(el) {
-      try { let fn = __X[el.dataset.exprId]; if (fn) el.textContent = fn(loopCtx); } catch(e) {}
+      try { let fn = ${X}[el.dataset.exprId]; if (fn) el.textContent = fn(loopCtx); } catch(e) {}
       el.classList.remove('sinth-expr');
     });
     frag.querySelectorAll('[data-sinth-delay-expr-id]').forEach(function(el) {
@@ -310,13 +312,12 @@ function sinthForBlock(t) {
       el.setAttribute('onclick', onclick);
     });
     frag.querySelectorAll('template[data-sinth-if-expr]').forEach(function(ifT) {
-      let condFn = __X[ifT.dataset.sinthIfExpr];
+      let condFn = ${X}[ifT.dataset.sinthIfExpr];
       let cond = condFn ? condFn(loopCtx) : false;
       if (cond) {
         let ifFrag = document.createRange().createContextualFragment(ifT.innerHTML);
         ifFrag.querySelectorAll('.sinth-expr').forEach(function(el2) {
-          try { let fn2 = __X[el2.dataset.exprId]; if (fn2) el2.textContent = fn2(loopCtx); } catch(e) {}
-          el2.classList.remove('sinth-expr');
+          try { let fn2 = ${X}[el2.dataset.exprId]; if (fn2) el2.textContent = fn2(loopCtx); } catch(e) {}          el2.classList.remove('sinth-expr');
         });
         ifT.replaceWith(ifFrag);
       } else {

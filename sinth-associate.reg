@@ -2,6 +2,13 @@ Windows Registry Editor Version 5.00
 
 [HKEY_CLASSES_ROOT\.sinth]
 @="SinthSourceFile"
+"PerceivedType"="text"
 
 [HKEY_CLASSES_ROOT\SinthSourceFile]
 @="Sinth Source File"
+
+[HKEY_CLASSES_ROOT\SinthSourceFile\DefaultIcon]
+@="%SystemRoot%\\system32\\imageres.dll,3"
+
+[HKEY_CLASSES_ROOT\SinthSourceFile\shell\open\command]
+@="notepad.exe \"%1\""

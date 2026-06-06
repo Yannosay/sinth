@@ -1,4 +1,4 @@
-# ![Sinth Repo Cover](/.github/assets/sinth_repo_cover.png)
+# ![Sinth Repo Cover](/.github/assets/repo_cover.png)
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=6366f1&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
 [![npm downloads](https://img.shields.io/npm/dw/@yannosay/sinth?color=818cf8&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)

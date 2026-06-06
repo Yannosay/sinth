@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { SinthWarning } from "./core/types.ts";
-import { compileFile, CompileOptions, findSinthPages, copyDir } from "./core/compiler.ts";
+import { compileFile, CompileOptions, findSinthPages, copyDir } from "./core/cli-compiler.ts";
 import { startDevServer } from "./server.ts";
 
 
