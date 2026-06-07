@@ -83,8 +83,8 @@ git push
 ### 3. Sync main:
 
 ```bash
-git checkout main
-git merge release/1.9
+git checkout release/1.11
+git merge main
 git push
 git fetch --tags
 ```

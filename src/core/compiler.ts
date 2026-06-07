@@ -614,7 +614,19 @@ depth:   number,
   const condJS = compileExprToJS(ifBlock.condition, undefined, ctx.namespace);
   const allChildren  = [...ifBlock.body, ...(ifBlock.elseBody ?? [])];
   const hasAssign = allChildren.some(c => c.kind === "assign_stmt");
-  const hasComp   = allChildren.some(c => c.kind === "use");
+  const hasComp = allChildren.some(c => c.kind === "use");
+
+  if (!hasAssign && !hasComp) {
+    const tplId = ctx.ifIdCounter++;
+    const condId = registerExpr(ctx, ifBlock.condition);
+    const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
+    const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
+    const persistAttr = ifBlock.persist ? ` data-sinth-if-persist="true"` : "";
+    return (
+      `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${persistAttr}>${bodyHTML}</template>` +
+      (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}">${elseHTML}</template>` : "")
+    );
+  }
 
   // pure logic
   if (hasAssign && !hasComp) {
@@ -622,7 +634,7 @@ depth:   number,
     return "";
   }
 
-  // pure DOM
+  // pure DOM (components need replace/persist/delay handling)
   if (!hasAssign && hasComp) {
     const tplId = ctx.ifIdCounter++;
     const condId = registerExpr(ctx, ifBlock.condition);
@@ -739,8 +751,14 @@ depth:   number,
   }
 
   const condId = registerExpr(ctx, ifBlock.condition);
+  
+  const hasFullscreen = ifHTML.includes("data-sinth-fullscreen") || elseHTML.includes("data-sinth-fullscreen");
+  
   ctx.mixedBlocks.push({ id, conditionJS: String(condId), ifJS: ifAssignJS, ifHTML, elseJS: elseAssignJS, elseHTML, replaceId });
 
+  if (hasFullscreen) {
+    return `<span id="${replaceId || id}" data-sinth-mixed data-sinth-mixed-fullscreen="${condId}"></span>`;
+  }
   return `<span id="${replaceId || id}" data-sinth-mixed></span>`;
 }
 
