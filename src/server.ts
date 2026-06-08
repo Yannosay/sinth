@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as path from "path";
 import * as fs from "fs";
-import { compileFile, CompileOptions, findSinthPages, minifyHTML } from "./core/compiler.ts";
+import { compileFile, CompileOptions, findSinthPages, minifyHTML } from "./core/cli-compiler.ts";
 
 
 

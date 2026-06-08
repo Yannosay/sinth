@@ -2,4 +2,4 @@
 const path = require('path');
 const tsSource = path.join(__dirname, '..', 'src', 'cli.ts');
 require('ts-node').register({ project: path.join(__dirname, '..', 'tsconfig.json') });
-require(tsSource);
+require(path.join(__dirname, '..', 'src', 'cli'));
