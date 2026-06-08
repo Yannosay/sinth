@@ -1,6 +1,6 @@
 import { Expression, Child, AssignStmt, IfBlock, ReturnStmt, LitStr, LitNum, LitBool, CompileCtx } from "./types.ts";
 
-export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namespace?: string): string {
+export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namespace?: string, declaredVars?: Set<string>): string {
   switch (expr.kind) {
     case "literal":
       if (!expr.value) return "null";
@@ -21,34 +21,37 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
           return `_ctx.${expr.name}`;
         }
       }
-      return namespace ? namespace + "_" + (expr.name ?? "undefined") : (expr.name ?? "undefined");
+      if (namespace && declaredVars && expr.name && declaredVars.has(expr.name)) {
+        return namespace + "_" + expr.name;
+      }
+      return expr.name ?? "undefined";
     case "binary": {
-      const l = compileExprToJS(expr.left!, loopVars, namespace);
-      const r = compileExprToJS(expr.right!, loopVars, namespace);
+      const l = compileExprToJS(expr.left!, loopVars, namespace, declaredVars);
+      const r = compileExprToJS(expr.right!, loopVars, namespace, declaredVars);
       const o = expr.op === "and" ? "&&" : expr.op === "or" ? "||" : expr.op!;
       return `(${l} ${o} ${r})`;
     }
     case "unary": {
       const o = expr.op === "not" ? "!" : expr.op!;
-      return `${o}(${compileExprToJS(expr.operand!, loopVars, namespace)})`;
+      return `${o}(${compileExprToJS(expr.operand!, loopVars, namespace, declaredVars)})`;
     }
     case "assign": {
-      const v = expr.right ? compileExprToJS(expr.right, loopVars, namespace) : "null";
-      const t = namespace ? namespace + "_" + expr.target : expr.target;
+      const v = expr.right ? compileExprToJS(expr.right, loopVars, namespace, declaredVars) : "null";
+      const t = (namespace && declaredVars && expr.target && declaredVars.has(expr.target)) ? namespace + "_" + expr.target : expr.target;
       return `${t} ${expr.op} ${v}`;
     }
     case "index":
-      return `${compileExprToJS(expr.object!, loopVars, namespace)}[${compileExprToJS(expr.key!, loopVars, namespace)}]`;
+      return `${compileExprToJS(expr.object!, loopVars, namespace, declaredVars)}[${compileExprToJS(expr.key!, loopVars, namespace, declaredVars)}]`;
     case "postfix":
-      const t2 = namespace ? namespace + "_" + expr.target : expr.target;
+      const t2 = (namespace && declaredVars && expr.target && declaredVars.has(expr.target)) ? namespace + "_" + expr.target : expr.target;
       return `${t2}${expr.op}`;
     case "call": {
-      const callee = compileExprToJS(expr.callee!, loopVars, namespace);
+      const callee = compileExprToJS(expr.callee!, loopVars, namespace, declaredVars);
       if (callee === "remove") {
-        const arg = expr.args && expr.args[0] ? compileExprToJS(expr.args[0], loopVars, namespace) : "''";
+        const arg = expr.args && expr.args[0] ? compileExprToJS(expr.args[0], loopVars, namespace, declaredVars) : "''";
         return `(function(){ var _el=document.getElementById(${arg}); if(_el)_el.remove(); })()`;
       }
-      const args = (expr.args ?? []).map(a => compileExprToJS(a, loopVars, namespace)).join(", ");
+      const args = (expr.args ?? []).map(a => compileExprToJS(a, loopVars, namespace, declaredVars)).join(", ");
       if (expr.args && expr.args.length === 0 && /\.length$/.test(callee)) {
         return callee;
       }

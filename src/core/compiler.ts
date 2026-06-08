@@ -139,7 +139,7 @@ export function resolveBuiltinTag(
 }
 
 export function registerExpr(ctx: CompileCtx, expr: Expression): number {
-  let jsExpr = compileExprToJS(expr, ctx.loopVars, ctx.namespace);
+  let jsExpr = compileExprToJS(expr, ctx.loopVars, ctx.namespace, ctx.declaredVars);
   if (ctx.scopePrefix && ctx.scopeVar && expr.kind === "variable" && expr.name && ctx.varDecls?.some(v => v.name === expr.name)) {
     jsExpr = `_ctx.${ctx.scopePrefix}${expr.name}`;
   }
@@ -611,7 +611,7 @@ depth:   number,
 ): string {
   if (depth > 64) throw new SinthError("Maximum if-block nesting depth (64) exceeded.", ifBlock.loc);
 
-  const condJS = compileExprToJS(ifBlock.condition, undefined, ctx.namespace);
+  const condJS = compileExprToJS(ifBlock.condition, undefined, ctx.namespace, ctx.declaredVars);
   const allChildren  = [...ifBlock.body, ...(ifBlock.elseBody ?? [])];
   const hasAssign = allChildren.some(c => c.kind === "assign_stmt");
   const hasComp = allChildren.some(c => c.kind === "use");
@@ -959,30 +959,39 @@ export function renderCompUse(
     if (!use.attrs.some(a => a.name === "type")) attrParts.push(`type="checkbox"`);
     
     const checkedAttr = use.attrs.find(a => a.name === "checked");
-    if (checkedAttr && checkedAttr.value) {
-      if (checkedAttr.value.kind === "bool") {
-        if (checkedAttr.value.value) attrParts.push(`checked`);
-      } else if (checkedAttr.value.kind === "str") {
-        let raw = checkedAttr.value.value;
-        if (raw.startsWith("__EXPR__")) {
-          try {
-            const expr: Expression = JSON.parse(raw.substring(8));
-            if (expr.kind === "variable" && expr.name) {
-              const checkedExprId = registerExpr(ctx, { kind: "variable", name: expr.name });
-              attrParts.push(`data-sinth-checked="${checkedExprId}"`);
-            } else {
-              const exprId = registerExpr(ctx, expr);
-              attrParts.push(`data-sinth-checked-expr="${exprId}"`);
-            }
-          } catch {}
-        } else {
-          const checkedExprId = registerExpr(ctx, { kind: "variable", name: raw });
-          attrParts.push(`data-sinth-checked="${checkedExprId}"`);
-        }
+    const onChangeAttr = use.attrs.find(a => a.name === "onChange");
+    
+    // Resolve bound variable name (same pattern as Input's bind/model)
+    let boundVarName: string | null = null;
+    if (checkedAttr && checkedAttr.value?.kind === "str") {
+      let raw = checkedAttr.value.value;
+      if (raw.startsWith("__EXPR__")) {
+        try {
+          const expr: Expression = JSON.parse(raw.substring(8));
+          if (expr.kind === "variable" && expr.name) {
+            boundVarName = expr.name;
+          }
+        } catch {}
+      } else if (raw.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+        boundVarName = raw;
       }
     }
     
-    const onChangeAttr = use.attrs.find(a => a.name === "onChange");
+    let resolvedName = boundVarName;
+    if (resolvedName && ctx.scopePrefix && ctx.scopeVar && ctx.varDecls?.some(v => v.name === resolvedName)) {
+      resolvedName = `${ctx.scopePrefix}${resolvedName}`;
+    }
+    if (resolvedName && ctx.namespace) resolvedName = ctx.namespace + "_" + resolvedName;
+    
+    if (checkedAttr && checkedAttr.value) {
+      if (checkedAttr.value.kind === "bool") {
+        if (checkedAttr.value.value) attrParts.push(`checked`);
+      } else if (checkedAttr.value.kind === "str" && boundVarName) {
+        const checkedExprId = registerExpr(ctx, { kind: "variable", name: boundVarName });
+        attrParts.push(`data-sinth-checked="${checkedExprId}"`);
+      }
+    }
+    
     if (onChangeAttr && onChangeAttr.value?.kind === "str") {
       let raw = onChangeAttr.value.value;
       if (raw.startsWith("__EXPR__")) {
@@ -994,18 +1003,8 @@ export function renderCompUse(
       } else {
         attrParts.push(`onchange="${escAttr(raw)};${renderFn}()"`);
       }
-    } else if (!onChangeAttr && checkedAttr) {
-      const raw = checkedAttr.value?.kind === "str" ? checkedAttr.value.value : "";
-      if (raw.startsWith("__EXPR__")) {
-        try {
-          const expr: Expression = JSON.parse(raw.substring(8));
-          if (expr.kind === "variable" && expr.name) {
-            attrParts.push(`onchange="(function(e){ ${expr.name} = e.target.checked; ${renderFn}(); })(event)"`);
-          }
-        } catch {}
-      } else if (raw.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
-        attrParts.push(`onchange="(function(e){ ${raw} = e.target.checked; ${renderFn}(); })(event)"`);
-      }
+    } else if (!onChangeAttr && resolvedName) {
+      attrParts.push(`onchange="(function(e){ ${resolvedName} = e.target.checked; ${renderFn}(); })(event)"`);
     }
     
     const labelAttr = use.attrs.find(a => a.name === "label");
