@@ -695,7 +695,20 @@ depth:   number,
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
     const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
     let replaceAttr = "";
-    let persistAttr = (ifBlock.persist || hasComp) ? ` data-sinth-if-persist="true"` : "";
+    const hasStatefulComp = ifBlock.body.some(c => {
+      if (c.kind !== "use") return false;
+      const u = c as CompUse;
+      if (u.name === "__IF_ROOT__") return false;
+      if (ctx.customEls.has(u.name)) return true;
+      return u.attrs.some(a => a.name === "bind" || a.name === "model" || a.name === "fullscreenSync");
+    }) || (ifBlock.elseBody ?? []).some(c => {
+      if (c.kind !== "use") return false;
+      const u = c as CompUse;
+      if (u.name === "__IF_ROOT__") return false;
+      if (ctx.customEls.has(u.name)) return true;
+      return u.attrs.some(a => a.name === "bind" || a.name === "model" || a.name === "fullscreenSync");
+    });
+    let persistAttr = (ifBlock.persist || hasStatefulComp) ? ` data-sinth-if-persist="true"` : "";
     const firstComp = ifBlock.body.find(c => c.kind === "use") as CompUse | undefined;
     if (firstComp) {
       const idAttr = firstComp.attrs.find(a => a.name === "id");
