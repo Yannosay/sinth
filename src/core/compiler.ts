@@ -641,7 +641,7 @@ depth:   number,
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
     const elseHTML = (ifBlock.elseBody ?? []).map(c => renderChild(c, ctx, params, depth + 1)).join("");
     let replaceAttr = "";
-    let persistAttr = ifBlock.persist ? ` data-sinth-if-persist="true"` : "";    
+    let persistAttr = (ifBlock.persist || hasComp) ? ` data-sinth-if-persist="true"` : "";
     const firstComp = ifBlock.body.find(c => c.kind === "use") as CompUse | undefined;
     if (firstComp) {
       const idAttr = firstComp.attrs.find(a => a.name === "id");
@@ -773,7 +773,7 @@ export function renderCompUse(
     return use.children.map(c => renderChild(c, ctx, params, depth)).join("");
   }
 
-  // RawHTML
+
   if (use.name === "RawHTML") {
     const ca = use.attrs.find(a => a.name === "content");
     if (!ca || !ca.value) return "";
@@ -785,17 +785,17 @@ export function renderCompUse(
   if (userDef) return expandUserComp(use, userDef, ctx, params, depth + 1);
 
   // custom element
-  const customEl = ctx.customEls.get(use.name);
-  if (customEl) {
-    const attrParts = [`data-s="${ctx.scopeHash}"`];
-    for (const attr of use.attrs) {
-      if (attr.name === "bind" || attr.name === "model") continue;
-      const r = renderAttr(attr, params, ctx);
-      if (r) attrParts.push(r);
-    }
-    const inner = use.children.map(c => renderChild(c, ctx, params, depth + 1)).join("");
-    return `<${customEl.tagName} ${attrParts.join(" ")}>${inner}</${customEl.tagName}>`;
-  }
+  // const customEl = ctx.customEls.get(use.name);
+  // if (customEl) {
+  //  const attrParts = [`data-s="${ctx.scopeHash}"`];
+  //  for (const attr of use.attrs) {
+  //    if (attr.name === "bind" || attr.name === "model") continue;
+  //    const r = renderAttr(attr, params, ctx);
+  //    if (r) attrParts.push(r);
+  //  }
+  //  const inner = use.children.map(c => renderChild(c, ctx, params, depth + 1)).join("");
+  //  return `<${customEl.tagName} ${attrParts.join(" ")}>${inner}</${customEl.tagName}>`;
+  // }
 
   // built-in component
   const { tag, defaultClass, voidEl } = resolveBuiltinTag(use.name, use.attrs);

@@ -148,7 +148,14 @@ function sinthIfBlock(t) {
     }
   } else {
     let runElse = function() {
-      if (t.dataset.sinthIfPersist === "true") return;
+      if (t.dataset.sinthIfPersist === "true") {
+        if (anchor) {
+          let cur2 = anchor.nextSibling;
+          while (cur2 && cur2 !== t) { let nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
+          anchor.remove();
+        }
+        return;
+      }
       if (anchor) {
         if (anchor._sinthReplaced) {
           let insFirst = anchor._sinthInsertedFirst;
