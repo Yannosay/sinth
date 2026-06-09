@@ -1,9 +1,9 @@
-import { Lexer } from "../core/lexer.ts";
-import { Parser } from "../core/parser.ts";
-import { SinthFile, CompileCtx } from "../core/types.ts";
-import { buildRuntime, renderCompUse } from "../core/compiler.ts";
-import { fnv1a } from "../utils.ts";
-import { processStyleBlock } from "../core/style-processor.ts";
+import { Lexer } from "../core/lexer";
+import { Parser } from "../core/parser";
+import { SinthFile, CompileCtx } from "../core/types";
+import { buildRuntime, renderCompUse } from "../core/compiler";
+import { fnv1a } from "../utils";
+import { processStyleBlock } from "../core/style-processor";
 
 export interface BrowserCompileResult {
   html: string;

@@ -1,6 +1,6 @@
-import { CustomElDecl, CompileCtx } from "../types.ts";
-import { renderChild } from "../compiler.ts";
-import { litToString } from "../../utils.ts";
+import { CustomElDecl, CompileCtx } from "../types";
+import { renderChild } from "../compiler";
+import { litToString } from "../../utils";
 
 export function compileCustomElement(cel: CustomElDecl, opts: { sharedRuntime: boolean }, hash: string, ctx: CompileCtx): string {
   const componentId = `${cel.sinthName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

@@ -1,6 +1,6 @@
-import { BUILTIN_MAP } from "./builtins.ts";
-import { SinthError, SinthWarning, StyleBlock } from "./types.ts";
-import { camelToKebab, interpolateAttr } from "../utils.ts";
+import { BUILTIN_MAP } from "./builtins";
+import { SinthError, SinthWarning, StyleBlock } from "./types";
+import { camelToKebab, interpolateAttr } from "../utils";
 
 
 

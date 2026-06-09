@@ -1,16 +1,16 @@
-import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types.ts";
-import { Parser } from "./parser.ts";
-import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal, interpolateAttr, renderText } from "../utils.ts";
-import { compileExprToJS, compileIfToJS, bodyToJS } from "./expr.ts";
-import { FunctionDef } from "./types.ts";
-import { parseFile, resolveImports, ResolverConfig, ResolvedImports } from "../resolver.ts";
-import { compileFunctionDef } from "./runtime/functions.ts";
-import { generateHelpers } from "./runtime/helpers.ts";
-import { buildRenderBody } from "./runtime/render.ts";
-import { BUILTIN_MAP, VOID_TAGS, BuiltinInfo } from "./builtins.ts";
-import { processStyleBlock } from "./style-processor.ts";
-import { buildHeadData, renderHead, HeadData } from "./head-builder.ts";
-import { compileCustomElement } from "./runtime/custom-element.ts";
+import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types";
+import { Parser } from "./parser";
+import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal, interpolateAttr, renderText } from "../utils";
+import { compileExprToJS, compileIfToJS, bodyToJS } from "./expr";
+import { FunctionDef } from "./types";
+import { parseFile, resolveImports, ResolverConfig, ResolvedImports } from "../resolver";
+import { compileFunctionDef } from "./runtime/functions";
+import { generateHelpers } from "./runtime/helpers";
+import { buildRenderBody } from "./runtime/render";
+import { BUILTIN_MAP, VOID_TAGS, BuiltinInfo } from "./builtins";
+import { processStyleBlock } from "./style-processor";
+import { buildHeadData, renderHead, HeadData } from "./head-builder";
+import { compileCustomElement } from "./runtime/custom-element";
 
 const EVENT_RE = /^on[A-Z]/;
 export function eventAttrName(name: string): string | null {

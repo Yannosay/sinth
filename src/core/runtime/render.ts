@@ -1,4 +1,4 @@
-import { MixedBlockEntry } from "../types.ts";
+import { MixedBlockEntry } from "../types";
 
 export function buildRenderBody(opts: {
   bodyHTML: string;

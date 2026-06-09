@@ -1,6 +1,6 @@
 import * as path from "path";
-import { MetaEntry, SinthWarning } from "./types.ts";
-import { esc, escAttr, litToString, camelToKebab } from "../utils.ts";
+import { MetaEntry, SinthWarning } from "./types";
+import { esc, escAttr, litToString, camelToKebab } from "../utils";
 
 
 

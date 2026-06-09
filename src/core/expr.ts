@@ -1,4 +1,4 @@
-import { Expression, Child, AssignStmt, IfBlock, ReturnStmt, LitStr, LitNum, LitBool, CompileCtx } from "./types.ts";
+import { Expression, Child, AssignStmt, IfBlock, ReturnStmt, LitStr, LitNum, LitBool, CompileCtx } from "./types";
 
 export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namespace?: string, declaredVars?: Set<string>): string {
   switch (expr.kind) {

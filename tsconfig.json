@@ -10,18 +10,9 @@
     "skipLibCheck": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
     "types": ["node"],
     "typeRoots": ["./node_modules/@types", "../node_modules/@types"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
-  "ts-node": {
-    "compilerOptions": {
-      "module": "commonjs"
-    },
-    "esm": false,
-    "transpileOnly": true
-  }
+  "exclude": ["node_modules", "dist"]
 }

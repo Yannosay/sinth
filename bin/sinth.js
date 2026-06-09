@@ -1,5 +1,2 @@
 #!/usr/bin/env node
-const path = require('path');
-const tsSource = path.join(__dirname, '..', 'src', 'cli.ts');
-require('ts-node').register({ project: path.join(__dirname, '..', 'tsconfig.json') });
-require(path.join(__dirname, '..', 'src', 'cli'));
+require('../dist/cli.js');

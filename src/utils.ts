@@ -1,4 +1,4 @@
-import { Literal, SinthWarning } from "./core/types.ts";
+import { Literal, SinthWarning } from "./core/types";
 
 
 export function fnv1a(s: string): string {

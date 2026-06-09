@@ -1,7 +1,7 @@
-import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, SinthWarning, AssignOp, VarType, BinaryOp } from "./types.ts";
-import { Lexer } from "./lexer.ts";
-import { compileExprToJS, compileIfToJS } from "./expr.ts";
-import { tagNameToPascal } from "../utils.ts";
+import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, SinthWarning, AssignOp, VarType, BinaryOp } from "./types";
+import { Lexer } from "./lexer";
+import { compileExprToJS, compileIfToJS } from "./expr";
+import { tagNameToPascal } from "../utils";
 
 
 

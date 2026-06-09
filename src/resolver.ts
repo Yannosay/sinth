@@ -1,9 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
-import { SinthFile, CompDef, CustomElInfo, SinthError, SinthWarning } from "./core/types.ts";
-import { Lexer } from "./core/lexer.ts";
-import { Parser } from "./core/parser.ts";
-import { BUILTIN_MAP } from "./core/builtins.ts";
+import { SinthFile, CompDef, CustomElInfo, SinthError, SinthWarning } from "./core/types";
+import { Lexer } from "./core/lexer";
+import { Parser } from "./core/parser";
+import { BUILTIN_MAP } from "./core/builtins";
 
 
 

@@ -1,4 +1,4 @@
-import { TT, Token, Loc, SinthError } from "./types.ts";
+import { TT, Token, Loc, SinthError } from "./types";
 
 // lexer
 const KEYWORDS: Record<string, TT> = {

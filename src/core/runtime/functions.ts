@@ -1,5 +1,5 @@
-import { CompileCtx, FunctionDef, IfBlock, VarDeclaration, Expression } from "../types.ts";
-import { compileExprToJS, compileIfToJS } from "../expr.ts";
+import { CompileCtx, FunctionDef, IfBlock, VarDeclaration, Expression } from "../types";
+import { compileExprToJS, compileIfToJS } from "../expr";
 
 export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
   const paramsJS = fn.params.map(p => p.name).join(", ");
