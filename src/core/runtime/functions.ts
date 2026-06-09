@@ -1,4 +1,4 @@
-import { CompileCtx, FunctionDef, IfBlock } from "../types.ts";
+import { CompileCtx, FunctionDef, IfBlock, VarDeclaration, Expression } from "../types.ts";
 import { compileExprToJS, compileIfToJS } from "../expr.ts";
 
 export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
@@ -15,31 +15,71 @@ export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
       case "text":
         break;
       case "expr":
-        bodyStatements.push(`${compileExprToJS(child.expression)};`);
+        bodyStatements.push(`${compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars)};`);
         break;
       case "assign_stmt":
-        bodyStatements.push(`${compileExprToJS(child.expression)};`);
+        bodyStatements.push(`${compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars)};`);
         break;
       case "if":
-        bodyStatements.push(compileIfToJS(child as IfBlock));
+        bodyStatements.push(compileIfToJS(child as IfBlock, undefined, ctx.namespace, ctx.declaredVars));
         break;
       case "for": {
         const fl = child as any;
         const itemVar = fl.itemVar;
-        const arrayVar = fl.arrayVar;
+        const arrayVar = (ctx.namespace && ctx.declaredVars && ctx.declaredVars.has(fl.arrayVar)) ? ctx.namespace + "_" + fl.arrayVar : fl.arrayVar;
         const bodyJS = fl.body.map((c: any) => {
-          if (c.kind === "assign_stmt") return `${compileExprToJS(c.expression)};`;
-          if (c.kind === "if") return compileIfToJS(c);
-          if (c.kind === "expr") return `${compileExprToJS(c.expression)};`;
+          if (c.kind === "assign_stmt") return `${compileExprToJS(c.expression, undefined, ctx.namespace, ctx.declaredVars)};`;
+          if (c.kind === "if") return compileIfToJS(c, undefined, ctx.namespace, ctx.declaredVars);
+          if (c.kind === "expr") return `${compileExprToJS(c.expression, undefined, ctx.namespace, ctx.declaredVars)};`;
           return "";
         }).filter(Boolean).join("\n");
         const bodyLines = bodyJS.split("\n");
         const indentedBody = bodyLines.map((line: string) => `    ${line}`).join("\n");
-        bodyStatements.push(`for (let ${itemVar} of ${arrayVar}) {\n${indentedBody}\n  }`);
+        if (fl.indexVar) {
+          const alreadyDeclared = fn.body.some((bc: any) => bc.kind === "var" && bc.name === fl.indexVar);
+          if (!alreadyDeclared) {
+            bodyStatements.push(`let ${fl.indexVar} = 0;`);
+          }
+          bodyStatements.push(`for (let ${itemVar} of ${arrayVar}) {\n${indentedBody}\n    ${fl.indexVar} = ${fl.indexVar} + 1;\n  }`);
+        } else {
+          bodyStatements.push(`for (let ${itemVar} of ${arrayVar}) {\n${indentedBody}\n  }`);
+        }
+        break;
+      }
+      case "var": {
+        const vd = child as VarDeclaration;
+        let initJS: string;
+        if (vd.value) {
+          const lit = vd.value;
+          if (lit.kind === "str") {
+            if (lit.value.startsWith("__ARR__")) {
+              initJS = lit.value.slice(7);
+            } else if (lit.value.startsWith("__EXPR__")) {
+              try {
+                const innerExpr: Expression = JSON.parse(lit.value.substring(8));
+                initJS = compileExprToJS(innerExpr, undefined, ctx.namespace, ctx.declaredVars);
+              } catch { initJS = JSON.stringify(lit.value); }
+            } else {
+              initJS = JSON.stringify(lit.value);
+            }
+          } else if (lit.kind === "num") {
+            initJS = String(lit.value);
+          } else if (lit.kind === "bool") {
+            initJS = String(lit.value);
+          } else if (lit.kind === "null") {
+            initJS = "null";
+          } else {
+            initJS = "null";
+          }
+        } else {
+          const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]", obj: "{}" };
+          initJS = defaults[vd.varType] ?? "undefined";
+        }
+        bodyStatements.push(`let ${vd.name} = ${initJS};`);
         break;
       }
       case "return":
-        bodyStatements.push(`return ${child.expression ? compileExprToJS(child.expression) : ""};`);
+        bodyStatements.push(`return ${child.expression ? compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars) : ""};`);
         break;
     }
   }

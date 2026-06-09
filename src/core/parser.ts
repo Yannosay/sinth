@@ -660,7 +660,10 @@ private parseArrayLiteral(): Literal {
       }
       else if (this.check(TT.IDENT) && this.peek().value === "var") {
         const vd = this.parseVarDeclaration();
-        if (vd) this._varDecls.push(vd);
+        if (vd) {
+          this._varDecls.push(vd);
+          body.push(vd);
+        }
         continue;
       }
       else if (this.check(TT.KW_RETURN)){ body.push(this.parseReturnStmt()); }
@@ -858,7 +861,10 @@ private parseArrayLiteral(): Literal {
       }
       if (this.check(TT.IDENT) && this.peek().value === "var") {
         const vd = this.parseVarDeclaration();
-        if (vd) this._varDecls.push(vd);
+        if (vd) {
+          this._varDecls.push(vd);
+          children.push(vd);
+        }
         continue;
       }
 
@@ -1246,7 +1252,10 @@ private parseArrayLiteral(): Literal {
       }
       else if (this.check(TT.IDENT) && this.peek().value === "var") {
         const vd = this.parseVarDeclaration();
-        if (vd) this._varDecls.push(vd);
+        if (vd) {
+          this._varDecls.push(vd);
+          children.push(vd);
+        }
         continue;
       }
       else if (this.check(TT.KW_RETURN)) { children.push(this.parseReturnStmt()); continue; }

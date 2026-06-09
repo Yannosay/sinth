@@ -32,8 +32,26 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   const hash = fnv1a(absPath);
   const allVarDecls: VarDeclaration[] = file.varDecls;
   const functionDefs: FunctionDef[]   = file.functions;
-  
-  const declaredVars = new Set(allVarDecls.map(v => v.name));
+
+  const fnLocalVarNames = new Set<string>();
+  const collectFnVars = (child: Child): void => {
+    if (child.kind === "var") {
+      fnLocalVarNames.add((child as VarDeclaration).name);
+    } else if (child.kind === "if") {
+      (child as IfBlock).body.forEach(collectFnVars);
+      (child as IfBlock).elseBody?.forEach(collectFnVars);
+    } else if (child.kind === "for") {
+      (child as ForLoop).body.forEach(collectFnVars);
+    } else if (child.kind === "use") {
+      (child as CompUse).children.forEach(collectFnVars);
+    }
+  };
+  for (const fn of file.functions) {
+    fn.body.forEach(collectFnVars);
+  }
+
+  const pageVarDecls = allVarDecls.filter(v => !fnLocalVarNames.has(v.name));
+  const declaredVars = new Set(pageVarDecls.map(v => v.name));
   const declaredFuncs = new Set(file.functions.map(f => f.name));
 
   function collectExprVars(expr: Expression | undefined, vars: Set<string>): void {
@@ -101,7 +119,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   for (const v of pageVars) {
     if (pageLoopVars.has(v)) continue;
     const rootVar = v.split('.')[0];
-    if (declaredVars.has(rootVar)) continue;
+    if (declaredVars.has(rootVar) || fnLocalVarNames.has(rootVar)) continue;
     let foundInFn = false;
     for (const fn of file.functions) {
       if (fn.params.some(p => p.name === rootVar)) { foundInFn = true; break; }
@@ -151,10 +169,25 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     };
     fn.body.forEach(gatherFnLoopVars);
     
+    const fnLocalDeclared = new Set<string>();
+    const collectFnLocalDeclared = (child: Child): void => {
+      if (child.kind === "var") {
+        fnLocalDeclared.add((child as VarDeclaration).name);
+      } else if (child.kind === "if") {
+        (child as IfBlock).body.forEach(collectFnLocalDeclared);
+        (child as IfBlock).elseBody?.forEach(collectFnLocalDeclared);
+      } else if (child.kind === "for") {
+        (child as ForLoop).body.forEach(collectFnLocalDeclared);
+      } else if (child.kind === "use") {
+        (child as CompUse).children.forEach(collectFnLocalDeclared);
+      }
+    };
+    fn.body.forEach(collectFnLocalDeclared);
+
     for (const v of fnBodyVars) {
       if (fnLoopVars.has(v)) continue;
       const rootVar = v.split('.')[0];
-      if (!fnParamNames.has(rootVar) && !declaredVars.has(rootVar) && !declaredFuncs.has(rootVar)) {
+      if (!fnParamNames.has(rootVar) && !declaredVars.has(rootVar) && !declaredFuncs.has(rootVar) && !fnLocalDeclared.has(rootVar)) {
         throw new SinthError(
           `Variable '${rootVar}' used in function '${fn.name}' is not declared. It must be a parameter or a page-level variable.`
         );
@@ -278,7 +311,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     ifIdCounter:  0,
     exprRegistry: [],
     exprMap:      new Map(),
-    varDecls:     allVarDecls,
+    varDecls:     pageVarDecls,
     actionButtons: [],
     diffingEnabled: enableDiffing,
     declaredVars: declaredVars,
@@ -336,7 +369,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   }));
 
   const runtimeResult = buildRuntime({
-    varDecls:     allVarDecls,
+    varDecls:     pageVarDecls,
     bodyHTML,
     logicBlocks:  ctx.logicBlocks,
     mixedBlocks:  ctx.mixedBlocks,

@@ -100,22 +100,72 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
   for (const c of fnDef.body) {
     const substituted = subChild(c);
     if (substituted.kind === "assign_stmt") {
-      statements.push(compileExprToJS(substituted.expression, ctx.loopVars, ctx.namespace) + ";");
+      statements.push(compileExprToJS(substituted.expression, ctx.loopVars, ctx.namespace, ctx.declaredVars) + ";");
     } else if (substituted.kind === "expr") {
-      statements.push(compileExprToJS((substituted as any).expression, ctx.loopVars, ctx.namespace) + ";");
+      statements.push(compileExprToJS((substituted as any).expression, ctx.loopVars, ctx.namespace, ctx.declaredVars) + ";");
     } else if (substituted.kind === "if") {
-      statements.push(compileIfToJS(substituted as IfBlock));
+      statements.push(compileIfToJS(substituted as IfBlock, ctx.loopVars, ctx.namespace, ctx.declaredVars));
     } else if (substituted.kind === "return") {
     } else if (substituted.kind === "for") {
       const fl = substituted as any;
+      const innerLoopVars = new Set<string>();
+      if (ctx.loopVars) {
+        for (const v of ctx.loopVars) {
+          if (v !== fl.itemVar && v !== fl.indexVar && v !== fl.keyVar) {
+            innerLoopVars.add(v);
+          }
+        }
+      }
       const bodyStmts = fl.body.map((bc: any) => {
         const s = subChild(bc);
-        if (s.kind === "assign_stmt") return compileExprToJS(s.expression) + ";";
-        if (s.kind === "if") return compileIfToJS(s);
-        if (s.kind === "expr") return compileExprToJS(s.expression) + ";";
+        if (s.kind === "assign_stmt") return compileExprToJS(s.expression, innerLoopVars, ctx.namespace, ctx.declaredVars) + ";";
+        if (s.kind === "if") return compileIfToJS(s, innerLoopVars, ctx.namespace, ctx.declaredVars);
+        if (s.kind === "expr") return compileExprToJS(s.expression, innerLoopVars, ctx.namespace, ctx.declaredVars) + ";";
         return "";
       }).filter(Boolean).join(" ");
-      statements.push(`for (let ${fl.itemVar} of ${fl.arrayVar}) { ${bodyStmts} }`);
+      const nsArrayVar = (ctx.namespace && ctx.declaredVars && ctx.declaredVars.has(fl.arrayVar)) ? ctx.namespace + "_" + fl.arrayVar : fl.arrayVar;
+      if (fl.indexVar) {
+        const alreadyDeclared = fnDef.body.some((bc: any) => bc.kind === "var" && bc.name === fl.indexVar);
+        if (!alreadyDeclared) {
+          statements.push(`let ${fl.indexVar} = 0;`);
+        }
+        statements.push(`for (let ${fl.itemVar} of ${nsArrayVar}) { ${bodyStmts} ${fl.indexVar} = ${fl.indexVar} + 1; }`);
+      } else {
+        statements.push(`for (let ${fl.itemVar} of ${nsArrayVar}) { ${bodyStmts} }`);
+      }
+    } else if (substituted.kind === "var") {
+      const vd = substituted as VarDeclaration;
+      let initJS: string;
+      if (vd.value) {
+        const lit = vd.value;
+        if (lit.kind === "str") {
+          if (lit.value.startsWith("__VAR__")) {
+            const varName = lit.value.slice(7);
+            initJS = paramMap.has(varName) ? paramMap.get(varName)! : varName;
+          } else if (lit.value.startsWith("__ARR__")) {
+            initJS = lit.value.slice(7);
+          } else if (lit.value.startsWith("__EXPR__")) {
+            try {
+              const innerExpr: Expression = JSON.parse(lit.value.substring(8));
+              initJS = compileExprToJS(subExpr(innerExpr), ctx.loopVars, ctx.namespace);
+            } catch { initJS = JSON.stringify(lit.value); }
+          } else {
+            initJS = JSON.stringify(lit.value);
+          }
+        } else if (lit.kind === "num") {
+          initJS = String(lit.value);
+        } else if (lit.kind === "bool") {
+          initJS = String(lit.value);
+        } else if (lit.kind === "null") {
+          initJS = "null";
+        } else {
+          initJS = "null";
+        }
+      } else {
+        const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]", obj: "{}" };
+        initJS = defaults[vd.varType] ?? "undefined";
+      }
+      statements.push(`let ${vd.name} = ${initJS};`);
     }
   }
   if (statements.length === 0) return null;
@@ -321,6 +371,9 @@ if (name === "delay") {
         } else if (expr.kind === "assign" && expr.target && ctx.varDecls?.some(v => v.name === expr.target)) {
           jsExpr = jsExpr.replace(new RegExp(`^${expr.target}\\b`), `${ctx.scopePrefix}${expr.target}`);
         }
+      }
+      if (ev && expr.kind === "variable" && expr.name && ctx.functionDefs.some(f => f.name === expr.name)) {
+        jsExpr = jsExpr + "()";
       }
       const renderCall = ctx.scopeVar ? `${ctx.scopeVar}._render()` : renderFn + "()";
       let bump = "";
@@ -574,7 +627,8 @@ export function renderChild(
     case "return":
       return "";    
 
-    
+    case "var":
+      return "";
 
     case "if":
       return renderIfBlock(child, ctx, params, depth);
@@ -1235,7 +1289,11 @@ export function buildRuntime(opts: {
     }
     if (forArrays.size > 0) {
       forDataJS = `var _sinthForData = {};\n`;
-      forSyncBlock = [...forArrays].map(v => `_sinthForData['${v.replace(/&quot;/g, '"')}'] = ${v.replace(/&quot;/g, '"')};`).join("\n    ") + "\n    ";
+      forSyncBlock = [...forArrays].map(v => {
+        const bare = v.replace(/&quot;/g, '"');
+        const namespaced = opts.namespace ? opts.namespace + "_" + bare : bare;
+        return `_sinthForData['${bare}'] = ${namespaced};`;
+      }).join("\n    ") + "\n    ";
     }
   }
 

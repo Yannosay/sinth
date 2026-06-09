@@ -69,7 +69,7 @@ export interface ReturnStmt  { kind: "return";      expression?: Expression; loc
 export interface ComponentExpr { kind: "component_expr"; children: Child[]; loc: Loc }
 
 
-export type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt | ReturnStmt | ComponentExpr;
+export type Child = TextNode | CompUse | ExprNode | AssignStmt | IfBlock | ForLoop | RemoveStmt | ReturnStmt | ComponentExpr | VarDeclaration;
 
 export interface ParamDecl   { name: string; paramType?: VarType; defaultVal?: Literal; loc: Loc }
 

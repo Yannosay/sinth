@@ -21,8 +21,12 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
           return `_ctx.${expr.name}`;
         }
       }
-      if (namespace && declaredVars && expr.name && declaredVars.has(expr.name)) {
-        return namespace + "_" + expr.name;
+      if (namespace && declaredVars && expr.name) {
+        const dotIdx2 = expr.name.indexOf('.');
+        const root2 = dotIdx2 !== -1 ? expr.name.substring(0, dotIdx2) : expr.name;
+        if (declaredVars.has(root2)) {
+          return namespace + "_" + expr.name;
+        }
       }
       return expr.name ?? "undefined";
     case "binary": {
@@ -37,14 +41,29 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
     }
     case "assign": {
       const v = expr.right ? compileExprToJS(expr.right, loopVars, namespace, declaredVars) : "null";
-      const t = (namespace && declaredVars && expr.target && declaredVars.has(expr.target)) ? namespace + "_" + expr.target : expr.target;
+      let t = expr.target ?? "undefined";
+      if (namespace && declaredVars && expr.target) {
+        const dotIdx = expr.target.indexOf('.');
+        const root = dotIdx !== -1 ? expr.target.substring(0, dotIdx) : expr.target;
+        if (declaredVars.has(root)) {
+          t = namespace + "_" + expr.target;
+        }
+      }
       return `${t} ${expr.op} ${v}`;
     }
     case "index":
       return `${compileExprToJS(expr.object!, loopVars, namespace, declaredVars)}[${compileExprToJS(expr.key!, loopVars, namespace, declaredVars)}]`;
-    case "postfix":
-      const t2 = (namespace && declaredVars && expr.target && declaredVars.has(expr.target)) ? namespace + "_" + expr.target : expr.target;
+    case "postfix": {
+      let t2 = expr.target ?? "undefined";
+      if (namespace && declaredVars && expr.target) {
+        const dotIdx = expr.target.indexOf('.');
+        const root = dotIdx !== -1 ? expr.target.substring(0, dotIdx) : expr.target;
+        if (declaredVars.has(root)) {
+          t2 = namespace + "_" + expr.target;
+        }
+      }
       return `${t2}${expr.op}`;
+    }
     case "call": {
       const callee = compileExprToJS(expr.callee!, loopVars, namespace, declaredVars);
       if (callee === "remove") {
@@ -63,10 +82,10 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
 }
 
 
-export function compileIfToJS(ifBlock: IfBlock): string {
-  const cond = compileExprToJS(ifBlock.condition);
-  const ifJS = bodyToJS(ifBlock.body);
-  const elseJS = ifBlock.elseBody ? bodyToJS(ifBlock.elseBody) : "";
+export function compileIfToJS(ifBlock: IfBlock, loopVars?: Set<string>, namespace?: string, declaredVars?: Set<string>): string {
+  const cond = compileExprToJS(ifBlock.condition, loopVars, namespace, declaredVars);
+  const ifJS = bodyToJS(ifBlock.body, loopVars, namespace, declaredVars);
+  const elseJS = ifBlock.elseBody ? bodyToJS(ifBlock.elseBody, loopVars, namespace, declaredVars) : "";
   let js = `if (${cond}) {\n${ifJS}}\n`;
   if (elseJS) js += `else {\n${elseJS}}\n`;
   return js;
@@ -74,14 +93,14 @@ export function compileIfToJS(ifBlock: IfBlock): string {
 
 
 
-export function bodyToJS(children: Child[]): string {
+export function bodyToJS(children: Child[], loopVars?: Set<string>, namespace?: string, declaredVars?: Set<string>): string {
   return children
     .filter(c => c.kind === "assign_stmt" || c.kind === "if" || c.kind === "return" || c.kind === "expr")
     .map(c => {
-      if (c.kind === "assign_stmt") return `  ${compileExprToJS((c as AssignStmt).expression)};\n`;
-      if (c.kind === "return")      return `  return ${(c as ReturnStmt).expression ? compileExprToJS((c as ReturnStmt).expression!) : ""};\n`;
-      if (c.kind === "if")          return compileIfToJS(c as IfBlock).replace(/^/gm, "  ") + "\n";
-      if (c.kind === "expr")        return `  ${compileExprToJS((c as any).expression)};\n`;
+      if (c.kind === "assign_stmt") return `  ${compileExprToJS((c as AssignStmt).expression, loopVars, namespace, declaredVars)};\n`;
+      if (c.kind === "return")      return `  return ${(c as ReturnStmt).expression ? compileExprToJS((c as ReturnStmt).expression!, loopVars, namespace, declaredVars) : ""};\n`;
+      if (c.kind === "if")          return compileIfToJS(c as IfBlock, loopVars, namespace, declaredVars).replace(/^/gm, "  ") + "\n";
+      if (c.kind === "expr")        return `  ${compileExprToJS((c as any).expression, loopVars, namespace, declaredVars)};\n`;
       return "";
     })
     .join("");
