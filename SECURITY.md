@@ -24,10 +24,11 @@ Credit is given in the published advisory unless you request anonymity.
 
 Security patches are provided only for the following versions:
 
-| Version | Supported          | Status              |
-|---------|--------------------|---------------------|
-| 1.9.x   | :white_check_mark: | Active support      |
-| < 1.9   | :x:                | End of life         |
+| Version | Supported | Status |
+|---------|-----------|--------|
+| 1.12.0 and later | :white_check_mark: | Active support |
+| 1.9.0 through 1.11.x | :warning: | Security support |
+| earlier than 1.9.0 | :x: | End of life |
 
 Users must upgrade to a supported version before a report can be triaged.
 
@@ -62,4 +63,4 @@ We gratefully acknowledge the security researchers who have responsibly disclose
 
 ---
 
-*This policy is effective as of 2026-06-04 and applies to all versions of Sinth.*
+*This policy is effective as of 2026-06-09 and applies to all versions of Sinth.*

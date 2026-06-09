@@ -1,6 +1,3 @@
-<!-- This is the CONTRIBUTING.md file. It's intended for interested developers on GitHub. -->
-
-
 # Contributing to Sinth
 
 **`Sinth Compiler`** is currently built by one person. Any help is appreciated!
@@ -19,28 +16,23 @@
 git clone https://github.com/Yannosay/sinth.git
 cd sinth
 npm install
-node bin/sinth.js build
-
+npm run build
 ```
 
 ## Raw Project structure
 
 - `src/compiler/` - Lexer, parser, AST, code generation
-
 - `src/runtime/` - Runtime renderer
-
-- pregenerated `dist/` - Compiled Sinth Files (HTML)
-
+- `src/server/` - Dev server with live reload
+- `src/core/` - CLI compiler, shared types, utilities
+- `dist/` - Compiled JavaScript output (not committed to Git)
+- `bin/sinth.js` - CLI entry point
 
 ## Pull requests
 
 1. Add tests if applicable
-
-2. Ensure `node bin/sinth.js build` runs correctly
-
+2. Ensure `npm run build` completes without errors
 3. Open PR against `main`
-
 4. Done!
-
 
 Small PRs are also welcome. A documentation fix is just as valuable as a code change!
