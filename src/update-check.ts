@@ -59,7 +59,11 @@ export async function checkForUpdate(currentVersion: string): Promise<void> {
 
   writeCache();
   const latest = await fetchLatestVersion();
-  if (!latest || latest === currentVersion) return;
+  if (!latest) return;
+  if (latest === currentVersion) {
+    process.stdout.write(`\n\x1b[2mSinth is up to date (v${currentVersion})!\x1b[0m\n`);
+    return;
+  }
 
   // simple semver compare (major.minor.patch)
   const curParts = currentVersion.split(".").map(Number);

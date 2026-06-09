@@ -47,7 +47,7 @@ export const INLINE_STYLE_PROPS = new Set([
 function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: CompileCtx): string | null {
   const paramMap = new Map<string, string>();
   for (let i = 0; i < fnDef.params.length && i < args.length; i++) {
-    paramMap.set(fnDef.params[i].name, compileExprToJS(args[i], ctx.loopVars, ctx.namespace));
+    paramMap.set(fnDef.params[i].name, compileExprToJS(args[i], ctx.loopVars, ctx.namespace, ctx.declaredVars));
   }
   const subExpr = (expr: Expression): Expression => {
     if (expr.kind === "variable" && expr.name && paramMap.has(expr.name)) {
@@ -147,7 +147,7 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
           } else if (lit.value.startsWith("__EXPR__")) {
             try {
               const innerExpr: Expression = JSON.parse(lit.value.substring(8));
-              initJS = compileExprToJS(subExpr(innerExpr), ctx.loopVars, ctx.namespace);
+              initJS = compileExprToJS(subExpr(innerExpr), ctx.loopVars, ctx.namespace, ctx.declaredVars);
             } catch { initJS = JSON.stringify(lit.value); }
           } else {
             initJS = JSON.stringify(lit.value);
@@ -335,7 +335,7 @@ if (name === "delay") {
     const exprJson = raw.substring("__MULTI_EXPR__".length);
     try {
       const exprs: Expression[] = JSON.parse(exprJson);
-      const jsExprs = exprs.map(e => compileExprToJS(e, undefined, ctx.namespace)).join("; ");
+      const jsExprs = exprs.map(e => compileExprToJS(e, undefined, ctx.namespace, ctx.declaredVars)).join("; ");
       const ev = eventAttrName(name);
       let bumps = "";
       if (ctx.diffingEnabled) {
@@ -364,7 +364,7 @@ if (name === "delay") {
           }
         }
       }
-      let jsExpr = compileExprToJS(expr, ctx?.loopVars, ctx.namespace);
+      let jsExpr = compileExprToJS(expr, ctx?.loopVars, ctx.namespace, ctx.declaredVars);
       if (ctx.scopePrefix && ctx.scopeVar) {
         if (expr.kind === "variable" && expr.name && ctx.varDecls?.some(v => v.name === expr.name)) {
           jsExpr = `${ctx.scopePrefix}${expr.name}`;
@@ -489,16 +489,16 @@ export function renderChild(
         if (isMemo) {
           if (fnName && fnName.includes(".")) {
             SinthWarning.emit(`'$' on '${fnName}()' has no effect — dotted calls cannot be memoized.`);
-            ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace) + ";");
+            ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars) + ";");
             return "";
           }
-          const js = compileExprToJS(child.expression);
+          const js = compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars);
           ctx.logicBlocks.push(`if(!_memo_${fnName}_done){_memo_${fnName}=${js};_memo_${fnName}_done=true;}`);
           const exprId = registerExpr(ctx, { kind: "variable", name: `_memo_${fnName}` });
           return `<span class="sinth-expr" data-expr-id="${exprId}"></span>`;
         }
         if (fnName && fnName.includes(".")) {
-          ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace) + ";");
+          ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars) + ";");
           return "";
         }
         if (fnName === "remove" && child.expression.args && child.expression.args.length === 1) {
@@ -616,7 +616,7 @@ export function renderChild(
     }
 
     case "assign_stmt": {
-      ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace) + ";");
+      ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars) + ";");
       return "";
     }
 
@@ -749,7 +749,7 @@ depth:   number,
     .filter(c => c.kind === "assign_stmt")
     .map(c => {
       const e = (c as AssignStmt).expression;
-      const js = compileExprToJS(e, undefined, ctx.namespace);
+      const js = compileExprToJS(e, undefined, ctx.namespace, ctx.declaredVars);
       let bump = "";
       if (ctx.diffingEnabled && e.kind === "assign" && e.target) {
         bump = `;window._bump&&window._bump('${e.target.replace(/'/g, "\\'")}')`;
@@ -767,7 +767,7 @@ depth:   number,
     .filter(c => c.kind === "assign_stmt")
     .map(c => {
       const e = (c as AssignStmt).expression;
-      const js = compileExprToJS(e, undefined, ctx.namespace);
+      const js = compileExprToJS(e, undefined, ctx.namespace, ctx.declaredVars);
       let bump = "";
       if (ctx.diffingEnabled && e.kind === "assign" && e.target) {
         bump = `;window._bump&&window._bump('${e.target.replace(/'/g, "\\'")}')`;
@@ -1051,7 +1051,7 @@ export function renderCompUse(
       if (raw.startsWith("__EXPR__")) {
         try {
           const expr: Expression = JSON.parse(raw.substring(8));
-          const jsExpr = compileExprToJS(expr, undefined, ctx.namespace);
+          const jsExpr = compileExprToJS(expr, undefined, ctx.namespace, ctx.declaredVars);
           attrParts.push(`onchange="(function(){ ${jsExpr}; ${renderFn}(); })(event)"`);
         } catch {}
       } else {
@@ -1186,6 +1186,7 @@ export function buildRuntime(opts: {
   sharedRuntime: boolean;
   functionsJS:  string;
   namespace?:   string;
+  declaredVars?: Set<string>;
 }): string | { page: string; shared: string } {
   
   const { varDecls, bodyHTML, logicBlocks, mixedBlocks, assignedVars, exprRegistry, functionsJS } = opts;
@@ -1219,7 +1220,7 @@ export function buildRuntime(opts: {
     if (val.startsWith("__EXPR__")) {
       try {
         const expr: Expression = JSON.parse(val.substring(8));
-        const js = compileExprToJS(expr);
+        const js = compileExprToJS(expr, undefined, opts.namespace, opts.declaredVars);
         const id = exprRegistry.length;
         exprRegistry.push(js);
         return `var ${vn} = __X${ns}[${id}]({});`;
@@ -1262,7 +1263,7 @@ export function buildRuntime(opts: {
     .map(v => {
       try {
         const expr: Expression = JSON.parse(litToString(v.value!).substring(8));
-        const js = compileExprToJS(expr);
+        const js = compileExprToJS(expr, undefined, opts.namespace, opts.declaredVars);
         const idx = exprRegistry.indexOf(js);
         const vn2 = ns ? ns.slice(1) + "_" + v.name : v.name;
         return `${vn2} = __X${ns}[${idx}]({});`;

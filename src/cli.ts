@@ -40,7 +40,12 @@ async function main(): Promise<void> {
   switch (command) {
     case "build": {
       const nonSinth = cleanArgs.filter(a => !a.endsWith(".sinth"));
-      const buildStart = Date.now();      
+      const buildStart = Date.now();
+      const pkgPath4 = path.join(__dirname, "..", "package.json");
+      if (fs.existsSync(pkgPath4)) {
+        const pkg4 = JSON.parse(fs.readFileSync(pkgPath4, "utf-8"));
+        checkForUpdate(pkg4.version);
+      }
       if (nonSinth.length > 0) process.stdout.write(`\x1b[33mSkipping non-.sinth files:\x1b[0m ${nonSinth.join(", ")}\n`);
 
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
@@ -104,6 +109,11 @@ async function main(): Promise<void> {
     }
 
     case "dev": {
+      const pkgPath3 = path.join(__dirname, "..", "package.json");
+      if (fs.existsSync(pkgPath3)) {
+        const pkg3 = JSON.parse(fs.readFileSync(pkgPath3, "utf-8"));
+        checkForUpdate(pkg3.version);
+      }
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
       const files    = fileArgs.length > 0
         ? fileArgs.map(f => path.resolve(cwd, f)).filter(f => fs.existsSync(f))
@@ -128,6 +138,34 @@ async function main(): Promise<void> {
       process.exit(hadError ? 1 : 0);
     }
     
+
+
+    case "update": {
+      const pkgPath2 = path.join(__dirname, "..", "package.json");
+      const current = fs.existsSync(pkgPath2) ? JSON.parse(fs.readFileSync(pkgPath2, "utf-8")).version : null;
+      const https = require("https");
+      https.get("https://registry.npmjs.org/@yannosay/sinth/latest", { timeout: 5000 }, (res: any) => {
+        let data = "";
+        res.on("data", (chunk: any) => data += chunk);
+        res.on("end", () => {
+          try {
+            const latest = JSON.parse(data).version;
+            if (latest === current) {
+              process.stdout.write(`\x1b[32mAlready on latest version: ${current} ✓\x1b[0m\n`);
+            } else if (latest) {
+              process.stdout.write(`\x1b[36mUpdating Sinth ${current} → ${latest}...\x1b[0m\n`);
+              const { execSync } = require("child_process");
+              execSync("npm install -g @yannosay/sinth@latest", { stdio: "inherit" });
+              process.stdout.write(`\x1b[32m✓ Sinth updated to ${latest}!\x1b[0m\n`);
+            }
+          } catch {
+            process.stderr.write("\x1b[31mCould not check for updates.\x1b[0m\n");
+          }
+        });
+      }).on("error", () => process.stderr.write("\x1b[31mCould not reach npm registry.\x1b[0m\n"));
+      break;
+    }
+
     case "version":
     case "--version":
     case "-v": {
