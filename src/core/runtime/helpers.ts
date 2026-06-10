@@ -46,6 +46,14 @@ function sinthReplaceInsert(t, anchor, ifId, replaceId) {
         _rpParent = _rp.parentNode;
         _rpNext = _rp.nextSibling;
         _rp.parentNode.removeChild(_rp);
+        let src = _rp.previousSibling;
+        while (src && src !== _rp.parentNode.firstChild) {
+          if (src.dataset && src.dataset.sinthIfAnchor) {
+            anchor._sinthReplaceSourceIfId = src.dataset.sinthIfAnchor;
+            break;
+          }
+          src = src.previousSibling;
+        }
         anchor._sinthReplaced = _rp;
         anchor._sinthReplacedParent = _rpParent;
         anchor._sinthReplacedNext = _rpNext;
@@ -125,7 +133,9 @@ function sinthDelayExpr(el, _ctx) {
     helpers += `
 function sinthIfBlock(t) {
   let ifId = t.dataset.sinthIfId;
-  let anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + ifId + '"]');
+  let replaceId = t.dataset.sinthIfReplace || null;
+  let anchorKey = replaceId ? '__replace__' + replaceId : ifId;
+  let anchor = t.parentNode.querySelector('[data-sinth-if-anchor="' + anchorKey + '"]');
   let condFn = ${X}[t.dataset.sinthIfExpr];
   let cond = condFn ? condFn() : false;
   if (cond) {
@@ -141,10 +151,10 @@ function sinthIfBlock(t) {
     if (t.dataset.sinthIfDelayHide === 'false' && t.dataset.sinthIfDelay && _hasContent) {
       let dms = parseInt(t.dataset.sinthIfDelay) || 0;
       setTimeout(function() {
-        sinthReplaceInsert(t, anchor, ifId, t.dataset.sinthIfReplace);
+        sinthReplaceInsert(t, anchor, anchorKey, replaceId);
       }, dms);
     } else {
-      anchor = sinthReplaceInsert(t, anchor, ifId, t.dataset.sinthIfReplace);
+      anchor = sinthReplaceInsert(t, anchor, anchorKey, replaceId);
     }
   } else {
     let runElse = function() {
@@ -158,6 +168,7 @@ function sinthIfBlock(t) {
       }
       if (anchor) {
         if (anchor._sinthReplaced) {
+          var restored = anchor._sinthReplaced;
           let insFirst = anchor._sinthInsertedFirst;
           let insLast = anchor._sinthInsertedLast;
           let rpParent = anchor._sinthReplacedParent;
@@ -172,22 +183,27 @@ function sinthIfBlock(t) {
             if (insLast) insLast.remove();
           }
           if (rpParent && rpNext) {
-            rpParent.insertBefore(anchor._sinthReplaced, rpNext);
+            rpParent.insertBefore(restored, rpNext);
           } else if (rpParent) {
-            rpParent.appendChild(anchor._sinthReplaced);
+            rpParent.appendChild(restored);
           }
-          if (anchor._sinthReplaced) {
-            anchor._sinthReplaced.querySelectorAll('.sinth-expr').forEach(sinthExpr);
-            if (anchor._sinthReplaced.dataset.sinthDelay) {
-              delete anchor._sinthReplaced.dataset.sinthDelayDone;
-              sinthDelay(anchor._sinthReplaced);
+          if (restored.id) {
+            var allDup = t.parentNode.querySelectorAll('[id="' + restored.id + '"]');
+            for (var di = 0; di < allDup.length; di++) {
+              if (allDup[di] !== restored) allDup[di].remove();
             }
-            anchor._sinthReplaced = null;
-            anchor._sinthReplacedParent = null;
-            anchor._sinthReplacedNext = null;
-            anchor._sinthInsertedFirst = null;
-            anchor._sinthInsertedLast = null;
           }
+          restored.querySelectorAll('.sinth-expr').forEach(sinthExpr);
+          if (restored.dataset.sinthDelay) {
+            delete restored.dataset.sinthDelayDone;
+            sinthDelay(restored);
+          }
+          anchor._sinthReplaced = null;
+          anchor._sinthReplacedParent = null;
+          anchor._sinthReplacedNext = null;
+          anchor._sinthInsertedFirst = null;
+          anchor._sinthInsertedLast = null;
+          anchor._sinthReplaceSourceIfId = null;
         } else {
           let cur2 = anchor.nextSibling;
           while (cur2 && cur2 !== t) { let nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }

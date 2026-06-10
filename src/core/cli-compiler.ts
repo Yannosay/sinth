@@ -29,7 +29,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   const file    = parseFile(absPath);
   const cfg: ResolverConfig = { projectRoot: opts.projectRoot, libraryPaths: opts.libraryPaths };
   const { allDefs, customEls, cssLinks, jsLinks } = resolveImports(file, cfg);
-  const hash = fnv1a(absPath);
+  const hash = "_" + fnv1a(absPath);
   const allVarDecls: VarDeclaration[] = file.varDecls;
   const functionDefs: FunctionDef[]   = file.functions;
 
