@@ -379,6 +379,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     functionsJS:  compiledFunctions,
     namespace:    hash,
     declaredVars: ctx.declaredVars,
+    initLogic:    file.initLogic,
   });
   const runtimeJS = typeof runtimeResult === 'string' ? runtimeResult : runtimeResult.page;
   const sharedJS = typeof runtimeResult === 'string' ? null : runtimeResult.shared;

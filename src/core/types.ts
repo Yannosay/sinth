@@ -116,6 +116,7 @@ export interface SinthFile {
   scripts:   ScriptBlock[];
   customEls: CustomElDecl[];
   varDecls:  VarDeclaration[];
+  initLogic: string[];
 }
 
 export interface MixedBlockEntry {

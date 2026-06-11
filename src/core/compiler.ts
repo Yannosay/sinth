@@ -1204,11 +1204,6 @@ export function extractFunctionNames(js: string): string[] {
 }
 
 
-
-
-// sinth runtime
-
-
 export function buildRuntime(opts: {
   varDecls:     VarDeclaration[];
   bodyHTML:     string;
@@ -1220,6 +1215,7 @@ export function buildRuntime(opts: {
   functionsJS:  string;
   namespace?:   string;
   declaredVars?: Set<string>;
+  initLogic?:   string[];
 }): string | { page: string; shared: string } {
   
   const { varDecls, bodyHTML, logicBlocks, mixedBlocks, assignedVars, exprRegistry, functionsJS } = opts;
@@ -1335,9 +1331,21 @@ export function buildRuntime(opts: {
     ? `let __X${ns} = [${exprRegistry.map((js) => `function(_ctx){ return ${js}; }`).join(",")}];\n`
     : "";
 
+  let initLogicJS = "";
+  if (opts.initLogic && opts.initLogic.length > 0) {
+    let logic = opts.initLogic.join("\n");
+    if (opts.namespace && opts.declaredVars) {
+      for (const v of opts.declaredVars) {
+        const re = new RegExp(`\\b${v}\\b`, 'g');
+        logic = logic.replace(re, opts.namespace + "_" + v);
+      }
+    }
+    initLogicJS = logic + "\n";
+  }
+
   let renderFunc = '';
   if (needsRender) {
-    renderFunc = `function ${renderFn}() {\n    ${forSyncBlock}${renderBody.replace(/^/gm, "  ")}\n}\n${renderFn}();`;
+    renderFunc = `function ${renderFn}() {\n    ${forSyncBlock}${renderBody.replace(/^/gm, "  ")}\n}\n${initLogicJS}${renderFn}();`;
   }
 
   if (needsFullscreenSync) {

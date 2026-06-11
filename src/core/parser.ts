@@ -24,6 +24,7 @@ export class Parser {
     const scripts:   ScriptBlock[]   = [];
     const customEls: CustomElDecl[]  = [];
     const varDecls:  VarDeclaration[] = [];
+    const initLogic: string[] = [];
     this._varDecls = varDecls;
 
     if (this.check(TT.KW_PAGE)) { this.consume(TT.KW_PAGE); isPage = true; }
@@ -55,7 +56,7 @@ export class Parser {
       }
       else if (this.check(TT.KW_IF)) {
         const ifNode = this.parseIfBlock();
-        uses.push(...this.flattenIfToUses(ifNode, scripts));
+        uses.push(...this.flattenIfToUses(ifNode, scripts, initLogic));
       }
       else if (this.check(TT.KW_FOR)) {
         const forNode = this.parseForLoop();
@@ -75,7 +76,6 @@ const savedPos = this.pos;
 const identName = this.peek().value;
 const nextType  = this.tokens[this.pos + 1]?.type;
 
-// detect accidental top-level expressions (guess == target" instead of "if guess == target")
 const isComparison = [TT.OP_EQEQ, TT.OP_NEQ, TT.OP_LT, TT.OP_GT, TT.OP_LTEQ, TT.OP_GTEQ].includes(nextType);
 const isLogicAndOr = nextType === TT.IDENT && (this.tokens[this.pos + 1]?.value === "and" || this.tokens[this.pos + 1]?.value === "or");
 
@@ -97,9 +97,7 @@ if (nextType === TT.EQUALS ||
     this.consume(TT.EQUALS);
     const expr = this.parseExpression();
     if (expr) {
-        const js = `${identName} ${op} ${compileExprToJS(expr)};
-sinthRender();`;
-        scripts.push({ raw: js, attrs: {}, loc: this.peek().loc });
+        initLogic.push(`${identName} ${op} ${compileExprToJS(expr)};`);
     }
     continue;
 }
@@ -130,14 +128,14 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
     }
 
     this._visited.clear();
-    return { filePath: this.file, isPage, imports, meta, defs, functions, uses, styles, scripts, customEls, varDecls };
+    return { filePath: this.file, isPage, imports, meta, defs, functions, uses, styles, scripts, customEls, varDecls, initLogic };
   }
 
-  private flattenIfToUses(ifNode: IfBlock, scripts: ScriptBlock[]): CompUse[] {
+  private flattenIfToUses(ifNode: IfBlock, scripts: ScriptBlock[], initLogic: string[]): CompUse[] {
     const bodyHasComp  = ifNode.body.some(c => c.kind === "use");
     const elseHasComp  = (ifNode.elseBody ?? []).some(c => c.kind === "use");
     if (!bodyHasComp && !elseHasComp) {
-      scripts.push({ raw: compileIfToJS(ifNode), attrs: {}, loc: ifNode.loc });
+      initLogic.push(compileIfToJS(ifNode));
       return [];
     }
     const syntheticUse: CompUse = {
