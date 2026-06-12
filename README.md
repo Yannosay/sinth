@@ -1,11 +1,6 @@
 # ![Sinth Repo Cover](/.github/assets/repo_cover.png)
 
-[![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=6366f1&label=&style=for-the-badge)]
-(https://www.npmjs.com/package/@yannosay/sinth)
-[!npm downloads](https://img.shields.io/npm/dt/@yannosay/sinth?color=818cf8&label=Downloads&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth)
-[![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&label=&style=for-the-badge)](https://github.com/yannosay/sinth/blob/main/LICENSE)
-[![Commits](https://img.shields.io/github/commit-activity/m/yannosay/sinth?color=a78bfa&style=for-the-badge)](https://github.com/yannosay/sinth/commits)
-[![PRs](https://img.shields.io/github/issues-pr-raw/yannosay/sinth?color=818cf8&style=for-the-badge)](https://github.com/yannosay/sinth/pulls)
+[![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=6366f1&label=&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![npm downloads](https://img.shields.io/npm/dt/@yannosay/sinth?color=818cf8&label=Downloads&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&label=&style=for-the-badge)](https://github.com/yannosay/sinth/blob/main/LICENSE)[![Commits](https://img.shields.io/github/commit-activity/m/yannosay/sinth?color=a78bfa&style=for-the-badge)](https://github.com/yannosay/sinth/commits) [![PRs](https://img.shields.io/github/issues-pr-raw/yannosay/sinth?color=818cf8&style=for-the-badge)](https://github.com/yannosay/sinth/pulls)
 
 ## Sinth Compiler
 
