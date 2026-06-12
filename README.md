@@ -93,4 +93,4 @@ If you have encountered a problem and need assistance, please open an issue in [
 
 [AGPL-3.0](https://github.com/Yannosay/sinth/blob/main/LICENSE)
 
-Notice: All generated output you made with Sinth is entirely your intellectual property and free of any license obligations of Sinth.
+**Notice**: All generated output you made with Sinth is entirely your intellectual property and free of any license obligations of Sinth.
