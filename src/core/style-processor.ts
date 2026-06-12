@@ -72,7 +72,7 @@ export function preprocessSinthStyle(raw: string): string {
     if (!trimmed) { result.push(line); continue; }
 
     if (trimmed.startsWith("--") && !trimmed.startsWith("--[")) { continue; }
-    // Standard comments pass through
+
     if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) {
       result.push(line); continue;
     }
@@ -166,13 +166,12 @@ export function processStyleBlock(
 ): string {
   let raw = block.raw;
 
-  // 1. interpolate {param} placeholders
-  if (params.size > 0) raw = interpolateAttr(raw, params);
+  if (params.size > 0) raw = interpolateAttr(raw, params);  // interpolate {param} placeholders
+                                                            // (note: this allows dynamic values in styles)
+ 
+  raw = preprocessSinthStyle(raw); // sinth style preprocessing
 
-  // 2. sinth style preprocessing
-  raw = preprocessSinthStyle(raw);
-
-  // 3. warn if & in plain CSS
+  // warn if & in plain CSS
   if (block.lang === "css" && raw.includes("&")) {
     SinthWarning.emit(
       `'&' (CSS nesting) found in style block. Nested selectors require a modern browser or lang="scss".`,
@@ -180,10 +179,9 @@ export function processStyleBlock(
     );
   }
 
-  // 4. camelCase → kebab-case
   let css = convertCSSProps(raw);
 
-  // 5. SCSS compilation
+  // SCSS compilation
   if (block.lang === "scss") {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -191,20 +189,16 @@ export function processStyleBlock(
       css = sass.compileString(css).css;
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
-      if (err.code === "MODULE_NOT_FOUND" || err.message?.includes("Cannot find module")) {
-        throw new SinthError("SCSS requires the 'sass' package. Install with: npm install sass");
-      }
       throw new SinthError(`SCSS compilation failed: ${err.message ?? String(e)}`);
     }
   }
 
-  // 6. if target component given, wrap content in its CSS selector
   if (block.target) {
     const selector = sinthCompToSelector(block.target);
     css = `${selector} {\n${css}\n}`;
   }
 
-  // 7. scope (except it's global)
+  // scope (except it is global)
   if (!block.global) css = scopeCSS(css, hash);
 
   return css;
