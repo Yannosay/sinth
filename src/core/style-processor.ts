@@ -167,12 +167,12 @@ export function processStyleBlock(
   let raw = block.raw;
 
   if (params.size > 0) raw = interpolateAttr(raw, params);  // interpolate {param} placeholders
-                                                            // (note: this allows dynamic values in styles)
+                                                            // this allows dynamic values in styles
  
-  raw = preprocessSinthStyle(raw); // sinth style preprocessing
+  raw = preprocessSinthStyle(raw);                          // sinth style preprocessing
 
-  // warn if & in plain CSS
-  if (block.lang === "css" && raw.includes("&")) {
+
+  if (block.lang === "css" && raw.includes("&")) {          // warn if & in plain CSS
     SinthWarning.emit(
       `'&' (CSS nesting) found in style block. Nested selectors require a modern browser or lang="scss".`,
       block.loc,
@@ -183,9 +183,18 @@ export function processStyleBlock(
 
   // SCSS compilation
   if (block.lang === "scss") {
+    let sass: { compileString: (src: string) => { css: string } };
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const sass: { compileString: (src: string) => { css: string } } = require("sass");
+                              // eslint-disable-next-line @typescript-eslint/no-require-imports
+      sass = require("sass");
+    } catch {
+      throw new SinthError(
+        `style lang="scss" requires the 'sass' package to be installed.\n` +
+        `Run: npm install sass`,
+        block.loc,
+      );
+    }
+    try {
       css = sass.compileString(css).css;
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
@@ -198,7 +207,7 @@ export function processStyleBlock(
     css = `${selector} {\n${css}\n}`;
   }
 
-  // scope (except it is global)
+                            // scope (except it is global)
   if (!block.global) css = scopeCSS(css, hash);
 
   return css;
