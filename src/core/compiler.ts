@@ -1,16 +1,11 @@
-import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types";
-import { Parser } from "./parser";
-import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal, interpolateAttr, renderText } from "../utils";
-import { compileExprToJS, compileIfToJS, bodyToJS } from "./expr";
+import { Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, CompDef, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, AssignStmt } from "./types";
+import { camelToKebab, esc, escAttr, litToString, interpolateAttr, renderText } from "../utils";
+import { compileExprToJS, compileIfToJS } from "./expr";
 import { FunctionDef } from "./types";
-import { parseFile, resolveImports, ResolverConfig, ResolvedImports } from "../resolver";
-import { compileFunctionDef } from "./runtime/functions";
 import { generateHelpers } from "./runtime/helpers";
 import { buildRenderBody } from "./runtime/render";
-import { BUILTIN_MAP, VOID_TAGS, BuiltinInfo } from "./builtins";
+import { BUILTIN_MAP, VOID_TAGS } from "./builtins";
 import { processStyleBlock } from "./style-processor";
-import { buildHeadData, renderHead, HeadData } from "./head-builder";
-import { compileCustomElement } from "./runtime/custom-element";
 
 const EVENT_RE = /^on[A-Z]/;
 export function eventAttrName(name: string): string | null {
@@ -102,12 +97,13 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
     if (substituted.kind === "assign_stmt") {
       statements.push(compileExprToJS(substituted.expression, ctx.loopVars, ctx.namespace, ctx.declaredVars));
     } else if (substituted.kind === "expr") {
-      statements.push(compileExprToJS((substituted as any).expression, ctx.loopVars, ctx.namespace, ctx.declaredVars));
+      statements.push(compileExprToJS((substituted as { expression: Expression }).expression, ctx.loopVars, ctx.namespace, ctx.declaredVars));
     } else if (substituted.kind === "if") {
       statements.push(compileIfToJS(substituted as IfBlock, ctx.loopVars, ctx.namespace, ctx.declaredVars));
     } else if (substituted.kind === "return") {
+      void 0;
     } else if (substituted.kind === "for") {
-      const fl = substituted as any;
+      const fl = substituted as ForLoop;
       const innerLoopVars = new Set<string>();
       if (ctx.loopVars) {
         for (const v of ctx.loopVars) {
@@ -116,7 +112,7 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
           }
         }
       }
-      const bodyStmts = fl.body.map((bc: any) => {
+      const bodyStmts = fl.body.map((bc) => {
         const s = subChild(bc);
         if (s.kind === "assign_stmt") return compileExprToJS(s.expression, innerLoopVars, ctx.namespace, ctx.declaredVars);
         if (s.kind === "if") return compileIfToJS(s, innerLoopVars, ctx.namespace, ctx.declaredVars);
@@ -125,7 +121,7 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
       }).filter(Boolean).join("; ");
       const nsArrayVar = (ctx.namespace && ctx.declaredVars && ctx.declaredVars.has(fl.arrayVar)) ? ctx.namespace + "_" + fl.arrayVar : fl.arrayVar;
       if (fl.indexVar) {
-        const alreadyDeclared = fnDef.body.some((bc: any) => bc.kind === "var" && bc.name === fl.indexVar);
+        const alreadyDeclared = fnDef.body.some((bc) => bc.kind === "var" && bc.name === fl.indexVar);
         if (!alreadyDeclared) {
           statements.push(`let ${fl.indexVar} = 0;`);
         }
@@ -244,7 +240,9 @@ if (name === "step" && value?.kind === "str") {
         const stepExprId = registerExpr(ctx, expr);
         return `data-sinth-step="${stepExprId}"`;
       }
-    } catch {}
+    } catch {
+      void 0;
+    }
   }
 }
 
@@ -261,7 +259,9 @@ if (name === "delay") {
         const expr: Expression = JSON.parse(v.substring(8));
         const id = registerExpr(ctx, expr);
         return `data-sinth-delay-expr-id="${id}"`;
-      } catch {}
+      } catch {
+        void 0;
+      }
     }
     const id = registerExpr(ctx, { kind: "variable", name: v });
     return `data-sinth-delay-expr-id="${id}"`;
@@ -269,9 +269,6 @@ if (name === "delay") {
 
   if (name === "hide") {
     if (value === null) return `data-sinth-hide=""`;
-    if (value && (value as any).kind === "bool") {
-      return (value as any).value ? `data-sinth-hide=""` : "";
-    }
     if (value?.kind === "str") {
       const v = value.value;
       if (v === "true") return `data-sinth-hide=""`;
@@ -310,7 +307,9 @@ if (name === "delay") {
           if (expr.kind === "variable" && expr.name) {
             return `data-sinth-fullscreen-sync="${escAttr(expr.name)}"`;
           }
-        } catch {}
+        } catch {
+          void 0;
+        }
       }
       return `data-sinth-fullscreen-sync="${escAttr(raw)}"`;
     }
@@ -318,7 +317,7 @@ if (name === "delay") {
   } 
 
   if (name === "checked") {
-    return (value as any)?.kind === "bool" && (value as any).value ? "checked" : "";
+    return "";
   }
 
   if (value.kind === "num") return `${name}="${value.value}"`;
@@ -360,7 +359,9 @@ if (name === "delay") {
       }
       if (ev) return `${ev}="(function(){ ${jsExprs.replace(/"/g, "&quot;")}${bumps}; ${renderFn}(); })()"`;
       return `${name}="${escAttr(jsExprs)}"`;
-    } catch { }
+    } catch {
+      void 0;
+    }
   }
   if (raw.startsWith("__EXPR__")) {
     const exprJson = raw.substring("__EXPR__".length);
@@ -408,7 +409,9 @@ if (name === "delay") {
         return `${ev}="(function(){ ${handlerBody.replace(/"/g, "&quot;")} })()"`;
       }
       return `${name}="${escAttr(jsExpr)}"`;
-    } catch { }
+    } catch {
+      void 0;
+    }
   }
 
   raw = interpolateAttr(raw, paramMap);
@@ -590,7 +593,9 @@ export function renderChild(
                       const expr: Expression = JSON.parse(raw.substring(8));
                       const substituted = substituteExpr(expr, pm);
                       return { ...a, value: { kind: "str" as const, value: "__EXPR__" + JSON.stringify(substituted) } };
-                    } catch {}
+                    } catch {
+                      void 0;
+                    }
                   }
                   if (raw.startsWith("__ACTION_JS__")) {
                     return { ...a, value: { kind: "str" as const, value: raw } };
@@ -600,7 +605,9 @@ export function renderChild(
                       const exprs: Expression[] = JSON.parse(raw.substring("__MULTI_EXPR__".length));
                       const substituted = exprs.map(e => substituteExpr(e, pm));
                       return { ...a, value: { kind: "str" as const, value: "__MULTI_EXPR__" + JSON.stringify(substituted) } };
-                    } catch {}
+                    } catch {
+                      void 0;
+                    }
                   }
                   for (const [pn, pv] of pm) {
                     if (pv.startsWith("__LIT__")) raw = raw.replace(new RegExp(`\\b${pn}\\b`, 'g'), pv.slice(7));
@@ -685,12 +692,17 @@ depth:   number,
 ): string {
   if (depth > 64) throw new SinthError("Maximum if-block nesting depth (64) exceeded.", ifBlock.loc);
 
-  const condJS = compileExprToJS(ifBlock.condition, undefined, ctx.namespace, ctx.declaredVars);
   const allChildren  = [...ifBlock.body, ...(ifBlock.elseBody ?? [])];
   const hasAssign = allChildren.some(c => c.kind === "assign_stmt");
+  const hasExprAssign = allChildren.some(c => c.kind === "expr" && c.expression?.kind === "assign");
   const hasComp = allChildren.some(c => c.kind === "use");
 
-  if (!hasAssign && !hasComp) {
+  if (!hasComp) {
+    ctx.logicBlocks.push(compileIfToJS(ifBlock, undefined, ctx.namespace, ctx.declaredVars));
+    return "";
+  }
+
+  if (!hasAssign && !hasExprAssign && !hasComp) {
     const tplId = ctx.ifIdCounter++;
     const condId = registerExpr(ctx, ifBlock.condition);
     const bodyHTML = ifBlock.body.map(c => renderChild(c, ctx, params, depth + 1)).join("");
@@ -700,12 +712,6 @@ depth:   number,
       `<template data-sinth-if-id="${tplId}" data-sinth-if-expr="${condId}"${persistAttr}>${bodyHTML}</template>` +
       (elseHTML ? `<template data-sinth-else data-sinth-if-id="${tplId}">${elseHTML}</template>` : "")
     );
-  }
-
-  // pure logic
-  if (hasAssign && !hasComp) {
-    ctx.logicBlocks.push(compileIfToJS(ifBlock));
-    return "";
   }
 
   // pure DOM (components need replace/persist/delay handling)
@@ -728,7 +734,7 @@ depth:   number,
       if (ctx.customEls.has(u.name)) return true;
       return u.attrs.some(a => a.name === "bind" || a.name === "model" || a.name === "fullscreenSync");
     });
-    let persistAttr = (ifBlock.persist || hasStatefulComp) ? ` data-sinth-if-persist="true"` : "";
+    const persistAttr = (ifBlock.persist || hasStatefulComp) ? ` data-sinth-if-persist="true"` : "";
     const firstComp = ifBlock.body.find(c => c.kind === "use") as CompUse | undefined;
     if (firstComp) {
       const idAttr = firstComp.attrs.find(a => a.name === "id");
@@ -743,7 +749,7 @@ depth:   number,
     if (firstComp) {
       const delayA = firstComp.attrs.find(a => a.name === "delay");
       const hideA = firstComp.attrs.find(a => a.name === "hide");
-      if (delayA && hideA && hideA.value && (hideA.value as any).kind === "bool" && !(hideA.value as any).value) {
+      if (delayA && hideA && hideA.value && hideA.value.kind === "bool" && !hideA.value.value) {
         if (delayA.value?.kind === "num") {
           delayAttr = ` data-sinth-if-delay="${delayA.value.value}"`;
         } else if (delayA.value?.kind === "str") {
@@ -759,7 +765,7 @@ depth:   number,
     if (elseFirstComp) {
       const delayA = elseFirstComp.attrs.find(a => a.name === "delay");
       const hideA = elseFirstComp.attrs.find(a => a.name === "hide");
-      if (delayA && hideA && hideA.value && (hideA.value as any).kind === "bool" && !(hideA.value as any).value) {
+      if (delayA && hideA && hideA.value && hideA.value.kind === "bool" && !hideA.value.value) {
         if (delayA.value?.kind === "num") {
           elseDelayAttr = ` data-sinth-if-delay="${delayA.value.value}"`;
         } else if (delayA.value?.kind === "str") {
@@ -1008,7 +1014,9 @@ export function renderCompUse(
         try {
           const expr: Expression = JSON.parse(vName.substring(8));
           if (expr.kind === "variable" && expr.name) vName = expr.name;
-        } catch {}
+        } catch {
+          void 0;
+        }
       }
       const varDecl = ctx.varDecls?.find(v => v.name === vName);
       if (!use.attrs.some(a => a.name === "type")) {
@@ -1051,14 +1059,16 @@ export function renderCompUse(
     // Resolve bound variable name (same pattern as Input's bind/model)
     let boundVarName: string | null = null;
     if (checkedAttr && checkedAttr.value?.kind === "str") {
-      let raw = checkedAttr.value.value;
+      const raw = checkedAttr.value.value;
       if (raw.startsWith("__EXPR__")) {
         try {
           const expr: Expression = JSON.parse(raw.substring(8));
           if (expr.kind === "variable" && expr.name) {
             boundVarName = expr.name;
           }
-        } catch {}
+        } catch {
+          void 0;
+        }
       } else if (raw.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
         boundVarName = raw;
       }
@@ -1080,13 +1090,15 @@ export function renderCompUse(
     }
     
     if (onChangeAttr && onChangeAttr.value?.kind === "str") {
-      let raw = onChangeAttr.value.value;
+      const raw = onChangeAttr.value.value;
       if (raw.startsWith("__EXPR__")) {
         try {
           const expr: Expression = JSON.parse(raw.substring(8));
           const jsExpr = compileExprToJS(expr, undefined, ctx.namespace, ctx.declaredVars);
           attrParts.push(`onchange="(function(){ ${jsExpr}; ${renderFn}(); })(event)"`);
-        } catch {}
+        } catch {
+          void 0;
+        }
       } else {
         attrParts.push(`onchange="${escAttr(raw)};${renderFn}()"`);
       }
@@ -1274,7 +1286,7 @@ export function buildRuntime(opts: {
     if (matches) matches.forEach(m => memoVars.add(m));
   }
   for (const e of exprRegistry) {
-    let matches = e.match(/_memo_(\w+)/g);
+    const matches = e.match(/_memo_(\w+)/g);
     if (matches) matches.forEach(m => memoVars.add(m));
   }
   const memoVarDecls = [...memoVars].map(m => `var ${m};`).join("\n");
@@ -1302,8 +1314,8 @@ export function buildRuntime(opts: {
     .join("\n    ");
 
   const renderBody = buildRenderBody({
-    bodyHTML, logicBlocks, mixedBlocks,
-    needsLogic, needsMixed, needsIf, needsFor, needsExpr, needsDelay,
+    bodyHTML, logicBlocks: [], mixedBlocks,
+    needsLogic: false, needsMixed, needsIf, needsFor, needsExpr, needsDelay,
     exprVarUpdates: exprVarUpdates || undefined,
     ns
   });
@@ -1345,7 +1357,8 @@ export function buildRuntime(opts: {
 
   let renderFunc = '';
   if (needsRender) {
-    renderFunc = `function ${renderFn}() {\n    ${forSyncBlock}${renderBody.replace(/^/gm, "  ")}\n}\n${initLogicJS}${renderFn}();`;
+    const logicAtTop = needsLogic ? logicBlocks.join("\n") + "\n" : "";
+    renderFunc = `function ${renderFn}() {\n  ${logicAtTop}${forSyncBlock}${renderBody}\n}\n${initLogicJS}${renderFn}();`;
   }
 
   if (needsFullscreenSync) {

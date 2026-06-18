@@ -58,7 +58,7 @@ export function buildRenderBody(opts: {
     renderBody += `  document.querySelectorAll('template[data-sinth-if-expr]').forEach(function(t) { var p = t.parentElement; while(p && p.tagName !== 'TEMPLATE') p = p.parentElement; if (!p || (!p.hasAttribute('data-sinth-for') && !p.hasAttribute('data-sinth-for-expr'))) sinthIfBlock(t); });\n`;
   }
   renderBody += `  document.querySelectorAll('[data-sinth-value]').forEach(function(el) {
-    try { if (document.activeElement !== el) { let v=el.dataset.sinthValue; el.value = ${X}[v] ? ${X}[v]({}) : ''; } } catch(e) {}
+    try { let v=el.dataset.sinthValue; el.value = ${X}[v] ? ${X}[v]({}) : ''; } catch(e) {}
   });\n`;
   renderBody += `  document.querySelectorAll('[data-sinth-step]').forEach(function(el) {
     try { let s=el.dataset.sinthStep; el.step = ${X}[s] ? ${X}[s]({}) : 1; } catch(e) {}

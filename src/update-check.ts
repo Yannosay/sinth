@@ -16,7 +16,9 @@ function readCache(): CacheData | null {
     if (fs.existsSync(CACHE_FILE)) {
       return JSON.parse(fs.readFileSync(CACHE_FILE, "utf-8")) as CacheData;
     }
-  } catch {}
+  } catch {
+    void 0;
+  }
   return null;
 }
 
@@ -24,7 +26,9 @@ function writeCache(): void {
   try {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     fs.writeFileSync(CACHE_FILE, JSON.stringify({ lastCheck: Date.now() }));
-  } catch {}
+  } catch {
+    void 0;
+  }
 }
 
 function fetchLatestVersion(): Promise<string | null> {

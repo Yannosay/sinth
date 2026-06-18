@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as https from "https";
+import { execSync } from "child_process";
 import { SinthWarning } from "./core/types";
 import { compileFile, CompileOptions, findSinthPages, copyDir } from "./core/cli-compiler";
 import { startDevServer } from "./server";
@@ -12,7 +14,10 @@ function loadConfig(root: string): Record<string, unknown> {
   const cfgPath = path.join(root, "sinth.config.json");
   if (fs.existsSync(cfgPath)) {
     try { return JSON.parse(fs.readFileSync(cfgPath, "utf-8")) as Record<string, unknown>; }
-    catch { SinthWarning.emit("Could not parse sinth.config.json"); }
+    catch (e) {
+      SinthWarning.emit("Could not parse sinth.config.json");
+      console.error(e);
+    }
   }
   return {};
 }
@@ -46,7 +51,7 @@ async function main(): Promise<void> {
         const pkg4 = JSON.parse(fs.readFileSync(pkgPath4, "utf-8"));
         checkForUpdate(pkg4.version);
       }
-      if (nonSinth.length > 0) process.stdout.write(`\x1b[33mSkipping non-.sinth files:\x1b[0m ${nonSinth.join(", ")}\n`);
+      if (nonSinth.length > 0) process.stdout.write(`\u001b[33mSkipping non-.sinth files:\u001b[0m ${nonSinth.join(", ")}\n`);
 
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
       const pages    = fileArgs.length > 0
@@ -70,10 +75,10 @@ async function main(): Promise<void> {
           const out = path.join(outDir, rel);
           fs.mkdirSync(path.dirname(out), { recursive: true });
           fs.writeFileSync(out, html);
-          process.stdout.write(`  \x1b[32m✓\x1b[0m ${rel}\n`);
+          process.stdout.write(`  \u001b[32m✓\u001b[0m ${rel}\n`);
           built++;
         } catch (e: unknown) {
-          process.stderr.write(`  \x1b[31m✗\x1b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
+          process.stderr.write(`  \u001b[31m✗\u001b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
           hadError = true;
         }
       }
@@ -81,13 +86,13 @@ async function main(): Promise<void> {
       if (sharedRuntimes.length > 0) {
         const combined = sharedRuntimes.join("\n");
         fs.writeFileSync(path.join(outDir, "sinth-runtime.js"), combined);
-        process.stdout.write(`  \x1b[32m✓\x1b[0m sinth-runtime.js (shared)\n`);
+        process.stdout.write(`  \u001b[32m✓\u001b[0m sinth-runtime.js (shared)\n`);
       }
 
       const assetsIn = path.join(cwd, "assets"), assetsOut = path.join(outDir, "assets");
       if (fs.existsSync(assetsIn)) {
         copyDir(assetsIn, assetsOut);
-        process.stdout.write(`  \x1b[32m✓\x1b[0m assets/ → ${path.relative(cwd, assetsOut)}/\n`);
+        process.stdout.write(`  \u001b[32m✓\u001b[0m assets/ → ${path.relative(cwd, assetsOut)}/\n`);
       }
 
       const libIn = path.join(cwd, "libraries"), libOut = path.join(outDir, "libraries");
@@ -96,16 +101,19 @@ async function main(): Promise<void> {
         const libFiles = fs.readdirSync(libOut, { recursive: true }) as string[];
         for (const f of libFiles) {
           if (f.endsWith(".sinth") || f.endsWith(".html")) {
-            try { fs.unlinkSync(path.join(libOut, f)); } catch {}
+            try { 
+              fs.unlinkSync(path.join(libOut, f)); 
+            } catch (e) {
+              console.warn(`Failed to delete ${f}:`, e);
+            }
           }
         }
-        process.stdout.write(`  \x1b[32m✓\x1b[0m libraries/ → ${path.relative(cwd, libOut)}/\n`);
+        process.stdout.write(`  \u001b[32m✓\u001b[0m libraries/ → ${path.relative(cwd, libOut)}/\n`);
       }
 
       const buildTime = ((Date.now() - buildStart) / 1000).toFixed(2);
-      process.stdout.write(`\n\x1b[1mBuilt ${built} page(s)\x1b[0m${hadError ? " with errors" : ""} \x1b[2min ${buildTime}s\x1b[0m\n`);
-      process.exit(hadError ? 1 : 0);
-      break;
+      process.stdout.write(`\n\u001b[1mBuilt ${built} page(s)\u001b[0m${hadError ? " with errors" : ""} \u001b[2min ${buildTime}s\u001b[0m\n`);
+      return process.exit(hadError ? 1 : 0);
     }
 
     case "dev": {
@@ -119,7 +127,7 @@ async function main(): Promise<void> {
         ? fileArgs.map(f => path.resolve(cwd, f)).filter(f => fs.existsSync(f))
         : undefined;
       await startDevServer({ ...opts, port, files });
-      break;
+      return;
     }
 
     case "check": {
@@ -129,13 +137,14 @@ async function main(): Promise<void> {
       for (const p of pages) {
         try {
           compileFile(p, opts);
-          process.stdout.write(`  \x1b[32m✓\x1b[0m ${path.relative(cwd, p)}\n`);
+          process.stdout.write(`  \u001b[32m✓\u001b[0m ${path.relative(cwd, p)}\n`);
         } catch (e: unknown) {
-          process.stderr.write(`  \x1b[31m✗\x1b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
+          process.stderr.write(`  \u001b[31m✗\u001b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
           hadError = true;
         }
       }
-      process.exit(hadError ? 1 : 0);
+      return process.exit(hadError ? 1 : 0);
+      
     }
     
 
@@ -143,27 +152,25 @@ async function main(): Promise<void> {
     case "update": {
       const pkgPath2 = path.join(__dirname, "..", "package.json");
       const current = fs.existsSync(pkgPath2) ? JSON.parse(fs.readFileSync(pkgPath2, "utf-8")).version : null;
-      const https = require("https");
-      https.get("https://registry.npmjs.org/@yannosay/sinth/latest", { timeout: 5000 }, (res: any) => {
+      https.get("https://registry.npmjs.org/@yannosay/sinth/latest", { timeout: 5000 }, (res: import("http").IncomingMessage) => {
         let data = "";
-        res.on("data", (chunk: any) => data += chunk);
+        res.on("data", (chunk: Buffer) => data += chunk.toString());
         res.on("end", () => {
           try {
             const latest = JSON.parse(data).version;
             if (latest === current) {
-              process.stdout.write(`\x1b[32mAlready on latest version: ${current} ✓\x1b[0m\n`);
+              process.stdout.write(`\u001b[32mAlready on latest version: ${current} ✓\u001b[0m\n`);
             } else if (latest) {
-              process.stdout.write(`\x1b[36mUpdating Sinth ${current} → ${latest}...\x1b[0m\n`);
-              const { execSync } = require("child_process");
+              process.stdout.write(`\u001b[36mUpdating Sinth ${current} → ${latest}...\u001b[0m\n`);
               execSync("npm install -g @yannosay/sinth@latest", { stdio: "inherit" });
-              process.stdout.write(`\x1b[32m✓ Sinth updated to ${latest}!\x1b[0m\n`);
+              process.stdout.write(`\u001b[32m✓ Sinth updated to ${latest}!\u001b[0m\n`);
             }
           } catch {
-            process.stderr.write("\x1b[31mCould not check for updates.\x1b[0m\n");
+            process.stderr.write("\u001b[31mCould not check for updates.\u001b[0m\n");
           }
         });
-      }).on("error", () => process.stderr.write("\x1b[31mCould not reach npm registry.\x1b[0m\n"));
-      break;
+      }).on("error", () => process.stderr.write("\u001b[31mCould not reach npm registry.\u001b[0m\n"));
+      return;
     }
 
     case "version":
@@ -177,12 +184,13 @@ async function main(): Promise<void> {
       } else {
         process.stdout.write("Sinth Compiler v1.0.0\n");
       }
-      break;
+      return;
     }
 
     case "init": {
       await interactiveInit(cwd);
-      break;
+      process.stdin.destroy();
+      return process.exit(0);
     }
 
     default: {
@@ -199,20 +207,22 @@ async function main(): Promise<void> {
             const pkg = JSON.parse(fs.readFileSync(p, "utf-8"));
             version = pkg.version;
             break;
-          } catch {}
+          } catch {
+            // Ignore - use default version
+          }
         }
       }
       process.stdout.write(`
-\x1b[1mSinth Compiler v${version}\x1b[0m
+\u001b[1mSinth Compiler v${version}\u001b[0m
 
-\x1b[1mCommands:\x1b[0m
+\u001b[1mCommands:\u001b[0m
   sinth build   [files] [--out ./dist] [--prod] [--shared-runtime]    Compile .sinth pages
   sinth dev     [files] [--port 3000]              Live-reload dev server
   sinth check                                      Lint without emitting
   sinth init    [name]                             Scaffold a new project
   sinth version                                    Print version
 `);
-      break;
+      return;
     }
   }
 }
@@ -233,72 +243,69 @@ async function interactiveInit(cwd: string): Promise<void> {
     escapeCodeTimeout: 50,
   });
 
-  process.stdout.write("\x1b[1m\n✨ Welcome to Sinth project setup!\n\n\x1b[0m");
+  process.stdout.write("\u001b[s\u001b[1m\n✨ Welcome to Sinth project setup!\n\n\u001b[0m");
 
-  const rawName = await question(rl, "\x1b[45m\x1b[30m Project name: \x1b[0m ", "my-sinth-project");
+  const rawName = await question(rl, "\u001b[45m\u001b[30m Project name: \u001b[0m ", "my-sinth-project");
+  rl.close();
+  process.stdin.pause();
+  process.stdin.removeAllListeners();
+  process.stdin.read();
   process.stdout.write("\n");
   const projectName = rawName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-  rl.close();
 
-  const rl2 = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-    escapeCodeTimeout: 50,
-  });
+  const preset = await select();
 
-  const preset = await select(rl2);
-  rl2.close();
-
+  process.stdout.write("\u001b[u\u001b[0J");
   const root = path.resolve(cwd, projectName);
-  process.stdout.write("\n");
   const start = Date.now();
   scaffoldByPreset(root, projectName, preset);
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
 
   process.stdout.write(`
-\x1b[32m✓ Sinth project scaffolded at \x1b[4m${projectName}/\x1b[0m\x1b[32m in ${elapsed}s\x1b[0m
+\u001b[1m✨ Success!\u001b[0m
 
-\x1b[1mNext steps:\x1b[0m
-  cd ${projectName}
-  sinth dev
-  sinth build
+ \u001b[45m\u001b[30m Project name: \u001b[0m  ${projectName}
+ \u001b[43m\u001b[30m Preset: \u001b[0m ${preset}
+\u001b[32m✓ ${projectName} scaffolded at \u001b[4m${projectName}/\u001b[0m\u001b[32m in ${elapsed}s\u001b[0m
+
+\u001b[47m\u001b[30m Get started: \u001b[0m
+  \u001b[100m\u001b[37m sinth dev \u001b[0m to start dev server.
 `);
 }
 
 function question(rl: readline.Interface, prompt: string, defaultVal: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
+  return new Promise<string>((resolve: (value: string) => void) => {
+    rl.question(prompt, (answer: string) => {
       resolve(answer.trim() || defaultVal);
     });
   });
 }
 
-function select(rl: readline.Interface): Promise<Preset> {
-  return new Promise((resolve) => {
+function select(): Promise<Preset> {
+  return new Promise<Preset>((resolve: (value: Preset) => void) => {
     const items = PRESETS;
     let selected = 1;
 
     const prefix = "  ";
-    const cursor = "\x1b[36m❯\x1b[0m";
+    const cursor = "\u001b[36m❯\u001b[0m";
     const empty  = " ";
 
     function render(first: boolean = false) {
       if (!first) {
-        process.stdout.write(`\x1b[${items.length + 1}A`);
+        process.stdout.write(`\u001b[${items.length + 1}A`);
       }
-      process.stdout.write(`\x1b[43m\x1b[30m Select preset: \x1b[0m\n`);
+      process.stdout.write(`\u001b[43m\u001b[30m Select preset: \u001b[0m\n`);
       for (let i = 0; i < items.length; i++) {
         const pointer = i === selected ? cursor : empty;
         const isFull  = items[i].value === "full";
         let label: string;
         if (i === selected) {
-          label = isFull ? `\x1b[1m\x1b[35m${items[i].label}\x1b[0m` : `\x1b[1m${items[i].label}\x1b[0m`;
+          label = isFull ? `\u001b[1m\u001b[35m${items[i].label}\u001b[0m` : `\u001b[1m${items[i].label}\u001b[0m`;
         } else {
           label = items[i].label;
         }
-        const desc    = `\x1b[2m- ${items[i].description}\x1b[0m`;
-        process.stdout.write(`${prefix}${pointer} ${label} ${desc}\x1b[0K\n`);
+        const desc    = `\u001b[2m- ${items[i].description}\u001b[0m`;
+        process.stdout.write(`${prefix}${pointer} ${label} ${desc}\u001b[0K\n`);
       }
     }
 
@@ -316,9 +323,9 @@ function select(rl: readline.Interface): Promise<Preset> {
         render();
       } else if (str === "\r" || str === "\n") {
         process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener("data", onData);
-        process.stdout.write(`\x1b[${items.length - selected}A\x1b[0J`);
+        process.stdin.removeAllListeners("data");
+        process.stdin.resume();
+        process.stdout.write(`\u001b[${items.length + 1}A\u001b[0J`);
         resolve(items[selected].value);
       } else if (str === "\u0003") {
         process.stdin.setRawMode(false);
@@ -493,9 +500,7 @@ component Card(title, color = "blue") {
 }
 
 
-
-
 main().catch(e => {
-  process.stderr.write(`\x1b[31m${(e as Error).message}\x1b[0m\n`);
+  process.stderr.write(`\u001b[31m${(e as Error).message}\u001b[0m\n`);
   process.exit(1);
 });

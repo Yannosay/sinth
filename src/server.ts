@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as path from "path";
 import * as fs from "fs";
-import { compileFile, CompileOptions, findSinthPages, minifyHTML } from "./core/cli-compiler";
+import { compileFile, CompileOptions, findSinthPages } from "./core/cli-compiler";
 
 
 
@@ -18,7 +18,7 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
   const cache = new Map<string, string>();
 
   function notify(): void {
-    for (const c of clients) { try { c.write("data: reload\n\n"); } catch {} }
+    for (const c of clients) { try { c.write("data: reload\n\n"); } catch { void 0; } }
   }
 
   function compileAll(): void {
@@ -65,7 +65,9 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
       }, DEBOUNCE_MS));
     });
     watchReady = true;
-  } catch {}
+  } catch {
+    void 0;
+  }
 
   if (!watchReady) {
     const mtimes = new Map<string, number>();
@@ -80,7 +82,9 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
             process.stdout.write(`\x1b[36m[sinth]\x1b[0m Changed: ${path.relative(opts.projectRoot, p)}\n`);
             compileAll(); notify(); break;
           }
-        } catch {}
+        } catch {
+          void 0;
+        }
       }
     }, 500);
     process.on("exit", () => clearInterval(poller));

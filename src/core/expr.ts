@@ -100,7 +100,7 @@ export function bodyToJS(children: Child[], loopVars?: Set<string>, namespace?: 
       if (c.kind === "assign_stmt") return `  ${compileExprToJS((c as AssignStmt).expression, loopVars, namespace, declaredVars)};\n`;
       if (c.kind === "return")      return `  return ${(c as ReturnStmt).expression ? compileExprToJS((c as ReturnStmt).expression!, loopVars, namespace, declaredVars) : ""};\n`;
       if (c.kind === "if")          return compileIfToJS(c as IfBlock, loopVars, namespace, declaredVars).replace(/^/gm, "  ") + "\n";
-      if (c.kind === "expr")        return `  ${compileExprToJS((c as any).expression, loopVars, namespace, declaredVars)};\n`;
+      if (c.kind === "expr")        return `  ${compileExprToJS((c as { expression: Expression }).expression, loopVars, namespace, declaredVars)};\n`;
       return "";
     })
     .join("");

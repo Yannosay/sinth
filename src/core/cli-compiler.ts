@@ -1,19 +1,15 @@
 import * as path from "path";
 import * as fs from "fs";
-import { Loc, Literal, Expression, Child, Attr, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, StyleBlock, CompDef, ParamDecl, VarDeclaration, SinthFile, CompileCtx, MixedBlockEntry, SinthError, SinthWarning, TT, AssignStmt, MetaEntry } from "./types";
-import { Parser } from "./parser";
-import { fnv1a, camelToKebab, esc, escAttr, litToString, tagNameToPascal, interpolateAttr, renderText } from "../utils";
-import { compileExprToJS, compileIfToJS, bodyToJS } from "./expr";
+import { Expression, Child, CompUse, IfBlock, ForLoop, Loc, ReturnStmt, VarDeclaration, CompileCtx, SinthError, SinthWarning } from "./types";
+import { fnv1a, escAttr } from "../utils";
 import { FunctionDef } from "./types";
-import { parseFile, resolveImports, ResolverConfig, ResolvedImports } from "../resolver";
+import { parseFile, resolveImports, ResolverConfig } from "../resolver";
 import { compileFunctionDef } from "./runtime/functions";
-import { generateHelpers } from "./runtime/helpers";
-import { buildRenderBody } from "./runtime/render";
-import { BUILTIN_MAP, VOID_TAGS, BuiltinInfo } from "./builtins";
 import { processStyleBlock } from "./style-processor";
-import { buildHeadData, renderHead, HeadData } from "./head-builder";
+import { buildHeadData, renderHead } from "./head-builder";
 import { compileCustomElement } from "./runtime/custom-element";
-import { eventAttrName, INLINE_STYLE_PROPS, resolveBuiltinTag, registerExpr, renderAttr, renderChild, renderIfBlock, renderCompUse, expandUserComp, collectScripts, extractFunctionNames, buildRuntime } from "./compiler";
+import { renderCompUse, renderChild, collectScripts, buildRuntime } from "./compiler";
+
 
 export interface CompileOptions {
   projectRoot:  string;
@@ -89,7 +85,9 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
                 ? JSON.parse(v.substring("__MULTI_EXPR__".length))
                 : [JSON.parse(v.substring(8))];
               exprs.forEach(e => collectExprVars(e, vars));
-            } catch {}
+            } catch {
+              void 0;
+            }
           }
         }
       });
@@ -197,6 +195,9 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
       checkTypeInChild(child, allVarDecls, functionDefs);
     }
   }
+  for (const vd of pageVarDecls) {
+    checkVarInitType(vd, allVarDecls, functionDefs);
+  }  
   for (const use of file.uses) {
     checkTypeInChild(use, allVarDecls, functionDefs);
   }
@@ -223,6 +224,46 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     return null;
   }
 
+  function checkVarInitType(vd: VarDeclaration, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
+    if (!vd.value) return;
+    if (vd.value.kind === "num") {
+      if (vd.varType !== "int") throw new SinthError(`Cannot assign number to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      return;
+    }
+    if (vd.value.kind === "bool") {
+      if (vd.varType !== "bool") throw new SinthError(`Cannot assign boolean to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      return;
+    }
+    if (vd.value.kind !== "str") return;
+    const raw = vd.value.value;
+    if (raw.startsWith("__EXPR__")) {
+      let expr: Expression;
+      try { expr = JSON.parse(raw.substring(8)); } catch { return; }
+      const exprType = inferType(expr, varDecls, functionDefs);
+      if (exprType && exprType !== vd.varType) {
+        throw new SinthError(`Cannot assign expression of type '${exprType}' to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      }
+      return;
+    }
+    if (raw.startsWith("__VAR__")) {
+      const varName = raw.substring(7);
+      const exprType = inferType({ kind: "variable", name: varName }, varDecls, functionDefs);
+      if (exprType && exprType !== vd.varType) {
+        throw new SinthError(`Cannot assign variable '${varName}' of type '${exprType}' to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      }
+      return;
+    }
+    if (raw.startsWith("__ARR__")) {
+      if (vd.varType !== "str[]") {
+        throw new SinthError(`Cannot assign array literal to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      }
+      return;
+    }
+    if (vd.varType !== "str" && vd.varType !== "str[]") {
+      throw new SinthError(`Cannot assign string value to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+    }
+  }
+
   function checkCallArgs(fnDef: FunctionDef, args: Expression[], loc: Loc, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
     for (let i = 0; i < fnDef.params.length && i < args.length; i++) {
       const param = fnDef.params[i];
@@ -241,31 +282,81 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     }
   }
 
-  function checkTypeInExpr(expr: Expression | undefined, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
+  function checkTypeInExpr(expr: Expression | undefined, varDecls: VarDeclaration[], functionDefs: FunctionDef[], loc?: Loc): void {
     if (!expr) return;
+    if (expr.kind === "assign" && expr.target) {
+      const parts = expr.target.split('.');
+      const rootVar = parts[0];
+      const vd = varDecls.find(v => v.name === rootVar);
+      if (vd) {
+        let expected = vd.varType;
+        if (parts.length > 1) {
+          if (expected === "obj") expected = "str";
+          else if (expected === "str[]" && parts[1] === "length") expected = "int";
+        }
+        const rhsType = inferType(expr.right!, varDecls, functionDefs);
+        if (rhsType && expected !== rhsType) {
+          if (expr.op === "+=" && expected === "str") { /* allow string += any */ }
+          else if (expr.op === "-=") {
+            if (expected !== "int") {
+              throw new SinthError(`Cannot use '-=' on non‑int variable '${expr.target}'`, loc || { file: "", line: 0, col: 0 });
+            } else if (rhsType !== "int") {
+              throw new SinthError(`Right operand of '-=' must be int, got '${rhsType}'`, loc || { file: "", line: 0, col: 0 });
+            }
+          } else {
+            throw new SinthError(`Cannot assign value of type '${rhsType}' to variable '${expr.target}' of type '${expected}'`, loc || { file: "", line: 0, col: 0 });
+          }
+        }
+      }
+    }
+    if (expr.kind === "binary") {
+      const leftType  = inferType(expr.left!,  varDecls, functionDefs);
+      const rightType = inferType(expr.right!, varDecls, functionDefs);
+      if (leftType && rightType) {
+        const op = expr.op!;
+        if (["==","!=","<",">","<=",">="].includes(op)) {
+          if (leftType !== rightType) {
+            throw new SinthError(`Cannot compare values of type '${leftType}' and '${rightType}' with '${op}'`, loc || { file: "", line: 0, col: 0 });
+          }
+        } else if (["and","or"].includes(op)) {
+          if (leftType !== "bool") throw new SinthError(`Left side of '${op}' must be bool, got '${leftType}'`, loc || { file: "", line: 0, col: 0 });
+          if (rightType !== "bool") throw new SinthError(`Right side of '${op}' must be bool, got '${rightType}'`, loc || { file: "", line: 0, col: 0 });
+        } else if (["-","*","/","%"].includes(op)) {
+          if (leftType !== "int" || rightType !== "int") {
+            throw new SinthError(`Arithmetic operator '${op}' requires int operands, got '${leftType}' and '${rightType}'`, loc || { file: "", line: 0, col: 0 });
+          }
+        }
+      }
+    }
+    if (expr.kind === "unary" && expr.op === "not") {
+      const operandType = inferType(expr.operand!, varDecls, functionDefs);
+      if (operandType && operandType !== "bool") {
+        throw new SinthError(`'not' operator requires bool operand, got '${operandType}'`, loc || { file: "", line: 0, col: 0 });
+      }
+    }
     if (expr.kind === "call" && expr.callee?.kind === "variable" && expr.callee.name) {
       const fnDef = functionDefs.find(f => f.name === expr.callee!.name);
-      if (fnDef) checkCallArgs(fnDef, expr.args ?? [], fnDef.loc, varDecls, functionDefs);
+      if (fnDef) checkCallArgs(fnDef, expr.args ?? [], loc || fnDef.loc, varDecls, functionDefs);
     }
-    if (expr.left) checkTypeInExpr(expr.left, varDecls, functionDefs);
-    if (expr.right) checkTypeInExpr(expr.right, varDecls, functionDefs);
-    if (expr.operand) checkTypeInExpr(expr.operand, varDecls, functionDefs);
-    if (expr.args) expr.args.forEach(a => checkTypeInExpr(a, varDecls, functionDefs));
+    if (expr.left)    checkTypeInExpr(expr.left,    varDecls, functionDefs, loc);
+    if (expr.right)   checkTypeInExpr(expr.right,   varDecls, functionDefs, loc);
+    if (expr.operand) checkTypeInExpr(expr.operand, varDecls, functionDefs, loc);
+    if (expr.args)    expr.args.forEach(a => checkTypeInExpr(a, varDecls, functionDefs, loc));
   }
 
   function checkTypeInChild(child: Child, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
     if (child.kind === "expr" && child.expression) {
-      checkTypeInExpr(child.expression, varDecls, functionDefs);
+      checkTypeInExpr(child.expression, varDecls, functionDefs, child.loc);
     }
     if (child.kind === "assign_stmt" && child.expression) {
-      checkTypeInExpr(child.expression, varDecls, functionDefs);
+      checkTypeInExpr(child.expression, varDecls, functionDefs, child.loc);
     }
     if (child.kind === "return" && (child as ReturnStmt).expression) {
       checkTypeInExpr((child as ReturnStmt).expression, varDecls, functionDefs);
     }
     if (child.kind === "if") {
       const ib = child as IfBlock;
-      checkTypeInExpr(ib.condition, varDecls, functionDefs);
+      checkTypeInExpr(ib.condition, varDecls, functionDefs, ib.loc);
       ib.body.forEach(c => checkTypeInChild(c, varDecls, functionDefs));
       ib.elseBody?.forEach(c => checkTypeInChild(c, varDecls, functionDefs));
     }
@@ -278,8 +369,10 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
         if (a.value?.kind === "str" && a.value.value.startsWith("__EXPR__")) {
           try {
             const expr: Expression = JSON.parse(a.value.value.substring(8));
-            checkTypeInExpr(expr, varDecls, functionDefs);
-          } catch {}
+            checkTypeInExpr(expr, varDecls, functionDefs, a.loc || u.loc);
+          } catch {
+            void 0;
+          }
         }
       });
       u.children.forEach(c => checkTypeInChild(c, varDecls, functionDefs));
@@ -290,15 +383,19 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     m.key === "domdiffing" &&
     (m.value.kind === "bool" ? m.value.value === true : (m.value.kind === "str" && m.value.value === "true"))
   );
+  const REACTIVE = /^if\b|^\{|^[a-zA-Z_$][a-zA-Z0-9_$]*\s*(?:[+\-*/%]?=|<<=|>>=|>>>=|&&=|\|\|=|\?\?=)/;
   const topLevelLogicIfs: string[] = [];
   file.scripts = file.scripts.filter(s => {
     const trimmed = s.raw.trim();
-    if (/^if\s*\(/.test(trimmed) || /^\{/.test(trimmed)) {
+    if (REACTIVE.test(trimmed)) {
       topLevelLogicIfs.push(trimmed);
       return false;
     }
     return true;
   });
+  if (file.initLogic) {
+    file.initLogic = file.initLogic.filter(s => !REACTIVE.test(s.trim()));
+  }
 
   const ctx: CompileCtx = {
     allDefs, functionDefs, customEls, cssLinks, jsLinks,
@@ -327,7 +424,17 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   }
 
   const headData = buildHeadData(file.meta);
-  const bodyHTML = file.uses.map(u => renderCompUse(u, ctx, new Map(), 0)).join("\n");
+  const flatUses: Child[] = [];
+  function flattenUses(child: Child): void {
+    if (child.kind === "use" && (child as CompUse).name === "__IF_ROOT__") {
+      (child as CompUse).children.forEach(flattenUses);
+    } else {
+      flatUses.push(child);
+    }
+  }
+  file.uses.forEach(flattenUses);
+
+  const bodyHTML = flatUses.map(u => renderChild(u, ctx, new Map(), 0)).join("\n");
   const pageCSS   = file.styles.map(s => processStyleBlock(s, hash, new Map())).join("\n");
   const scopedCSS = [pageCSS, ...ctx.extraCSS].filter(c => c.trim()).join("\n");
   const { componentScripts, pageScripts } = collectScripts(file, allDefs);
@@ -335,7 +442,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   // collect all assigned variables for default-value warnings
   const assignedVars = new Set<string>();
   for (const s of file.scripts) {
-    for (const m of s.raw.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:[+\-]?=)/g)) assignedVars.add(m[1]);
+    for (const m of s.raw.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:[+-]?=)/g)) assignedVars.add(m[1]);
   }
   for (const v of file.varDecls) { if (v.value) assignedVars.add(v.name); }
 

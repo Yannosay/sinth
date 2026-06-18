@@ -1,4 +1,4 @@
-import { CompileCtx, FunctionDef, IfBlock, VarDeclaration, Expression } from "../types";
+import { CompileCtx, FunctionDef, IfBlock, VarDeclaration, Expression, ForLoop, Child } from "../types";
 import { compileExprToJS, compileIfToJS } from "../expr";
 
 export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
@@ -24,10 +24,10 @@ export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
         bodyStatements.push(compileIfToJS(child as IfBlock, undefined, ctx.namespace, ctx.declaredVars));
         break;
       case "for": {
-        const fl = child as any;
+        const fl = child as ForLoop;
         const itemVar = fl.itemVar;
         const arrayVar = (ctx.namespace && ctx.declaredVars && ctx.declaredVars.has(fl.arrayVar)) ? ctx.namespace + "_" + fl.arrayVar : fl.arrayVar;
-        const bodyJS = fl.body.map((c: any) => {
+        const bodyJS = fl.body.map((c: Child) => {
           if (c.kind === "assign_stmt") return `${compileExprToJS(c.expression, undefined, ctx.namespace, ctx.declaredVars)};`;
           if (c.kind === "if") return compileIfToJS(c, undefined, ctx.namespace, ctx.declaredVars);
           if (c.kind === "expr") return `${compileExprToJS(c.expression, undefined, ctx.namespace, ctx.declaredVars)};`;
@@ -36,7 +36,7 @@ export function compileFunctionDef(fn: FunctionDef, ctx: CompileCtx): string {
         const bodyLines = bodyJS.split("\n");
         const indentedBody = bodyLines.map((line: string) => `    ${line}`).join("\n");
         if (fl.indexVar) {
-          const alreadyDeclared = fn.body.some((bc: any) => bc.kind === "var" && bc.name === fl.indexVar);
+          const alreadyDeclared = fn.body.some((bc: Child) => bc.kind === "var" && bc.name === fl.indexVar);
           if (!alreadyDeclared) {
             bodyStatements.push(`let ${fl.indexVar} = 0;`);
           }

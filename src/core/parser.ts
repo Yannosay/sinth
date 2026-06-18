@@ -1,7 +1,6 @@
-import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, RemoveStmt, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, SinthWarning, AssignOp, VarType, BinaryOp } from "./types";
+import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, AssignOp, VarType, BinaryOp } from "./types";
+import { compileExprToJS } from "./expr";
 import { Lexer } from "./lexer";
-import { compileExprToJS, compileIfToJS } from "./expr";
-import { tagNameToPascal } from "../utils";
 
 
 
@@ -131,12 +130,11 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
     return { filePath: this.file, isPage, imports, meta, defs, functions, uses, styles, scripts, customEls, varDecls, initLogic };
   }
 
-  private flattenIfToUses(ifNode: IfBlock, scripts: ScriptBlock[], initLogic: string[]): CompUse[] {
+  private flattenIfToUses(ifNode: IfBlock, _scripts: ScriptBlock[], _initLogic: string[]): CompUse[] {
     const bodyHasComp  = ifNode.body.some(c => c.kind === "use");
     const elseHasComp  = (ifNode.elseBody ?? []).some(c => c.kind === "use");
     if (!bodyHasComp && !elseHasComp) {
-      initLogic.push(compileIfToJS(ifNode));
-      return [];
+      return [{ kind: "use", name: "__IF_ROOT__", attrs: [], children: [ifNode], loc: ifNode.loc }];
     }
     const syntheticUse: CompUse = {
       kind: "use",
@@ -226,7 +224,7 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
 
 private parseArrayLiteral(): Literal {
     this.consume(TT.LBRACKET);
-    const items: any[] = [];
+    const items: Array<string | number | boolean | null | Record<string, string | number | boolean | null>> = [];
     while (!this.check(TT.RBRACKET) && !this.check(TT.EOF)) {
       if (this.check(TT.LBRACE)) {
         items.push(this.parseObjectLiteral());
@@ -250,9 +248,9 @@ private parseArrayLiteral(): Literal {
     return { kind: "str", value: `__ARR__${JSON.stringify(items)}` };
   }
 
-  private parseObjectLiteral(): Record<string, any> {
+  private parseObjectLiteral(): Record<string, string | number | boolean | null> {
     this.consume(TT.LBRACE);
-    const obj: Record<string, any> = {};
+    const obj: Record<string, string | number | boolean | null> = {};
     while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
       const key = this.consume(TT.IDENT).value;
       this.consume(TT.COLON);
@@ -314,23 +312,20 @@ private parseArrayLiteral(): Literal {
     }
 
     // remove as function
-    if ((tok.type as any) === TT.KW_REMOVE) {
+    if ((tok.type as TT) === TT.KW_REMOVE) {
       const name = this.consume(TT.KW_REMOVE).value;
       return this.parseBinaryRHS(this.parseCallExpr({ kind: "variable", name }));
     }
 
     // var or assignment
     if (tok.type === TT.IDENT) {
-      let memo = false;
       let rawName = this.consume(TT.IDENT).value;
       if (rawName.startsWith("$")) {
-        memo = true;
         rawName = rawName.substring(1);
       }
       const name = rawName;
       let varExpr: Expression;
 
-      // dot notation -> e.g. user.age
       if (this.check(TT.DOT)) {
         this.consume(TT.DOT);
         const propName = this.consume(TT.IDENT).value;
@@ -480,6 +475,12 @@ private parseArrayLiteral(): Literal {
     left = this.parseComparison(left);
     left = this.parseLogical(left);
     return left;
+  }
+
+  private parseConcatRHS(): Expression {
+    const rhs = this.parseExpression(true);
+    if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
+    return rhs;
   }
 
   private parsePostfix(base: Expression): Expression {
@@ -828,16 +829,15 @@ private parseArrayLiteral(): Literal {
         let leftExpr: Expression = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
-          let rhs: Expression | null = null;
+          let rhs: Expression;
           if (this.check(TT.STRING)) {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
             rhs = { kind: "variable", name: rhsName };
           } else {
-            rhs = this.parseExpression(true);
+            rhs = this.parseConcatRHS();
           }
-          if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
           leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
         }
         children.push({ kind: "expr", expression: leftExpr, loc });
@@ -1101,7 +1101,8 @@ private parseArrayLiteral(): Literal {
               const savedPos = this.pos;
               const expr = this.parseExpression();
               if (expr && (this.check(TT.COMMA) || this.check(TT.RPAREN) || this.check(TT.OP_SEMI) || this.check(TT.KW_IF))) {
-                const actions: (Expression | { kind: "if"; js: string })[] = [{ kind: "expr", expr } as any];
+                type ActionExpr = { kind: "expr"; expr: Expression } | { kind: "if"; js: string };
+                const actions: ActionExpr[] = [{ kind: "expr", expr }];
                 while (this.check(TT.OP_SEMI)) {
                   this.consume(TT.OP_SEMI);
                   if (this.check(TT.KW_IF)) {
@@ -1109,21 +1110,22 @@ private parseArrayLiteral(): Literal {
                     actions.push({ kind: "if", js: jsIf });
                   } else {
                     const next = this.parseExpression();
-                    if (next) actions.push({ kind: "expr", expr: next } as any);
+                    if (next) actions.push({ kind: "expr", expr: next });
                     else break;
                   }
                 }
                 const hasIf = actions.some(a => a.kind === "if");
                 if (actions.length === 1 && !hasIf) {
-                  const single = (actions[0] as any).expr as Expression;
+                  const firstAction = actions[0];
+                  const single: Expression = firstAction.kind === "expr" ? firstAction.expr : { kind: "literal", value: { kind: "str", value: firstAction.js } };
                   value = { kind: "str", value: "__EXPR__" + JSON.stringify(single) };
                 } else {
                   const partsJS: string[] = [];
                   for (const a of actions) {
                     if (a.kind === "if") {
-                      partsJS.push((a as any).js as string);
+                      partsJS.push(a.js);
                     } else {
-                      partsJS.push(compileExprToJS((a as any).expr as Expression) + ";");
+                      partsJS.push(compileExprToJS(a.expr) + ";");
                     }
                   }
                   value = { kind: "str", value: "__ACTION_JS__" + partsJS.join(" ") };
@@ -1197,16 +1199,15 @@ private parseArrayLiteral(): Literal {
         this.consume(TT.RPAREN);
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
-          let rhs: Expression | null = null;
+          let rhs: Expression;
           if (this.check(TT.STRING)) {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
             rhs = { kind: "variable", name: rhsName };
           } else {
-            rhs = this.parseExpression(true);
+            rhs = this.parseConcatRHS();
           }
-          if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
           expr = { kind: "binary", left: expr, op: "+", right: rhs };
         }
         children.push({ kind: "expr", expression: expr, loc });
@@ -1217,7 +1218,7 @@ private parseArrayLiteral(): Literal {
         let leftExpr: Expression = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
-          let rhs: Expression | null = null;
+          let rhs: Expression;
           if      (this.check(TT.STRING)) {
             rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
           } else if (this.check(TT.IDENT)) {
@@ -1241,9 +1242,8 @@ private parseArrayLiteral(): Literal {
               rhs = { kind: "variable", name: rhsName };
             }
           } else {
-            rhs = this.parseExpression(true);
+            rhs = this.parseConcatRHS();
           }
-          if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
           leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
         }
         children.push({ kind: "expr", expression: leftExpr, loc });
@@ -1277,7 +1277,7 @@ private parseArrayLiteral(): Literal {
         }
         
         if (nextType === TT.DOT) {
-          let rawFirst = this.consume(TT.IDENT).value;
+          const rawFirst = this.consume(TT.IDENT).value;
           const isMemo = rawFirst.startsWith("$");
           const firstPart = isMemo ? rawFirst.slice(1) : rawFirst;
           this.consume(TT.DOT);
@@ -1288,7 +1288,7 @@ private parseArrayLiteral(): Literal {
             let leftExpr: Expression = { kind: "variable", name: fullName };
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
-              let rhs: Expression | null = null;
+              let rhs: Expression;
               if (this.check(TT.STRING)) {
                 rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
               } else if (this.check(TT.IDENT)) {
@@ -1300,9 +1300,8 @@ private parseArrayLiteral(): Literal {
                   rhs = { kind: "variable", name: rhsName };
                 }
               } else {
-                rhs = this.parseExpression(true);
+                rhs = this.parseConcatRHS();
               }
-              if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
               leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
             }
             children.push({ kind: "expr", expression: leftExpr, loc });
@@ -1334,7 +1333,7 @@ private parseArrayLiteral(): Literal {
           let leftExpr: Expression = { kind: "variable", name };
           while (this.check(TT.OP_PLUS)) {
             this.consume(TT.OP_PLUS);
-            let rhs: Expression | null = null;
+            let rhs: Expression;
             if (this.check(TT.STRING)) {
               rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
             } else if (this.check(TT.IDENT)) {
@@ -1346,9 +1345,8 @@ private parseArrayLiteral(): Literal {
                 rhs = { kind: "variable", name: rhsName };
               }
             } else {
-              rhs = this.parseExpression(true);
+              rhs = this.parseConcatRHS();
             }
-            if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
             leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
           }
           children.push({ kind: "expr", expression: leftExpr, loc });
@@ -1358,12 +1356,12 @@ private parseArrayLiteral(): Literal {
         } else if (nextType === TT.LBRACKET) {
           const name = this.consume(TT.IDENT).value;
           const varExpr: Expression = { kind: "variable", name };
-          let indexedExpr = this.parsePostfix(varExpr);
+          const indexedExpr = this.parsePostfix(varExpr);
           if (this.check(TT.OP_PLUS)) {
             let leftExpr: Expression = indexedExpr;
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
-              let rhs: Expression | null = null;
+              let rhs: Expression;
               if (this.check(TT.STRING)) {
                 rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
               } else if (this.check(TT.IDENT)) {
@@ -1375,9 +1373,8 @@ private parseArrayLiteral(): Literal {
                   rhs = { kind: "variable", name: rhsName };
                 }
               } else {
-                rhs = this.parseExpression(true);
+                rhs = this.parseConcatRHS();
               }
-              if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
               leftExpr = { kind: "binary", left: leftExpr, op: "+", right: rhs };
             }
             children.push({ kind: "expr", expression: leftExpr, loc });
@@ -1406,15 +1403,14 @@ private parseArrayLiteral(): Literal {
             let finalExpr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
-              let rhs: Expression | null = null;
+              let rhs: Expression;
               if (this.check(TT.STRING)) {
                 rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
               } else if (this.check(TT.IDENT)) {
-                rhs = this.parseExpression();
+                rhs = this.parseExpression()!;
               } else {
-                rhs = this.parseExpression(true);
+                rhs = this.parseConcatRHS();
               }
-              if (!rhs) throw new SinthError("Expected expression after +", this.peek().loc);
               finalExpr = { kind: "binary", left: finalExpr, op: "+", right: rhs };
             }
             children.push({ kind: "expr", expression: finalExpr, loc });

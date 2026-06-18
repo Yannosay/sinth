@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 // Sinth Compiler
 
-import * as fs   from "fs";
-import * as path from "path";
-import * as http from "http";
-
-
 export interface Loc { file: string; line: number; col: number }
 
 export enum TT {
