@@ -113,7 +113,9 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
     }
   }
   this.consume(TT.RPAREN);
-  const expr: Expression = { kind: "call", callee: { kind: "variable", name: identName }, args };
+  const isMemo = identName.startsWith("$");
+  const realName = isMemo ? identName.substring(1) : identName;
+  const expr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
   uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc: this.peek().loc }], loc: this.peek().loc });
 } else {
   this.pos = savedPos;
@@ -320,7 +322,9 @@ private parseArrayLiteral(): Literal {
     // var or assignment
     if (tok.type === TT.IDENT) {
       let rawName = this.consume(TT.IDENT).value;
+      let memo = false;
       if (rawName.startsWith("$")) {
+        memo = true;
         rawName = rawName.substring(1);
       }
       const name = rawName;
@@ -334,6 +338,7 @@ private parseArrayLiteral(): Literal {
       } else {
         varExpr = { kind: "variable", name };
       }
+      if (memo) varExpr.memo = true;
 
       // apply bracket postfixes (e.g. data[key], data["x"])
       const indexedExpr = this.parsePostfix(varExpr);

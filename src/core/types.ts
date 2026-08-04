@@ -137,6 +137,7 @@ export interface CompileCtx {
   mixedBlocks:  MixedBlockEntry[];
   mixedCounter: number;
   logicBlocks:  string[];
+  initBlocks?:  string[];
   ifIdCounter:  number;
   exprRegistry: string[];
   exprMap:      Map<string, number>;

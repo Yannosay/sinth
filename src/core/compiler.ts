@@ -515,6 +515,12 @@ export function renderChild(
             ctx.logicBlocks.push(compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars) + ";");
             return "";
           }
+          const fnDef = fnName ? ctx.functionDefs.find(f => f.name === fnName) : undefined;
+          if (!fnDef) {
+            if (!ctx.initBlocks) ctx.initBlocks = [];
+            ctx.initBlocks.push(`if(!_memo_${fnName}_done){${compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars)};_memo_${fnName}_done=true;}`);
+            return "";
+          }
           const js = compileExprToJS(child.expression, undefined, ctx.namespace, ctx.declaredVars);
           ctx.logicBlocks.push(`if(!_memo_${fnName}_done){_memo_${fnName}=${js};_memo_${fnName}_done=true;}`);
           const exprId = registerExpr(ctx, { kind: "variable", name: `_memo_${fnName}` });
@@ -1220,6 +1226,7 @@ export function buildRuntime(opts: {
   varDecls:     VarDeclaration[];
   bodyHTML:     string;
   logicBlocks:  string[];
+  initBlocks?:  string[];
   mixedBlocks:  MixedBlockEntry[];
   assignedVars: Set<string>;
   exprRegistry: string[];
@@ -1230,7 +1237,7 @@ export function buildRuntime(opts: {
   initLogic?:   string[];
 }): string | { page: string; shared: string } {
   
-  const { varDecls, bodyHTML, logicBlocks, mixedBlocks, assignedVars, exprRegistry, functionsJS } = opts;
+  const { varDecls, bodyHTML, logicBlocks, mixedBlocks, assignedVars, exprRegistry, functionsJS, initBlocks } = opts;
   const ns = opts.namespace ? "_" + opts.namespace : "";
   const renderFn = "sinthRender" + ns;
   const needsMixed  = mixedBlocks.length > 0;
@@ -1283,6 +1290,12 @@ export function buildRuntime(opts: {
     let matches = lb.match(/_memo_(\w+)/g);
     if (matches) matches.forEach(m => memoVars.add(m));
     matches = lb.match(/_memo_(\w+)_done/g);
+    if (matches) matches.forEach(m => memoVars.add(m));
+  }
+  for (const ib of (initBlocks || [])) {
+    let matches = ib.match(/_memo_(\w+)/g);
+    if (matches) matches.forEach(m => memoVars.add(m));
+    matches = ib.match(/_memo_(\w+)_done/g);
     if (matches) matches.forEach(m => memoVars.add(m));
   }
   for (const e of exprRegistry) {
@@ -1344,8 +1357,9 @@ export function buildRuntime(opts: {
     : "";
 
   let initLogicJS = "";
-  if (opts.initLogic && opts.initLogic.length > 0) {
-    let logic = opts.initLogic.join("\n");
+  const allInit = [...(opts.initLogic || []), ...(initBlocks || [])];
+  if (allInit.length > 0) {
+    let logic = allInit.join("\n");
     if (opts.namespace && opts.declaredVars) {
       for (const v of opts.declaredVars) {
         const re = new RegExp(`\\b${v}\\b`, 'g');
@@ -1357,7 +1371,7 @@ export function buildRuntime(opts: {
 
   let renderFunc = '';
   if (needsRender) {
-    const logicAtTop = needsLogic ? logicBlocks.join("\n") + "\n" : "";
+    const logicAtTop = logicBlocks.length > 0 ? logicBlocks.join("\n") + "\n" : "";
     renderFunc = `function ${renderFn}() {\n  ${logicAtTop}${forSyncBlock}${renderBody}\n}\n${initLogicJS}${renderFn}();`;
   }
 

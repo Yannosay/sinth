@@ -65,7 +65,10 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
       return `${t2}${expr.op}`;
     }
     case "call": {
-      const callee = compileExprToJS(expr.callee!, loopVars, namespace, declaredVars);
+      let callee = compileExprToJS(expr.callee!, loopVars, namespace, declaredVars);
+      if (expr.memo && callee.startsWith('$')) {
+        callee = callee.substring(1);
+      }
       if (callee === "remove") {
         const arg = expr.args && expr.args[0] ? compileExprToJS(expr.args[0], loopVars, namespace, declaredVars) : "''";
         return `(function(){ var _el=document.getElementById(${arg}); if(_el)_el.remove(); })()`;

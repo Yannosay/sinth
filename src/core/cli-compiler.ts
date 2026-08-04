@@ -479,6 +479,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     varDecls:     pageVarDecls,
     bodyHTML,
     logicBlocks:  ctx.logicBlocks,
+    initBlocks:   ctx.initBlocks,
     mixedBlocks:  ctx.mixedBlocks,
     assignedVars,
     exprRegistry: ctx.exprRegistry,
