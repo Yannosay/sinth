@@ -82,7 +82,7 @@ export interface CompDef      { name: string; params: ParamDecl[]; body: Child[]
 export interface CustomElDecl { sinthName: string; tagName: string; exportTag?: string; params: ParamDecl[]; body: Child[]; styles: StyleBlock[]; scripts: ScriptBlock[]; varDecls: VarDeclaration[]; loc: Loc 
 }export interface CustomElInfo { tagName: string; params: ParamDecl[] }
 
-export type VarType = "int" | "str" | "bool" | "str[]" | "obj" | "ui";
+export type VarType = "int" | "num" | "str" | "bool" | "str[]" | "obj" | "ui";
 export interface VarDeclaration { kind: "var"; name: string; varType: VarType; value: Literal | null; loc: Loc }
 
 export type ImportNode =
@@ -154,7 +154,10 @@ export interface CompileCtx {
 
   // web
   namespace?: string;
+  fnCallCounters?: Map<string, number>;
 }
+
+
 
 export class SinthError extends Error {
   constructor(

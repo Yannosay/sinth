@@ -52,8 +52,14 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
 
   function collectExprVars(expr: Expression | undefined, vars: Set<string>): void {
     if (!expr) return;
-    if (expr.kind === "variable" && expr.name && !declaredFuncs.has(expr.name)) vars.add(expr.name);
-    if (expr.kind === "assign" && expr.target) vars.add(expr.target);
+    if (expr.kind === "variable" && expr.name && !declaredFuncs.has(expr.name)) {
+      const rootVar = expr.name.split('.')[0];
+      vars.add(rootVar);
+    }
+    if (expr.kind === "assign" && expr.target) {
+      const rootVar = expr.target.split('.')[0];
+      vars.add(rootVar);
+    }
     if (expr.left) collectExprVars(expr.left, vars);
     if (expr.right) collectExprVars(expr.right, vars);
     if (expr.operand) collectExprVars(expr.operand, vars);
@@ -116,7 +122,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   
   for (const v of pageVars) {
     if (pageLoopVars.has(v)) continue;
-    const rootVar = v.split('.')[0];
+    const rootVar = v;
     if (declaredVars.has(rootVar) || fnLocalVarNames.has(rootVar)) continue;
     let foundInFn = false;
     for (const fn of file.functions) {
@@ -184,7 +190,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
 
     for (const v of fnBodyVars) {
       if (fnLoopVars.has(v)) continue;
-      const rootVar = v.split('.')[0];
+      const rootVar = v;
       if (!fnParamNames.has(rootVar) && !declaredVars.has(rootVar) && !declaredFuncs.has(rootVar) && !fnLocalDeclared.has(rootVar)) {
         throw new SinthError(
           `Variable '${rootVar}' used in function '${fn.name}' is not declared. It must be a parameter or a page-level variable.`
@@ -205,7 +211,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   function inferType(expr: Expression, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): string | null {
     if (expr.kind === "literal" && expr.value) {
       if (expr.value.kind === "str") return "str";
-      if (expr.value.kind === "num") return "int";
+      if (expr.value.kind === "num") return "num";
       if (expr.value.kind === "bool") return "bool";
       return null;
     }
@@ -219,15 +225,33 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
       if (fd?.returnType) return fd.returnType;
       return null;
     }
-    if (expr.kind === "binary" && expr.op === "+") return "str";
-    if (expr.kind === "unary" && expr.op === "not") return "bool";
+    if (expr.kind === "binary") {
+      const leftType  = inferType(expr.left!, varDecls, functionDefs);
+      const rightType = inferType(expr.right!, varDecls, functionDefs);
+      const isNum = (t: string | null) => t === "int" || t === "num";
+      if (leftType && rightType && isNum(leftType) && isNum(rightType)) {
+        return "num";
+      }
+      if (expr.op === "+") {
+        return "str";
+      }
+      return null;
+    }
+    if (expr.kind === "unary") {
+      if (expr.op === "not") return "bool";
+      if (expr.op === "-") {
+        const operandType = inferType(expr.operand!, varDecls, functionDefs);
+        if (operandType === "int" || operandType === "num") return "num";
+        return null;
+      }
+    }
     return null;
   }
 
   function checkVarInitType(vd: VarDeclaration, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
     if (!vd.value) return;
     if (vd.value.kind === "num") {
-      if (vd.varType !== "int") throw new SinthError(`Cannot assign number to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
+      if (vd.varType !== "int" && vd.varType !== "num") throw new SinthError(`Cannot assign number to variable '${vd.name}' of type '${vd.varType}'`, vd.loc);
       return;
     }
     if (vd.value.kind === "bool") {
@@ -270,8 +294,8 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
       const arg = args[i];
       if (!param.paramType) continue;
       const argType = inferType(arg, varDecls, functionDefs);
-      if (argType && argType !== param.paramType) {
-        if (param.paramType === "int" && argType === "str" && arg.kind === "literal" && arg.value?.kind === "str") {
+              if (argType && argType !== param.paramType && !(param.paramType === "num" && argType === "int") && !(param.paramType === "int" && argType === "num")) {
+        if ((param.paramType === "int" || param.paramType === "num") && argType === "str" && arg.kind === "literal" && arg.value?.kind === "str") {
           if (!isNaN(Number(arg.value.value))) continue;
         }
         throw new SinthError(
@@ -292,16 +316,16 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
         let expected = vd.varType;
         if (parts.length > 1) {
           if (expected === "obj") expected = "str";
-          else if (expected === "str[]" && parts[1] === "length") expected = "int";
+          else if (expected === "str[]" && parts[1] === "length") expected = "num";
         }
         const rhsType = inferType(expr.right!, varDecls, functionDefs);
         if (rhsType && expected !== rhsType) {
           if (expr.op === "+=" && expected === "str") { /* allow string += any */ }
           else if (expr.op === "-=") {
-            if (expected !== "int") {
-              throw new SinthError(`Cannot use '-=' on non‑int variable '${expr.target}'`, loc || { file: "", line: 0, col: 0 });
-            } else if (rhsType !== "int") {
-              throw new SinthError(`Right operand of '-=' must be int, got '${rhsType}'`, loc || { file: "", line: 0, col: 0 });
+            if (expected !== "int" && expected !== "num") {
+              throw new SinthError(`Cannot use '-=' on non‑numeric variable '${expr.target}'`, loc || { file: "", line: 0, col: 0 });
+            } else if (rhsType !== "int" && rhsType !== "num") {
+              throw new SinthError(`Right operand of '-=' must be int or num, got '${rhsType}'`, loc || { file: "", line: 0, col: 0 });
             }
           } else {
             throw new SinthError(`Cannot assign value of type '${rhsType}' to variable '${expr.target}' of type '${expected}'`, loc || { file: "", line: 0, col: 0 });
@@ -322,8 +346,8 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
           if (leftType !== "bool") throw new SinthError(`Left side of '${op}' must be bool, got '${leftType}'`, loc || { file: "", line: 0, col: 0 });
           if (rightType !== "bool") throw new SinthError(`Right side of '${op}' must be bool, got '${rightType}'`, loc || { file: "", line: 0, col: 0 });
         } else if (["-","*","/","%"].includes(op)) {
-          if (leftType !== "int" || rightType !== "int") {
-            throw new SinthError(`Arithmetic operator '${op}' requires int operands, got '${leftType}' and '${rightType}'`, loc || { file: "", line: 0, col: 0 });
+          if ((leftType !== "int" && leftType !== "num") || (rightType !== "int" && rightType !== "num")) {
+            throw new SinthError(`Arithmetic operator '${op}' requires int or num operands, got '${leftType}' and '${rightType}'`, loc || { file: "", line: 0, col: 0 });
           }
         }
       }

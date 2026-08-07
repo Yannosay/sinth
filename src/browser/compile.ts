@@ -45,13 +45,15 @@ export function compileSinth(source: string): BrowserCompileResult | null {
   const bodyHTML = file.uses.map(u => renderCompUse(u, ctx, new Map(), 0)).join("\n");
   const pageCSS = file.styles.map(s => processStyleBlock(s, hash, new Map())).join("\n");
 
+  const allVarDecls = [...file.varDecls, ...(ctx.varDecls?.filter(v => !file.varDecls.some(fv => fv.name === v.name)) ?? [])];
+
   const assignedVars = new Set<string>();
-  for (const v of file.varDecls) {
+  for (const v of allVarDecls) {
     if (v.value) assignedVars.add(v.name);
   }
 
   const runtime = buildRuntime({
-    varDecls: file.varDecls,
+    varDecls: allVarDecls,
     bodyHTML,
     logicBlocks: ctx.logicBlocks,
     mixedBlocks: ctx.mixedBlocks,

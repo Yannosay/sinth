@@ -37,7 +37,11 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
     }
     case "unary": {
       const o = expr.op === "not" ? "!" : expr.op!;
-      return `${o}(${compileExprToJS(expr.operand!, loopVars, namespace, declaredVars)})`;
+      const operand = expr.operand!;
+      if (operand.kind === "binary" && (operand.op === "+" || operand.op === "-" || operand.op === "*" || operand.op === "/" || operand.op === "%")) {
+        return `${o}(${compileExprToJS(operand, loopVars, namespace, declaredVars)})`;
+      }
+      return `${o}${compileExprToJS(operand, loopVars, namespace, declaredVars)}`;
     }
     case "assign": {
       const v = expr.right ? compileExprToJS(expr.right, loopVars, namespace, declaredVars) : "null";

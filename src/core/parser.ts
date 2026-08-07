@@ -1,7 +1,6 @@
-import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, AssignOp, VarType, BinaryOp } from "./types";
+import { TT, Token, Loc, Literal, Expression, Attr, Child, CompUse, IfBlock, ForLoop, ReturnStmt, ParamDecl, StyleBlock, ScriptBlock, CompDef, CustomElDecl, VarDeclaration, ImportNode, MetaEntry, FunctionDef, SinthFile, SinthError, AssignOp, VarType, BinaryOp, UnaryOp, SinthWarning } from "./types";
 import { compileExprToJS } from "./expr";
 import { Lexer } from "./lexer";
-
 
 
 export class Parser {
@@ -194,10 +193,22 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
       this.consume(TT.LBRACKET); this.consume(TT.RBRACKET);
       typeStr = "str[]";
     }
-    if (!["int", "str", "bool", "str[]", "obj", "ui"].includes(typeStr)) {
-      throw new SinthError(`Unknown type '${typeStr}'. Expected: int, str, bool, str[], obj, component`, typeTok.loc);
+    if (!["int", "num", "str", "bool", "str[]", "obj", "ui"].includes(typeStr)) {
+      throw new SinthError(`Unknown type '${typeStr}'. Expected: int, num, str, bool, str[], obj, component`, typeTok.loc);
     }
 
+    if (typeStr === "int") {
+      SinthWarning.emit(
+        `\x1b[33mvar int\x1b[0m \x1b[36m${this.peek().value}\x1b[0m is deprecated, use \x1b[32mvar num\x1b[0m \x1b[36m${this.peek().value}\x1b[0m instead. '\x1b[33mvar int\x1b[0m' won't work in the next major version. Highly consider renaming.`,
+        typeTok.loc
+      );
+    }
+    if (typeStr === "int") {
+      SinthWarning.emit(
+        `\x1b[33mvar int\x1b[0m \x1b[36m${this.peek().value}\x1b[0m is deprecated, use \x1b[32mvar num\x1b[0m \x1b[36m${this.peek().value}\x1b[0m instead. '\x1b[33mvar int\x1b[0m' won't work in the next major version. Highly consider renaming.`,
+        typeTok.loc
+      );
+    }
     const nameTok = this.consume(TT.IDENT);
     let val: Literal | null = null;
 
@@ -205,19 +216,21 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
       this.consume(TT.EQUALS);
       if (this.check(TT.LBRACKET)) {
         val = this.parseArrayLiteral();
-      } else if (this.check(TT.IDENT) || this.check(TT.LPAREN)) {
+      } else {
         const savedPos = this.pos;
-        const expr = this.parseExpression();
-        if (expr && (expr.kind !== "literal" || (expr.kind === "literal" && expr.value?.kind === "str" && expr.value.value.startsWith("__VAR__")))) {
-          val = { kind: "str", value: `__EXPR__${JSON.stringify(expr)}` };
+        if (this.check(TT.IDENT) || this.check(TT.LPAREN) || this.check(TT.OP_MINUS) || this.check(TT.OP_NOT)) {
+          const expr = this.parseExpression();
+          if (expr && (expr.kind !== "literal" || (expr.kind === "literal" && expr.value?.kind === "str" && expr.value.value.startsWith("__VAR__")))) {
+            val = { kind: "str", value: `__EXPR__${JSON.stringify(expr)}` };
+          } else {
+            this.pos = savedPos;
+            val = this.parseLiteral();
+          }
+        } else if (this.check(TT.NUMBER)) {
+          val = this.parseLiteral();
         } else {
-          this.pos = savedPos;
           val = this.parseLiteral();
         }
-      } else if (this.check(TT.NUMBER)) {
-        val = this.parseLiteral();
-      } else {
-        val = this.parseLiteral();
       }
     }
 
@@ -284,17 +297,42 @@ private parseArrayLiteral(): Literal {
   parseExpression(skipBinary: boolean = false): Expression | null {
     if (this._visited.has(this.pos)) throw new SinthError("Circular expression reference", this.peek().loc);
     this._visited.add(this.pos);
-    const tok = this.peek();
 
-
-    // unary 'not'
-    if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT) {
-      if (tok.type === TT.IDENT) this.consume(TT.IDENT); else this.consume(TT.OP_NOT);
-      const operand = this.parseExpression();
-      if (!operand) throw new SinthError("Expected expression after 'not'", tok.loc);
-      const unaryExpr: Expression = { kind: "unary", op: "not", operand };
-      return this.parseBinaryRHS(this.parseCallExpr(this.parsePostfix(unaryExpr)));
+    if ((this.peek().type as TT) === TT.KW_REMOVE) {
+      const name = this.consume(TT.KW_REMOVE).value;
+      return this.parseBinaryRHS(this.parseCallExpr({ kind: "variable", name }));
     }
+
+    if (this.check(TT.IDENT)) {
+      const savedPos = this.pos;
+      const primaryExpr = this.parsePrimary();
+      if (this.check(TT.EQUALS) ||
+          (this.check(TT.OP_PLUS)  && this.tokens[this.pos + 1]?.type === TT.EQUALS) ||
+          (this.check(TT.OP_MINUS) && this.tokens[this.pos + 1]?.type === TT.EQUALS)) {
+        let op: AssignOp = "=";
+        if (this.check(TT.OP_PLUS))  { this.consume(TT.OP_PLUS);  op = "+="; }
+        else if (this.check(TT.OP_MINUS)) { this.consume(TT.OP_MINUS); op = "-="; }
+        this.consume(TT.EQUALS);
+        const rhs = this.parseExpression();
+        if (!rhs) throw new SinthError("Expected expression after assignment", this.peek().loc);
+        if (primaryExpr.kind !== "variable" || !primaryExpr.name) {
+          throw new SinthError("Invalid assignment target", this.peek().loc);
+        }
+        return { kind: "assign", target: primaryExpr.name, op, right: rhs };
+      }
+      this.pos = savedPos;
+    }
+
+    const result = this.parseUnary();
+
+    if (skipBinary) return result;
+    return this.parseBinaryRHS(result);
+  }
+
+  
+
+  private parsePrimary(): Expression {
+    const tok = this.peek();
 
     if (this.check(TT.LPAREN)) {
       this.consume(TT.LPAREN);
@@ -302,181 +340,133 @@ private parseArrayLiteral(): Literal {
       if (!inner) throw new SinthError("Expected expression after '('", this.peek().loc);
       if (!this.check(TT.RPAREN)) throw new SinthError("Expected closing ')'", this.peek().loc);
       this.consume(TT.RPAREN);
-      const result = this.parseCallExpr(this.parsePostfix(inner));
-      return skipBinary ? result : this.parseBinaryRHS(result);
+      return inner;
     }
 
-    if (this.check(TT.STRING) || this.check(TT.NUMBER) || this.check(TT.BOOL_TRUE) ||
+    if (this.check(TT.NUMBER) || this.check(TT.STRING) || this.check(TT.BOOL_TRUE) ||
         this.check(TT.BOOL_FALSE) || this.check(TT.NULL_LIT) || this.check(TT.LBRACE) || this.check(TT.LBRACKET)) {
-      const lit = this.parseLiteral();
-      const base: Expression = { kind: "literal", value: lit };
-      return this.parseBinaryRHS(this.parseCallExpr(this.parsePostfix(base)));
-    }
-
-    // remove as function
-    if ((tok.type as TT) === TT.KW_REMOVE) {
-      const name = this.consume(TT.KW_REMOVE).value;
-      return this.parseBinaryRHS(this.parseCallExpr({ kind: "variable", name }));
-    }
-
-    // var or assignment
-    if (tok.type === TT.IDENT) {
-      let rawName = this.consume(TT.IDENT).value;
-      let memo = false;
-      if (rawName.startsWith("$")) {
-        memo = true;
-        rawName = rawName.substring(1);
-      }
-      const name = rawName;
-      let varExpr: Expression;
-
-      if (this.check(TT.DOT)) {
-        this.consume(TT.DOT);
-        const propName = this.consume(TT.IDENT).value;
-        const fullName = `${name}.${propName}`;
-        varExpr = { kind: "variable", name: fullName };
-      } else {
-        varExpr = { kind: "variable", name };
-      }
-      if (memo) varExpr.memo = true;
-
-      // apply bracket postfixes (e.g. data[key], data["x"])
-      const indexedExpr = this.parsePostfix(varExpr);
-
-      // if indexing was applied, we don't allow assignment, just binary RHS (after possible call)
-      if (indexedExpr !== varExpr) {
-        return this.parseBinaryRHS(this.parseCallExpr(indexedExpr));
-      }
-
-      // no indexing – check for assignment operators
-      const nextType = this.tokens[this.pos]?.type;
-      if (nextType === TT.OP_PLUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
-        this.consume(TT.OP_PLUS); this.consume(TT.EQUALS);
-        const rhs = this.parseExpression();
-        if (!rhs) throw new SinthError("Expected expression after +=", this.peek().loc);
-        return { kind: "assign", target: varExpr.name!, op: "+=", right: rhs };
-      }
-      if (nextType === TT.OP_MINUS && this.tokens[this.pos + 1]?.type === TT.EQUALS) {
-        this.consume(TT.OP_MINUS); this.consume(TT.EQUALS);
-        const rhs = this.parseExpression();
-        if (!rhs) throw new SinthError("Expected expression after -=", this.peek().loc);
-        return { kind: "assign", target: varExpr.name!, op: "-=", right: rhs };
-      }
-      if (nextType === TT.EQUALS) {
-        this.consume(TT.EQUALS);
-        const rhs = this.parseExpression();
-        if (!rhs) throw new SinthError("Expected expression after =", this.peek().loc);
-        return { kind: "assign", target: varExpr.name!, op: "=", right: rhs };
-      }
-
-      return this.parseBinaryRHS(this.parseCallExpr(varExpr));
-    }
-
-    return null;
-  }
-
-  
-
-  private parsePrimary(): Expression {
-    const tok = this.peek();
-    if (tok.type === TT.NUMBER || tok.type === TT.STRING || tok.type === TT.BOOL_TRUE || tok.type === TT.BOOL_FALSE || tok.type === TT.NULL_LIT) {
       const lit = this.parseLiteral();
       return { kind: "literal", value: lit };
     }
+
     if (tok.type === TT.IDENT) {
-      let memo = false;
       let rawName = this.consume(TT.IDENT).value;
+      let memo = false;
       if (rawName.startsWith("$")) {
         memo = true;
         rawName = rawName.substring(1);
       }
-      const name = rawName;
-      let expr: Expression;
-      if (this.check(TT.DOT)) {
+      let name = rawName;
+      while (this.check(TT.DOT)) {
         this.consume(TT.DOT);
-        expr = { kind: "variable", name: name + "." + this.consume(TT.IDENT).value };
-      } else {
-        expr = { kind: "variable", name };
+        name += "." + this.consume(TT.IDENT).value;
       }
+      const expr: Expression = { kind: "variable", name };
       if (memo) expr.memo = true;
       return expr;
     }
-    if (tok.type === TT.LPAREN) {
-      this.consume(TT.LPAREN);
-      const inner = this.parseExpression();
-      this.consume(TT.RPAREN);
-      return inner!;
-    }
-    if (tok.type === TT.LBRACE) {
-      const obj = this.parseObjectLiteral();
-      return { kind: "literal", value: { kind: "str", value: JSON.stringify(obj) } };
-    }
+
     throw new SinthError(`Expected expression`, this.peek().loc);
   }
 
-  private parseComparison(left: Expression): Expression {
-    const savedPos = this.pos;
-    const t = this.peek().type;
-    let op: BinaryOp | null = null;
-    if      (t === TT.OP_EQEQ)  op = "==";
-    else if (t === TT.OP_NEQ)   op = "!=";
-    else if (t === TT.OP_LT)    op = "<";
-    else if (t === TT.OP_GT)    op = ">";
-    else if (t === TT.OP_LTEQ)  op = "<=";
-    else if (t === TT.OP_GTEQ)  op = ">=";
-    if (!op) return left;
-    this.pos++;
-    const rightPrimary = this.parsePrimary();
-    const rightWithPostfix = this.parsePostfix(rightPrimary);
-    const rightWithCall = this.parseCallExpr(rightWithPostfix);
-    const right = this.parseArithmetic(rightWithCall);
-    if (!right) {
-      this.pos = savedPos;
-      return left;
+  private parseUnary(): Expression {
+    const tok = this.peek();
+    if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT || tok.type === TT.OP_MINUS) {
+      const op: UnaryOp = (tok.type === TT.IDENT && tok.value === "not") ? "not" : tok.type === TT.OP_MINUS ? "-" : "not";
+      if (tok.type === TT.IDENT) this.consume(TT.IDENT);
+      else if (tok.type === TT.OP_NOT) this.consume(TT.OP_NOT);
+      else this.consume(TT.OP_MINUS);
+      const operand = this.parseUnary();
+      return { kind: "unary", op, operand };
     }
-    if (this.pos === savedPos) return { kind: "binary", left, op, right };
-    return { kind: "binary", left, op, right };
+    let primary = this.parsePrimary();
+    primary = this.parsePostfix(primary);
+    primary = this.parseCallExpr(primary);
+    return primary;
   }
 
-  private parseLogical(left: Expression): Expression {
-    const savedPos = this.pos;
-    const t = this.peek().type;
-    let op: BinaryOp | null = null;
-    if (t === TT.IDENT && this.peek().value === "and") op = "and";
-    else if (t === TT.IDENT && this.peek().value === "or") op = "or";
-    if (!op) return left;
-    this.pos++;
-    const right = this.parseExpression();
-    if (!right) {
-      this.pos = savedPos;
-      return left;
-    }
-    return this.parseLogical({ kind: "binary", left, op, right });
-  }
-
-  private parseArithmetic(left: Expression): Expression {
+  private parseTerm(): Expression {
+    let left = this.parseUnary();
     while (true) {
       const t = this.peek().type;
-      let op: BinaryOp | null = null;
-      if      (t === TT.OP_PLUS)  op = "+";
-      else if (t === TT.OP_MINUS) op = "-";
-      else if (t === TT.OP_STAR)  op = "*";
-      else if (t === TT.OP_SLASH) op = "/";
-      else if (t === TT.OP_MOD)   op = "%";
-      if (!op) break;
-      this.pos++;
-      const rightPrimary = this.parsePrimary();
-      const rightWithPostfix = this.parsePostfix(rightPrimary);
-      const rightWithCall = this.parseCallExpr(rightWithPostfix);
-      const right = rightWithCall;
-      if (!right) throw new SinthError(`Expected expression after '${op}'`, this.peek().loc);
-      left = { kind: "binary", left, op, right };
+      if (t === TT.OP_STAR || t === TT.OP_SLASH || t === TT.OP_MOD) {
+        const op: BinaryOp = t === TT.OP_STAR ? "*" : t === TT.OP_SLASH ? "/" : "%";
+        this.pos++;
+        const right = this.parseUnary();
+        left = { kind: "binary", left, op, right };
+      } else {
+        break;
+      }
     }
     return left;
   }
 
+  private parseAddition(left: Expression): Expression {
+    while (true) {
+      const t = this.peek().type;
+      if (t === TT.OP_PLUS || t === TT.OP_MINUS) {
+        const op: BinaryOp = t === TT.OP_PLUS ? "+" : "-";
+        this.pos++;
+        const right = this.parseTerm();
+        left = { kind: "binary", left, op, right };
+      } else {
+        break;
+      }
+    }
+    return left;
+  }
+
+  private parseAdditionExpression(): Expression {
+    return this.parseAddition(this.parseTerm());
+  }
+
+  private parseComparisonExpression(): Expression {
+    return this.parseComparison(this.parseAdditionExpression());
+  }
+
+  private parseComparison(left: Expression): Expression {
+    while (true) {
+      const savedPos = this.pos;
+      const t = this.peek().type;
+      let op: BinaryOp | null = null;
+      if      (t === TT.OP_EQEQ)  op = "==";
+      else if (t === TT.OP_NEQ)   op = "!=";
+      else if (t === TT.OP_LT)    op = "<";
+      else if (t === TT.OP_GT)    op = ">";
+      else if (t === TT.OP_LTEQ)  op = "<=";
+      else if (t === TT.OP_GTEQ)  op = ">=";
+      if (!op) return left;
+      this.pos++;
+      const right = this.parseAdditionExpression();
+      if (!right) {
+        this.pos = savedPos;
+        return left;
+      }
+      left = { kind: "binary", left, op, right };
+    }
+  }
+
+  private parseLogical(left: Expression): Expression {
+    while (true) {
+      const savedPos = this.pos;
+      const t = this.peek().type;
+      let op: BinaryOp | null = null;
+      if (t === TT.IDENT && this.peek().value === "and") op = "and";
+      else if (t === TT.IDENT && this.peek().value === "or") op = "or";
+      if (!op) return left;
+      this.pos++;
+      const right = this.parseComparisonExpression();
+      if (!right) {
+        this.pos = savedPos;
+        return left;
+      }
+      left = { kind: "binary", left, op, right };
+    }
+  }
+
+
   private parseBinaryRHS(left: Expression): Expression {
-    left = this.parseArithmetic(left);
+    left = this.parseAddition(left);
     left = this.parseComparison(left);
     left = this.parseLogical(left);
     return left;
@@ -532,8 +522,8 @@ private parseArrayLiteral(): Literal {
     if (this.check(TT.OP_ARROW)) {
       this.consume(TT.OP_ARROW);
       const typeTok = this.consume(TT.IDENT);
-      if (!["int","str","bool","str[]","obj","ui"].includes(typeTok.value)) {
-        throw new SinthError(`Unknown return type '${typeTok.value}'. Expected: int, str, bool, str[], obj, ui`, typeTok.loc);
+      if (!["int","num","str","bool","str[]","obj","ui"].includes(typeTok.value)) {
+        throw new SinthError(`Unknown return type '${typeTok.value}'. Expected: num, str, bool, str[], obj, ui`, typeTok.loc);
       }
       returnType = typeTok.value as VarType;
     }
@@ -626,9 +616,16 @@ private parseArrayLiteral(): Literal {
       const ploc    = this.peek().loc;
       let pname: string;
       let paramType: VarType | undefined;
-      if (this.check(TT.IDENT) && ["int","str","bool","str[]","obj"].includes(this.peek().value) &&
+      if (this.check(TT.IDENT) && ["int","num","str","bool","str[]","obj"].includes(this.peek().value) &&
           this.tokens[this.pos + 1]?.type === TT.IDENT) {
-        paramType = this.consume(TT.IDENT).value as VarType;
+        const pTypeTok = this.consume(TT.IDENT);
+        paramType = pTypeTok.value as VarType;
+        if (paramType === "int") {
+          SinthWarning.emit(
+            `\x1b[33mvar int\x1b[0m \x1b[36m${this.peek().value}\x1b[0m is deprecated, use \x1b[32mvar num\x1b[0m \x1b[36m${this.peek().value}\x1b[0m instead. '\x1b[33mvar int\x1b[0m' won't work in the next major version. Highly consider renaming.`,
+            pTypeTok.loc
+          );
+        }
         pname = this.consume(TT.IDENT).value;
       } else {
         const nameTok = this.check(TT.IDENT) ? this.consume(TT.IDENT) : this.consume(this.peek().type);

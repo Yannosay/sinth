@@ -16,7 +16,7 @@ export function eventAttrName(name: string): string | null {
  * CSS property names that are allowed as inline style shorthand attributes on
  * any Sinth component:  Paragraph(color: "red", fontSize: "1.2rem") { "Hi" }
  */
-export const INLINE_STYLE_PROPS = new Set([
+export const INLINE_STYLE_PROPS =     new Set      ([
   "color","backgroundColor","backgroundImage","backgroundSize","backgroundPosition",
   "fontSize","fontWeight","fontFamily","fontStyle","fontVariant","lineHeight","letterSpacing","textAlign",
   "textDecoration","textTransform","whiteSpace","wordBreak","wordWrap","textOverflow",
@@ -158,7 +158,7 @@ function inlineFunctionBody(fnDef: FunctionDef, args: Expression[], ctx: Compile
           initJS = "null";
         }
       } else {
-        const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]", obj: "{}" };
+        const defaults: Record<string, string> = { str: '""', int: "0", num: "0", bool: "false", "str[]": "[]", obj: "{}" };
         initJS = defaults[vd.varType] ?? "undefined";
       }
       statements.push(`let ${vd.name} = ${initJS};`);
@@ -205,6 +205,14 @@ function emitCEAction(ctx: CompileCtx, eventName: string, handlerBody: string): 
 }
 
 
+function resolveExprWithParams(expr: Expression, ctx: CompileCtx, paramMap: Map<string, string>): string {
+  const paramNames = new Set(paramMap.keys());
+  const combinedVars = new Set<string>();
+  if (ctx.declaredVars) { for (const v of ctx.declaredVars) combinedVars.add(v); }
+  for (const p of paramNames) { combinedVars.add(p); }
+  return compileExprToJS(expr, ctx.loopVars, ctx.namespace, combinedVars);
+}
+
 export function renderAttr(attr: Attr, paramMap: Map<string, string>, ctx: CompileCtx): string {
   const { name, value } = attr;
   const renderFn = ctx.namespace ? "sinthRender_" + ctx.namespace : "sinthRender";
@@ -219,7 +227,7 @@ if (name === "model" && value?.kind === "str") {
   }
   if (ctx.namespace) vName = ctx.namespace + "_" + vName;
   const varDecl = ctx?.varDecls?.find(v => v.name === vName);
-  const rhs = (varDecl && varDecl.varType === "int")
+  const rhs = (varDecl && (varDecl.varType === "int" || varDecl.varType === "num"))
     ? `Number(e.target.value) || 0`
     : `e.target.value`;
   const renderCall = ctx.scopeVar ? `${ctx.scopeVar}._render()` : renderFn + "()";
@@ -366,7 +374,10 @@ if (name === "delay") {
   if (raw.startsWith("__EXPR__")) {
     const exprJson = raw.substring("__EXPR__".length);
     try {
-      const expr: Expression = JSON.parse(exprJson);
+      let expr: Expression = JSON.parse(exprJson);
+      if (paramMap.size > 0) {
+        expr = substituteParamsInExpr(expr, paramMap);
+      }
       const ev = eventAttrName(name);
       if (ev && expr.kind === "call" && expr.callee?.kind === "variable") {
         const fnName = expr.callee.name;
@@ -379,9 +390,12 @@ if (name === "delay") {
           }
         }
       }
-      let jsExpr = compileExprToJS(expr, ctx?.loopVars, ctx.namespace, ctx.declaredVars);
-      if (ctx.namespace && ctx.declaredVars && !ctx.scopePrefix) {
-        for (const v of ctx.declaredVars) {
+      let jsExpr = resolveExprWithParams(expr, ctx, paramMap);
+      if (ctx.namespace && !ctx.scopePrefix) {
+        const combinedVars = new Set<string>();
+        if (ctx.declaredVars) { for (const v of ctx.declaredVars) combinedVars.add(v); }
+        for (const p of paramMap.keys()) { combinedVars.add(p); }
+        for (const v of combinedVars) {
           const regex = new RegExp(`\\b${v}\\b`, 'g');
           jsExpr = jsExpr.replace(regex, ctx.namespace + '_' + v);
         }
@@ -470,7 +484,7 @@ function exprDeps(expr: Expression, declaredVars: Set<string>): string {
   return [...deps].join(",");
 }
 
-export function renderChild(
+export function renderChild( 
   child:  Child,
   ctx:    CompileCtx,
   params: Map<string, string>,
@@ -484,6 +498,10 @@ export function renderChild(
 
     case "expr": {
       if (!child.expression) return "";
+      
+      if (params.size > 0) {
+        child = { ...child, expression: substituteParamsInExpr(child.expression, params) };
+      }
       
       if (child.expression.kind === "variable" && child.expression.name && params.has(child.expression.name)) {
         const val = params.get(child.expression.name)!;
@@ -541,14 +559,44 @@ export function renderChild(
           const callArgs = child.expression.args ?? [];
           const localParams = new Map<string, string>();
           for (let i = 0; i < fnDef.params.length && i < callArgs.length; i++) {
-            const arg = callArgs[i];
-            if (arg.kind === "literal" && arg.value?.kind === "str") {
-              localParams.set(fnDef.params[i].name, "__LIT__" + arg.value.value);
-            } else if (arg.kind === "variable" && arg.name) {
-              localParams.set(fnDef.params[i].name, "__VAR__" + arg.name);
-            } else {
-              const exprId = registerExpr(ctx, arg);
-              localParams.set(fnDef.params[i].name, "__EXPRID__" + exprId);
+            localParams.set(fnDef.params[i].name, "__EXPR__" + JSON.stringify(callArgs[i]));
+          }
+          if (!ctx.fnCallCounters) ctx.fnCallCounters = new Map();
+          const fnCallIdx = (ctx.fnCallCounters.get(fnName!) ?? 0) + 1;
+          ctx.fnCallCounters.set(fnName!, fnCallIdx);
+          const scopePrefix = `_fn_${fnName}_${fnCallIdx}_`;
+          for (const bodyChild of fnDef.body) {
+            if (bodyChild.kind === "var") {
+              const vd = bodyChild as VarDeclaration;
+              const scopedName = scopePrefix + vd.name;
+              localParams.set(vd.name, "__VAR__" + scopedName);
+              if (!ctx.varDecls) ctx.varDecls = [];
+              ctx.varDecls.push({
+                kind: "var",
+                name: scopedName,
+                varType: vd.varType,
+                value: vd.value,
+                loc: vd.loc,
+              });
+              if (ctx.declaredVars) ctx.declaredVars.add(scopedName);
+            }
+          }
+          for (let i = 0; i < fnDef.params.length && i < callArgs.length; i++) {
+            const param = fnDef.params[i];
+            const argExpr = callArgs[i];
+            const isSimpleVar = argExpr && argExpr.kind === "variable" && argExpr.name && !argExpr.name.includes(".");
+            if (!isSimpleVar && argExpr) {
+              const scopedName = scopePrefix + param.name;
+              localParams.set(param.name, "__VAR__" + scopedName);
+              if (!ctx.varDecls) ctx.varDecls = [];
+              ctx.varDecls.push({
+                kind: "var",
+                name: scopedName,
+                varType: param.paramType || "num",
+                value: { kind: "str", value: "__EXPR__" + JSON.stringify(argExpr) },
+                loc: param.loc,
+              });
+              if (ctx.declaredVars) ctx.declaredVars.add(scopedName);
             }
           }
           const substituteExpr = (expr: Expression, pm: Map<string, string>): Expression => {
@@ -556,8 +604,15 @@ export function renderChild(
               const pv = pm.get(expr.name!)!;
               if (pv.startsWith("__LIT__")) return { kind: "literal", value: { kind: "str", value: pv.slice(7) } };
               if (pv.startsWith("__EXPRID__")) {
-                const id = parseInt(pv.slice(10), 10);
+                const id = parseInt(pv.slice(10), 10) ;
                 return { kind: "expr_ref", exprId: id };
+              }
+              if (pv.startsWith("__EXPR__")) {
+                try {
+                  return JSON.parse(pv.substring(8));
+                } catch {
+                  return expr;
+                }
               }
               return { kind: "variable", name: pv.slice(7) };
             }
@@ -571,6 +626,16 @@ export function renderChild(
                 const pv = pm.get(target)!;
                 if (pv.startsWith("__VAR__")) {
                   return { ...expr, target: pv.slice(7), right: expr.right ? substituteExpr(expr.right, pm) : undefined };
+                }
+                if (pv.startsWith("__EXPR__")) {
+                  try {
+                    const argExpr: Expression = JSON.parse(pv.substring(8));
+                    if (argExpr.kind === "variable" && argExpr.name) {
+                      return { ...expr, target: argExpr.name, right: expr.right ? substituteExpr(expr.right, pm) : undefined };
+                    }
+                  } catch {
+                    void 0;
+                  }
                 }
               }
               return { ...expr, right: expr.right ? substituteExpr(expr.right, pm) : undefined };
@@ -1026,16 +1091,16 @@ export function renderCompUse(
       }
       const varDecl = ctx.varDecls?.find(v => v.name === vName);
       if (!use.attrs.some(a => a.name === "type")) {
-        if (varDecl && varDecl.varType === "int") {
+        if (varDecl && (varDecl.varType === "int" || varDecl.varType === "num")) {
           attrParts.push(`type="number"`);
         } else {
           attrParts.push(`type="text"`);
         }
       }
-      if (varDecl && varDecl.varType === "int" && !use.attrs.some(a => a.name === "step")) {
+      if (varDecl && (varDecl.varType === "int" || varDecl.varType === "num") && !use.attrs.some(a => a.name === "step")) {
         attrParts.push(`step="1"`);
       }
-      const rhs = (varDecl && varDecl.varType === "int")
+      const rhs = (varDecl && (varDecl.varType === "int" || varDecl.varType === "num"))
         ? `Number(e.target.value) || 0`
         : `e.target.value`;
       const initialVal = varDecl?.value ? litToString(varDecl.value).replace(/"/g, '&quot;') : "";
@@ -1253,13 +1318,13 @@ export function buildRuntime(opts: {
     const vn = ns ? ns.slice(1) + "_" + v.name : v.name;
     if (!v.value) {
       if (!assignedVars.has(v.name)) {
-        const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]" };
+        const defaults: Record<string, string> = { str: '""', int: "0", num: "0", bool: "false", "str[]": "[]" };
         SinthWarning.emit(
           `Variable '${v.name}' is declared but never assigned. Defaulting to ${defaults[v.varType] ?? "undefined"}.`,
           v.loc,
         );
       }
-      const defaults: Record<string, string> = { str: '""', int: "0", bool: "false", "str[]": "[]" };
+      const defaults: Record<string, string> = { str: '""', int: "0", num: "0", bool: "false", "str[]": "[]" };
       return `var ${vn} = ${defaults[v.varType] ?? "undefined"};`;
     }
     const val = litToString(v.value);
@@ -1312,24 +1377,9 @@ export function buildRuntime(opts: {
 
   const helpers = generateHelpers({ needsExpr, needsIf, needsFor, needsDelay, needsMixed, ns });
 
-  const exprVarUpdates = varDecls
-    .filter(v => v.value && litToString(v.value).startsWith("__EXPR__"))
-    .map(v => {
-      try {
-        const expr: Expression = JSON.parse(litToString(v.value!).substring(8));
-        const js = compileExprToJS(expr, undefined, opts.namespace, opts.declaredVars);
-        const idx = exprRegistry.indexOf(js);
-        const vn2 = ns ? ns.slice(1) + "_" + v.name : v.name;
-        return `${vn2} = __X${ns}[${idx}]({});`;
-      } catch { return ""; }
-    })
-    .filter(Boolean)
-    .join("\n    ");
-
   const renderBody = buildRenderBody({
     bodyHTML, logicBlocks: [], mixedBlocks,
     needsLogic: false, needsMixed, needsIf, needsFor, needsExpr, needsDelay,
-    exprVarUpdates: exprVarUpdates || undefined,
     ns
   });
 

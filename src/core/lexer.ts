@@ -72,7 +72,7 @@ export class Lexer {
         tokens.push({ type: TT.OP_ARROW, value: "->", loc });
         continue;
       }
-      if (ch === "-" && !this.isDigit(this.src[this.pos + 1] ?? "")) {
+      if (ch === "-") {
         tokens.push(this.single(TT.OP_MINUS, loc)); continue;
       }
 
@@ -88,7 +88,7 @@ export class Lexer {
 
       if (ch === '"' || ch === "'") { tokens.push(this.readString(loc)); continue; }
 
-      if (this.isDigit(ch) || (ch === "-" && this.isDigit(this.src[this.pos + 1] ?? ""))) {
+      if (this.isDigit(ch)) {
         tokens.push(this.readNumber(loc)); continue;
       }
 
@@ -241,7 +241,6 @@ export class Lexer {
 
   private readNumber(loc: Loc): Token {
     let s = "";
-    if (this.src[this.pos] === "-") { s += "-"; this.adv(); }
     while (this.isDigit(this.src[this.pos] ?? "")) { s += this.src[this.pos]; this.adv(); }
     if (this.src[this.pos] === "." && this.isDigit(this.src[this.pos + 1] ?? "")) {
       s += "."; this.adv();
@@ -272,5 +271,5 @@ export class Lexer {
   private loc(): Loc { return { file: this.file, line: this.line, col: this.col }; }
   private isDigit(c: string)      { return c >= "0" && c <= "9"; }
   private isIdentStart(c: string) { return /[a-zA-Z_$\u00C0-\uFFFF]/.test(c); }
-  private isIdentCont(c: string)  { return /[a-zA-Z0-9_$\-\u00C0-\uFFFF]/.test(c); }
+  private isIdentCont(c: string)  { return /[a-zA-Z0-9_$\u00C0-\uFFFF]/.test(c); }
 }
