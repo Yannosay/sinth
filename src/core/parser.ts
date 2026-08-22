@@ -326,7 +326,18 @@ private parseArrayLiteral(): Literal {
     const result = this.parseUnary();
 
     if (skipBinary) return result;
-    return this.parseBinaryRHS(result);
+    let left = this.parseBinaryRHS(result);
+    if (this.check(TT.OP_QUESTION)) {
+      this.consume(TT.OP_QUESTION);
+      const trueExpr = this.parseExpression();
+      if (!trueExpr) throw new SinthError("Expected expression after '?'", this.peek().loc);
+      if (!this.check(TT.COLON)) throw new SinthError("Expected ':' in ternary expression", this.peek().loc);
+      this.consume(TT.COLON);
+      const falseExpr = this.parseExpression();
+      if (!falseExpr) throw new SinthError("Expected expression after ':'", this.peek().loc);
+      left = { kind: "ternary", condition: left, trueExpr, falseExpr };
+    }
+    return left;
   }
 
   
@@ -826,14 +837,25 @@ private parseArrayLiteral(): Literal {
         }
         this.pos = savedPos;
       }
-      if (this.check(TT.STRING)) {
+      if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
         const loc = this.peek().loc;
-        let leftExpr: Expression = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+        let leftExpr: Expression;
+        if (this.check(TT.FSTRING)) {
+          const fTok = this.consume(TT.FSTRING);
+          leftExpr = this.parseFString(fTok.value, fTok.loc);
+        } else {
+          leftExpr = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+        }
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
           let rhs: Expression;
-          if (this.check(TT.STRING)) {
-            rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+          if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+            if (this.check(TT.FSTRING)) {
+              const fTok = this.consume(TT.FSTRING);
+              rhs = this.parseFString(fTok.value, fTok.loc);
+            } else {
+              rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+            }
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
             rhs = { kind: "variable", name: rhsName };
@@ -942,6 +964,14 @@ private parseArrayLiteral(): Literal {
           continue;
         }
 
+        if (nextType === TT.OP_QUESTION) {
+          const expr = this.parseExpression();
+          if (expr) {
+            children.push({ kind: "expr", expression: expr, loc });
+          }
+          continue;
+        }
+
         // var expression
         // check dot notation variable reference (user.age without assignment)
         if (nextType === TT.DOT) {
@@ -988,7 +1018,7 @@ private parseArrayLiteral(): Literal {
         if (lastChild.kind === "text" || lastChild.kind === "expr" || lastChild.kind === "assign_stmt") {
           const nextTT = this.tokens[this.pos]?.type;
           if (
-            nextTT === TT.STRING || nextTT === TT.NUMBER ||
+            nextTT === TT.STRING || nextTT === TT.NUMBER || nextTT === TT.FSTRING ||
             nextTT === TT.BOOL_TRUE || nextTT === TT.BOOL_FALSE || nextTT === TT.NULL_LIT ||
             (nextTT === TT.IDENT &&
               this.tokens[this.pos]?.value !== "var" &&
@@ -1202,8 +1232,13 @@ private parseArrayLiteral(): Literal {
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
           let rhs: Expression;
-          if (this.check(TT.STRING)) {
-            rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+          if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+            if (this.check(TT.FSTRING)) {
+              const fTok = this.consume(TT.FSTRING);
+              rhs = this.parseFString(fTok.value, fTok.loc);
+            } else {
+              rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+            }
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
             rhs = { kind: "variable", name: rhsName };
@@ -1215,14 +1250,25 @@ private parseArrayLiteral(): Literal {
         children.push({ kind: "expr", expression: expr, loc });
         continue;
       }
-      if (this.check(TT.STRING)) {
-        const loc      = this.peek().loc;
-        let leftExpr: Expression = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+      if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+        const loc = this.peek().loc;
+        let leftExpr: Expression;
+        if (this.check(TT.FSTRING)) {
+          const fTok = this.consume(TT.FSTRING);
+          leftExpr = this.parseFString(fTok.value, fTok.loc);
+        } else {
+          leftExpr = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+        }
         while (this.check(TT.OP_PLUS)) {
           this.consume(TT.OP_PLUS);
           let rhs: Expression;
-          if      (this.check(TT.STRING)) {
-            rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+          if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+            if (this.check(TT.FSTRING)) {
+              const fTok = this.consume(TT.FSTRING);
+              rhs = this.parseFString(fTok.value, fTok.loc);
+            } else {
+              rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+            }
           } else if (this.check(TT.IDENT)) {
             const rhsName = this.consume(TT.IDENT).value;
             if (this.check(TT.LPAREN)) {
@@ -1291,8 +1337,13 @@ private parseArrayLiteral(): Literal {
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
               let rhs: Expression;
-              if (this.check(TT.STRING)) {
-                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+                if (this.check(TT.FSTRING)) {
+                  const fTok = this.consume(TT.FSTRING);
+                  rhs = this.parseFString(fTok.value, fTok.loc);
+                } else {
+                  rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+                }
               } else if (this.check(TT.IDENT)) {
                 const rhsName = this.consume(TT.IDENT).value;
                 if (this.check(TT.DOT)) {
@@ -1336,8 +1387,13 @@ private parseArrayLiteral(): Literal {
           while (this.check(TT.OP_PLUS)) {
             this.consume(TT.OP_PLUS);
             let rhs: Expression;
-            if (this.check(TT.STRING)) {
-              rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+            if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+              if (this.check(TT.FSTRING)) {
+                const fTok = this.consume(TT.FSTRING);
+                rhs = this.parseFString(fTok.value, fTok.loc);
+              } else {
+                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              }
             } else if (this.check(TT.IDENT)) {
               const rhsName = this.consume(TT.IDENT).value;
               if (this.check(TT.DOT)) {
@@ -1364,8 +1420,13 @@ private parseArrayLiteral(): Literal {
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
               let rhs: Expression;
-              if (this.check(TT.STRING)) {
-                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+                if (this.check(TT.FSTRING)) {
+                  const fTok = this.consume(TT.FSTRING);
+                  rhs = this.parseFString(fTok.value, fTok.loc);
+                } else {
+                  rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+                }
               } else if (this.check(TT.IDENT)) {
                 const rhsName = this.consume(TT.IDENT).value;
                 if (this.check(TT.DOT)) {
@@ -1406,8 +1467,13 @@ private parseArrayLiteral(): Literal {
             while (this.check(TT.OP_PLUS)) {
               this.consume(TT.OP_PLUS);
               let rhs: Expression;
-              if (this.check(TT.STRING)) {
-                rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+              if (this.check(TT.STRING) || this.check(TT.FSTRING)) {
+                if (this.check(TT.FSTRING)) {
+                  const fTok = this.consume(TT.FSTRING);
+                  rhs = this.parseFString(fTok.value, fTok.loc);
+                } else {
+                  rhs = { kind: "literal", value: { kind: "str", value: this.consume(TT.STRING).value } };
+                }
               } else if (this.check(TT.IDENT)) {
                 rhs = this.parseExpression()!;
               } else {
@@ -1421,6 +1487,11 @@ private parseArrayLiteral(): Literal {
         } else if (nextType === TT.LBRACE || nextType === TT.RAW_BLOCK) {
           children.push(this.parseCompUse());
           continue;
+        } else if (nextType === TT.OP_QUESTION) {
+          const expr = this.parseExpression();
+          if (expr) {
+            children.push({ kind: "expr", expression: expr, loc });
+          }
         } else {
           const name = this.consume(TT.IDENT).value;
           children.push({ kind: "expr", expression: { kind: "variable", name }, loc });
@@ -1432,7 +1503,7 @@ private parseArrayLiteral(): Literal {
         if (lastChild.kind === "text" || lastChild.kind === "expr" || lastChild.kind === "assign_stmt") {
           const nextTT = this.tokens[this.pos]?.type;
           if (
-            nextTT === TT.STRING || nextTT === TT.NUMBER ||
+            nextTT === TT.STRING || nextTT === TT.NUMBER || nextTT === TT.FSTRING ||
             nextTT === TT.BOOL_TRUE || nextTT === TT.BOOL_FALSE || nextTT === TT.NULL_LIT ||
             (nextTT === TT.IDENT &&
               this.tokens[this.pos]?.value !== "var" &&
@@ -1526,4 +1597,110 @@ private parseArrayLiteral(): Literal {
     this.pos++;
     return tok;
   }
+
+  private parseFString(raw: string, loc: Loc): Expression {
+    const parts: (string | Expression)[] = [];
+    let buf = "";
+    let i = 0;
+
+    while (i < raw.length) {
+      if (raw[i] === "\\" && i + 1 < raw.length) {
+        const next = raw[i + 1];
+        if (next === "{" || next === "}") {
+          buf += next;
+          i += 2;
+          continue;
+        }
+        buf += raw[i] + raw[i + 1];
+        i += 2;
+        continue;
+      }
+
+      if (raw[i] === "{") {
+        if (buf.length > 0) {
+          parts.push(buf);
+          buf = "";
+        }
+        i++;
+        const exprStart = i;
+        let depth = 1;
+        while (i < raw.length && depth > 0) {
+          if (raw[i] === "\\" && i + 1 < raw.length) {
+            i += 2;
+            continue;
+          }
+          if (raw[i] === "{") depth++;
+          else if (raw[i] === "}") {
+            depth--;
+            if (depth === 0) break;
+          }
+          i++;
+        }
+        if (depth !== 0) throw new SinthError("Unmatched '{' in f-string", loc);
+        const exprRaw = raw.substring(exprStart, i);
+        const exprLexer = new Lexer(exprRaw, this.file);
+        const exprTokens = exprLexer.tokenize();
+        const exprParser = new Parser(exprTokens, this.file);
+        const expr = exprParser.parseExpression();
+        if (!expr) throw new SinthError("Expected expression inside {...}", loc);
+        parts.push(expr);
+        i++;
+        continue;
+      }
+
+      if (raw[i] === "}") {
+        buf += "}";
+        i++;
+        continue;
+      }
+
+      buf += raw[i];
+      i++;
+    }
+
+    if (buf.length > 0) parts.push(buf);
+
+    if (parts.length === 0) {
+      return { kind: "literal", value: { kind: "str", value: "" } };
+    }
+
+    const unescape = (s: string): string => {
+      let out = "";
+      for (let j = 0; j < s.length; j++) {
+        if (s[j] === "\\" && j + 1 < s.length) {
+          const n = s[j + 1];
+          switch (n) {
+            case "\\": out += "\\"; break;
+            case "n":  out += "\n"; break;
+            case "r":  out += "\r"; break;
+            case "t":  out += "\t"; break;
+            case "{":  out += "{";  break;
+            case "}":  out += "}";  break;
+            case "\"": out += "\""; break;
+            case "'":  out += "'";  break;
+            default:   out += n;    break;
+          }
+          j++;
+        } else {
+          out += s[j];
+        }
+      }
+      return out;
+    };
+
+    let combined: Expression | null = null;
+    for (const part of parts) {
+      const next: Expression =
+        typeof part === "string"
+          ? { kind: "literal", value: { kind: "str", value: unescape(part) } }
+          : part;
+      if (!combined) {
+        combined = next;
+      } else {
+        combined = { kind: "binary", left: combined, op: "+", right: next };
+      }
+    }
+    return combined!;
+  }
+
 }

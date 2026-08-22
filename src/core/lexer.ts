@@ -52,10 +52,10 @@ export class Lexer {
       if (ch === "[") { tokens.push(this.single(TT.LBRACKET, loc)); continue; }
       if (ch === "]") { tokens.push(this.single(TT.RBRACKET, loc)); continue; }
 
-      // two-character operators ->
       if (ch === "=" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_EQEQ, value: "==", loc }); continue; }
       if (ch === "!" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_NEQ,  value: "!=", loc }); continue; }
       if (ch === "!") { tokens.push(this.single(TT.OP_NOT, loc)); continue; }
+      if (ch === "?") { tokens.push(this.single(TT.OP_QUESTION, loc)); continue; }
       if (ch === ">" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_GTEQ, value: ">=", loc }); continue; }
       if (ch === "<" && this.src[this.pos + 1] === "=") { this.adv(); this.adv(); tokens.push({ type: TT.OP_LTEQ, value: "<=", loc }); continue; }
 
@@ -63,7 +63,7 @@ export class Lexer {
       if (ch === "+") { tokens.push(this.single(TT.OP_PLUS,  loc)); continue; }
       if (ch === "*") { tokens.push(this.single(TT.OP_STAR,  loc)); continue; }
       if (ch === "/") { tokens.push(this.single(TT.OP_SLASH, loc)); continue; }
-      if (ch === "%") { tokens.push(this.single(TT.OP_MOD, loc)); continue; }      
+      if (ch === "%") { tokens.push(this.single(TT.OP_MOD, loc)); continue; }
       if (ch === ";") { tokens.push(this.single(TT.OP_SEMI, loc)); continue; }
       if (ch === "<") { tokens.push(this.single(TT.OP_LT,    loc)); continue; }
       if (ch === ">") { tokens.push(this.single(TT.OP_GT,    loc)); continue; }
@@ -86,7 +86,17 @@ export class Lexer {
         continue;
       }
 
-      if (ch === '"' || ch === "'") { tokens.push(this.readString(loc)); continue; }
+      if ((ch === 'f' || ch === 'F') && (this.src[this.pos + 1] === '"' || this.src[this.pos + 1] === "'") && !this.isIdentCont(this.src[this.pos - 1] ?? '')) {
+        this.adv();
+        const quote = this.src[this.pos];
+        tokens.push(this.readRawFString(quote, loc));
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        tokens.push(this.readString(loc));
+        continue;
+      }
 
       if (this.isDigit(ch)) {
         tokens.push(this.readNumber(loc)); continue;
@@ -237,6 +247,27 @@ export class Lexer {
     if (this.pos >= this.src.length) throw new SinthError("Unterminated string literal", loc);
     this.adv();
     return { type: TT.STRING, value: result, loc };
+  }
+
+  private readRawFString(quote: string, loc: Loc): Token {
+    this.adv();
+    let raw = "";
+    while (this.pos < this.src.length && this.src[this.pos] !== quote) {
+      if (this.src[this.pos] === "\\") {
+        raw += "\\";
+        this.adv();
+        if (this.pos < this.src.length) {
+          raw += this.src[this.pos];
+          this.adv();
+        }
+      } else {
+        raw += this.src[this.pos];
+        this.adv();
+      }
+    }
+    if (this.pos >= this.src.length) throw new SinthError("Unterminated f-string literal", loc);
+    this.adv();
+    return { type: TT.FSTRING, value: raw, loc };
   }
 
   private readNumber(loc: Loc): Token {

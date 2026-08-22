@@ -68,6 +68,12 @@ export function compileExprToJS(expr: Expression, loopVars?: Set<string>, namesp
       }
       return `${t2}${expr.op}`;
     }
+    case "ternary": {
+      const cond = compileExprToJS(expr.condition!, loopVars, namespace, declaredVars);
+      const t = compileExprToJS(expr.trueExpr!, loopVars, namespace, declaredVars);
+      const f = compileExprToJS(expr.falseExpr!, loopVars, namespace, declaredVars);
+      return `(${cond} ? ${t} : ${f})`;
+    }
     case "call": {
       let callee = compileExprToJS(expr.callee!, loopVars, namespace, declaredVars);
       if (expr.memo && callee.startsWith('$')) {

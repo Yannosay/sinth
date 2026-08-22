@@ -12,10 +12,16 @@ export function eventAttrName(name: string): string | null {
   return EVENT_RE.test(name) ? name.toLowerCase() : null;
 }
 
-/**
- * CSS property names that are allowed as inline style shorthand attributes on
- * any Sinth component:  Paragraph(color: "red", fontSize: "1.2rem") { "Hi" }
- */
+
+
+
+//  CSS property names that are allowed as inline style shorthand attributes on
+//  any Sinth component
+//
+//  like this: ` Paragraph(color: "red", fontSize: "1.2rem") { "Hi, whoever is actually reading this!" } `
+
+
+
 export const INLINE_STYLE_PROPS =     new Set      ([
   "color","backgroundColor","backgroundImage","backgroundSize","backgroundPosition",
   "fontSize","fontWeight","fontFamily","fontStyle","fontVariant","lineHeight","letterSpacing","textAlign",
@@ -769,8 +775,12 @@ depth:   number,
   const hasComp = allChildren.some(c => c.kind === "use");
 
   if (!hasComp) {
-    ctx.logicBlocks.push(compileIfToJS(ifBlock, undefined, ctx.namespace, ctx.declaredVars));
-    return "";
+    throw new SinthError(
+      `If-blocks containing only text/expressions are not supported inside component bodies. ` +
+      `Wrap the component in the if-block instead. Example:\n` +
+      `  if condition {\n    Component { "text" }\n  } else {\n    Component { "other" }\n  }`,
+      ifBlock.loc
+    );
   }
 
   if (!hasAssign && !hasExprAssign && !hasComp) {
@@ -1434,21 +1444,16 @@ export function buildRuntime(opts: {
     syncedEls.forEach(function(el) { vars.push(el.dataset.sinthFullscreenSync); });
     document.addEventListener('fullscreenchange', function() {
       let state = !!document.fullscreenElement;
-      vars.forEach(function(varName) { 
-        switch(varName) {
-          ${[...new Set(varDecls.filter(v => v.name).map(v => {
-            const vn3 = ns ? ns.slice(1) + "_" + v.name : v.name;
-            return `case '${v.name}': ${vn3} = state; break;`;
-          }))].join('\n          ')}
-        }
+      vars.forEach(function(varName) {
+        let jsName = '${ns ? ns.slice(1) + "_" : ""}' + varName;
+        window[jsName] = state;
       });
       ${renderFn}();
     });
   }
 })();`;
   }
-
-  const pageCode = `// Sinth Page Runtime
+    const pageCode = `// Sinth Page Runtime
 ${forDataJS}
 ${exprArrayJS}
 ${memoVarDecls}

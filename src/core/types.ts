@@ -19,6 +19,8 @@ export enum TT {
   OP_LT, OP_GT, OP_NEQ, OP_EQEQ, OP_LTEQ, OP_GTEQ,
   OP_ARROW,
   OP_NOT,
+  OP_QUESTION,
+  FSTRING,
   EOF,
 }
 
@@ -36,7 +38,10 @@ export type AssignOp = "=" | "+=" | "-=";
 export type PostfixOp = "++" | "--";
 
 export interface Expression {
-  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index" | "call" | "expr_ref";
+  
+  
+  
+  kind:     "literal" | "variable" | "unary" | "binary" | "assign" | "postfix" | "index" | "call" | "expr_ref" | "ternary";
   memo?:    boolean;
   value?:   Literal;
   name?:    string;
@@ -45,11 +50,20 @@ export interface Expression {
   left?:    Expression;
   right?:   Expression;
   target?:  string;
+  
   object?:  Expression;
   key?:     Expression;
   callee?:  Expression;
   args?:    Expression[];
-  exprId?:  number;   // for "expr_ref" kind
+  
+  exprId?:  number;           //    for "expr_ref" kind
+  condition?: Expression;     //    for "ternary" kind
+  trueExpr?:  Expression;     //    for "ternary" kind
+  falseExpr?: Expression;     //    for "ternary" kind
+
+
+
+
 }
 
 export interface Attr       { name: string; value: Literal | null; loc: Loc }

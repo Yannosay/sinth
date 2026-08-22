@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import { createHash } from "crypto";
 import { Expression, Child, CompUse, IfBlock, ForLoop, Loc, ReturnStmt, VarDeclaration, CompileCtx, SinthError, SinthWarning } from "./types";
 import { fnv1a, escAttr } from "../utils";
 import { FunctionDef } from "./types";
@@ -18,9 +19,10 @@ export interface CompileOptions {
   minify:       boolean;
   checkOnly:    boolean;
   sharedRuntime: boolean;
+  inlineJS:     boolean;
 }
 
-export function compileFile(filePath: string, opts: CompileOptions): { html: string; shared?: string } | null {
+export function compileFile(filePath: string, opts: CompileOptions): { html: string; shared?: string; jsFile?: { filename: string; content: string } } | null {
   const absPath = path.resolve(filePath);
   const file    = parseFile(absPath);
   const cfg: ResolverConfig = { projectRoot: opts.projectRoot, libraryPaths: opts.libraryPaths };
@@ -547,16 +549,33 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
 
   const head = renderHead(headData, relativeCssLinks, relativeJsLinks, scopedCSS, companionJS);
   const scriptTags: string[] = [];
-  if (componentScripts.length > 0) {
-    scriptTags.push(`<script>\n${componentScripts.join("\n\n")}\n</script>`);
-  }
-
-  for (const s of pageScripts) {
-    const extra = Object.entries(s.attrs)
-      .map(([k, v]) => v === "true" ? k : `${k}="${escAttr(v)}"`)
-      .join(" ");
-    const globalised = s.raw.replace(/\b(let|const)\b/g, "let");
-    scriptTags.push(`<script${extra ? " " + extra : ""}>\n${globalised}\n</script>`);
+  const externalScripts: string[] = [];
+  if (opts.inlineJS) {
+    if (componentScripts.length > 0) {
+      scriptTags.push(`<script>\n${componentScripts.join("\n\n")}\n</script>`);
+    }
+    for (const s of pageScripts) {
+      const extra = Object.entries(s.attrs)
+        .map(([k, v]) => v === "true" ? k : `${k}="${escAttr(v)}"`)
+        .join(" ");
+      const globalised = s.raw.replace(/\b(let|const)\b/g, "let");
+      scriptTags.push(`<script${extra ? " " + extra : ""}>\n${globalised}\n</script>`);
+    }
+  } else {
+    if (componentScripts.length > 0) {
+      externalScripts.push(componentScripts.join("\n;\n"));
+    }
+    for (const s of pageScripts) {
+      if (Object.keys(s.attrs).length > 0) {
+        const extra = Object.entries(s.attrs)
+          .map(([k, v]) => v === "true" ? k : `${k}="${escAttr(v)}"`)
+          .join(" ");
+        const globalised = s.raw.replace(/\b(let|const)\b/g, "let");
+        scriptTags.push(`<script${extra ? " " + extra : ""}>\n${globalised}\n</script>`);
+      } else {
+        externalScripts.push(s.raw.replace(/\b(let|const)\b/g, "let"));
+      }
+    }
   }
 
 
@@ -571,6 +590,23 @@ const sharedRuntimeTag = (() => {
   return `<script src="${runtimeSrc}"></script>`;
 })();
 
+  let jsFile: { filename: string; content: string } | undefined;
+  let externalScriptTag = "";
+  if (!opts.inlineJS) {
+    const allExternal = [...externalScripts, finalRuntimeJS].filter(Boolean).join("\n");
+    if (allExternal.trim()) {
+      const contentHash = createHash("sha256").update(allExternal).digest("hex").substring(0, 8);
+      const relPathForName = path.relative(opts.projectRoot, absPath).replace(/\.sinth$/, "").replace(/[\\/]/g, "-");
+      const jsFilename = `${relPathForName}.${contentHash}.js`;
+      const compiledJsDir = path.join(opts.outDir, "_sinth", "js");
+      const htmlOutPath = path.join(opts.outDir, path.relative(opts.projectRoot, absPath).replace(/\.sinth$/, ".html"));
+      const htmlOutDir = path.dirname(htmlOutPath);
+      const relToJsDir = path.relative(htmlOutDir, compiledJsDir).replace(/\\/g, "/");
+      const srcPath = relToJsDir ? `${relToJsDir}/${jsFilename}` : `./${jsFilename}`;
+      externalScriptTag = `<script src="${escAttr(srcPath)}"></script>`;
+      jsFile = { filename: jsFilename, content: allExternal };
+    }
+  }
   let actionInitScript = '';
   if (ctx.actionButtons.length > 0) {
     actionInitScript = '<script>' +
@@ -588,7 +624,7 @@ const sharedRuntimeTag = (() => {
     bodyHTML,
     actionInitScript,
     sharedRuntimeTag,
-    finalRuntimeJS.trim() ? `<script>\n${finalRuntimeJS}\n</script>` : "",
+    opts.inlineJS ? (finalRuntimeJS.trim() ? `<script>\n${finalRuntimeJS}\n</script>` : "") : externalScriptTag,
     scriptTags.join("\n"),
     "</body>",
     "</html>",
@@ -612,7 +648,10 @@ const sharedRuntimeTag = (() => {
   }
 
   const finalHTML = opts.minify ? minifyHTML(html) : html;
-  return sharedJS ? { html: finalHTML, shared: sharedJS } : { html: finalHTML };
+  const result: { html: string; shared?: string; jsFile?: { filename: string; content: string } } = { html: finalHTML };
+  if (sharedJS) result.shared = sharedJS;
+  if (jsFile) result.jsFile = jsFile;
+  return result;
 }
 
 

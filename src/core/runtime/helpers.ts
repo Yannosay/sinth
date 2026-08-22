@@ -163,8 +163,8 @@ function sinthIfBlock(t) {
           let cur2 = anchor.nextSibling;
           while (cur2 && cur2 !== t) { let nx2 = cur2.nextSibling; cur2.remove(); cur2 = nx2; }
           anchor.remove();
+          anchor = null;
         }
-        return;
       }
       if (anchor) {
         if (anchor._sinthReplaced) {

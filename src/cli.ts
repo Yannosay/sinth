@@ -1,3 +1,18 @@
+
+
+
+
+
+
+//              The Entry point for the Sinth Language Compiler CLI
+//              Exact information about Sinth can be found here: https://api.yannosay.com/sinth
+//              or here: https://api.npmjs.org/downloads/point/2015-01-01:2100-01-01/@yannosay/sinth
+
+
+
+
+
+
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -10,17 +25,31 @@ import { checkForUpdate } from "./update-check";
 
 
 
+
+
+
+
+
 function loadConfig(root: string): Record<string, unknown> {
   const cfgPath = path.join(root, "sinth.config.json");
   if (fs.existsSync(cfgPath)) {
     try { return JSON.parse(fs.readFileSync(cfgPath, "utf-8")) as Record<string, unknown>; }
     catch (e) {
-      SinthWarning.emit("Could not parse sinth.config.json");
+      SinthWarning.emit("Could not parse sinth.config.json. Make sure it contains valid JSON.", { file: cfgPath, line: 0, col: 0 });
       console.error(e);
     }
   }
   return {};
 }
+
+
+
+
+
+
+
+
+
 
 async function main(): Promise<void> {
   const [,, command, ...args] = process.argv;
@@ -33,6 +62,7 @@ async function main(): Promise<void> {
   const port         = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : (cfg.port as number | undefined) ?? 3000;
   const minify       = args.includes("--prod") || Boolean(cfg.minify);
   const sharedRuntime = args.includes("--shared-runtime") || Boolean(cfg.sharedRuntime);
+  const inlineJS      = args.includes("--inline-js") || Boolean(cfg.inlineJS);
   const libraryPaths = (cfg.libraryPaths as string[] | undefined) ?? [path.join(cwd, "libraries")];
 
   const flagValues = new Set<string>();
@@ -40,7 +70,7 @@ async function main(): Promise<void> {
   if (portIdx   !== -1) flagValues.add(args[portIdx + 1]);
   const cleanArgs = args.filter(a => !a.startsWith("--") && !flagValues.has(a));
 
-  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, minify, checkOnly: false, sharedRuntime };
+  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, minify, checkOnly: false, sharedRuntime, inlineJS };
 
   switch (command) {
     case "build": {
@@ -63,6 +93,10 @@ async function main(): Promise<void> {
       let hadError = false, built = 0;
 
       const sharedRuntimes: string[] = [];
+      const compiledJsDir = path.join(outDir, "_sinth", "js");
+      if (!opts.checkOnly) {
+        fs.rmSync(compiledJsDir, { recursive: true, force: true });
+      }
       for (const p of pages) {
         try {
           const result = compileFile(p, opts);
@@ -71,13 +105,18 @@ async function main(): Promise<void> {
           if (result.shared) {
             sharedRuntimes.push(result.shared);
           }
+          if (result.jsFile) {
+            fs.mkdirSync(compiledJsDir, { recursive: true });
+            fs.writeFileSync(path.join(compiledJsDir, result.jsFile.filename), result.jsFile.content);
+          }
           const rel = path.relative(cwd, p).replace(/\.sinth$/, ".html");
           const out = path.join(outDir, rel);
           fs.mkdirSync(path.dirname(out), { recursive: true });
           fs.writeFileSync(out, html);
           process.stdout.write(`  \u001b[32m✓\u001b[0m ${rel}\n`);
           built++;
-        } catch (e: unknown) {
+        } 
+        catch (e: unknown) {
           process.stderr.write(`  \u001b[31m✗\u001b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
           hadError = true;
         }
@@ -208,7 +247,7 @@ async function main(): Promise<void> {
             version = pkg.version;
             break;
           } catch {
-            // Ignore - use default version
+            // ignore -- use default version
           }
         }
       }
@@ -216,7 +255,9 @@ async function main(): Promise<void> {
 \u001b[1mSinth Compiler v${version}\u001b[0m
 
 \u001b[1mCommands:\u001b[0m
-  sinth build   [files] [--out ./dist] [--prod] [--shared-runtime]    Compile .sinth pages
+  sinth build   [files] [--out ./dist]             Compile .sinth pages
+                [--prod] [--shared-runtime] 
+                [--inline-js]
   sinth dev     [files] [--port 3000]              Live-reload dev server
   sinth check                                      Lint without emitting
   sinth init    [name]                             Scaffold a new project
@@ -498,8 +539,6 @@ component Card(title, color = "blue") {
 }
 `);
 }
-
-
 main().catch(e => {
   process.stderr.write(`\u001b[31m${(e as Error).message}\u001b[0m\n`);
   process.exit(1);
