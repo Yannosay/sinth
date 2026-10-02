@@ -5,29 +5,29 @@
 
 ---
 
-## 🎉 What's New in Sinth 5
+## What's New in Sinth 5
 
 Sinth 5 is a complete reimagining of the language, bringing professional-grade tooling, modern developer experience, and production-ready features to the declarative web UI paradigm.
 
 ---
 
-## 📦 Major Features
+## Major Features
 
-### 🔧 **Full Math & Expression Support**
+### **Full Math & Expression Support**
 - All arithmetic operators (`+`, `-`, `*`, `/`, `%`) with correct precedence
 - Unary plus/minus, logical operators (`and`, `or`, `not`)
 - Comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`)
 - Ternary expressions (`condition ? true : false`)
 - String concatenation and template literals
 
-### ⚡ **Function System**
+### **Function System**
 - Strongly typed function signatures with return types
 - Default parameters and optional arguments
 - **Missing parameter detection** - Hard compile errors for missing required arguments
 - Recursive functions with proper tail-call handling
 - Native JS function integration (`Math.*`, `JSON.*`, `fetch`, `localStorage`, etc.)
 
-### 🎨 **Complete Built-in Component Library**
+### **Complete Built-in Component Library**
 | Category | Components |
 |----------|------------|
 | **Structural** | `Main`, `Header`, `Footer`, `Nav`, `Section`, `Article`, `Aside`, `Div`, `Span`, `Hero`, `Container`, `Grid`, `Flex`, `Stack`, `Row`, `Column`, `CardGrid` |
@@ -37,20 +37,20 @@ Sinth 5 is a complete reimagining of the language, bringing professional-grade t
 | **Layout** | `Flex`, `Grid`, `Stack`, `Container`, `Row`, `Column`, `CardGrid` |
 | **Forms** | `Form`, `Fieldset`, `Legend`, `Label`, `Textarea`, `Datalist`, `Optgroup`, `Progress`, `Meter`, `Output` |
 
-### 🎯 **State Management & Reactivity**
+### **State Management & Reactivity**
 - **Reactive variables** - `var` declarations auto-trigger re-renders
 - **Two-way binding** - `model` attribute for form inputs
 - **One-way binding** - `bind` attribute for display-only
 - **Computed values** - Derived state that updates automatically
 - **Memoization** - `$` prefix for expensive computations (`$expensiveFn()`)
 
-### 🎮 **Control Flow**
+### **Control Flow**
 - `if / else if / else` with `persist`, `replace`, `delay`, `hide` modifiers
 - `for` loops with `key`, `index` support
 - Inline ternary expressions
 - Pattern matching via `if/else` chains
 
-### 🎨 **Styling System**
+### **Styling System**
 - **Inline styles** - Dynamic CSS properties as attributes
 - **Scoped style blocks** - SCSS with nesting, variables, mixins, functions
 - **Global styles** - Import CSS/SCSS files
@@ -59,9 +59,9 @@ Sinth 5 is a complete reimagining of the language, bringing professional-grade t
 
 ---
 
-## 🛠️ **Developer Experience**
+## **Developer Experience**
 
-### 📝 **VSCode Extension** *(NEW!)*
+### **VSCode Extension** *(NEW!)*
 - **Syntax highlighting** - Full TextMate grammar
 - **IntelliSense** - Autocomplete for components, types, functions, native APIs
 - **Real-time diagnostics** - Type checking on save/change
@@ -73,7 +73,7 @@ Sinth 5 is a complete reimagining of the language, bringing professional-grade t
 code --install-extension sinth-language-5.0.0.vsix
 ```
 
-### 🚀 **Enhanced CLI**
+### **Enhanced CLI**
 - **Beautiful terminal UI** - Colorized headers, progress steps, byte sizes, durations
 - **`sinth build`** - Production builds with minification, shared runtime, inlining
 - **`sinth dev`** - Live reload + **Hot Module Replacement (HMR)**
@@ -96,7 +96,7 @@ code --install-extension sinth-language-5.0.0.vsix
 }
 ```
 
-### 🔥 **Hot Module Replacement (HMR)** *(NEW!)*
+### **Hot Module Replacement (HMR)** *(NEW!)*
 - **CSS updates** - Instant style injection without reload
 - **JS updates** - Dynamic module evaluation
 - **File hash tracking** - Only changed content transmitted
@@ -107,7 +107,7 @@ code --install-extension sinth-language-5.0.0.vsix
 sinth dev  # Starts with HMR enabled
 ```
 
-### 🎨 **Beautiful Error Overlay**
+### **Beautiful Error Overlay**
 - **Modern design** - Dark theme with animations
 - **Syntax highlighted** - Code context with line numbers
 - **Actionable** - Dismiss, reload, or fix in editor
@@ -134,7 +134,7 @@ sinth build --prod
 
 ---
 
-## 📚 **Migration from Sinth 4**
+## **Migration from Sinth 4**
 
 ### Breaking Changes
 | Old | New |
@@ -160,7 +160,7 @@ sinth dev
 
 ---
 
-## 📖 **Documentation**
+## **Documentation**
 
 - **Getting Started** → `/docs/getting-started`
 - **Language Reference** → `/docs/fundamentals`
@@ -173,26 +173,9 @@ sinth dev
 - **API Reference** → `/docs/reference`
 
 ---
+## **Acknowledgments**
 
-## 🛣️ **Roadmap**
-
-### Sinth 5.1 (Q1 2027)
-- [ ] Server Components
-- [ ] Streaming SSR
-- [ ] React/Vue interop layer
-- [ ] Storybook integration
-
-### Sinth 5.2 (Q2 2027)
-- [ ] Visual Editor
-- [ ] Component Library CLI
-- [ ] Performance Profiler
-- [ ] Accessibility Auditor
-
----
-
-## 🙏 **Acknowledgments**
-
-Built with ❤️ by the Sinth team and contributors.
+Built with <3 by Yannosay
 
 **Special thanks to:**
 - Early adopters who tested betas
@@ -217,4 +200,4 @@ cd my-app
 sinth dev
 ```
 
-[🌐 sinth.yannosay.com](https://sinth.yannosay.com) | [📦 npm](https://npmjs.com/package/@yannosay/sinth) | [💻 GitHub](https://github.com/yannosay/sinth-language)
+[Sinth Docs](https://sinth.yannosay.com) | [📦 NPM](https://npmjs.com/package/@yannosay/sinth) | [💻 GitHub](https://github.com/yannosay/sinth-language)
