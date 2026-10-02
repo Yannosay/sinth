@@ -1,0 +1,144 @@
+{
+  "name": "sinth-language",
+  "displayName": "Sinth Language",
+  "description": "Official VSCode extension for Sinth 5 - declarative, component-based web UI language",
+  "version": "5.0.0",
+  "publisher": "YannosayProductions",
+  "icon": "assets/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yannosay/sinth-language"
+  },
+  "bugs": {
+    "url": "https://github.com/yannosay/sinth-language/issues"
+  },
+  "homepage": "https://sinth.yannosay.com",
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "sinth",
+    "web",
+    "ui",
+    "components",
+    "reactive",
+    "typescript"
+  ],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "activationEvents": [
+    "onLanguage:sinth",
+    "onCommand:sinth.compile",
+    "onCommand:sinth.check"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sinth",
+        "aliases": [
+          "Sinth",
+          "sinth"
+        ],
+        "extensions": [
+          ".sinth"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sinth",
+        "scopeName": "source.sinith",
+        "path": "./syntaxes/sinth.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "sinth",
+        "path": "./snippets/sinth.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sinth.compile",
+        "title": "Sinth: Compile Current File",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.check",
+        "title": "Sinth: Type Check Project",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.dev",
+        "title": "Sinth: Start Dev Server",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.restartServer",
+        "title": "Sinth: Restart Language Server",
+        "category": "Sinth"
+      }
+    ],
+    "configuration": {
+      "title": "Sinth",
+      "properties": {
+        "sinth.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time type checking and error diagnostics"
+        },
+        "sinth.enableCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable IntelliSense code completion"
+        },
+        "sinth.compilerPath": {
+          "type": "string",
+          "default": "sinth",
+          "description": "Path to sinth compiler executable"
+        },
+        "sinth.configPath": {
+          "type": "string",
+          "default": "sinth.config.json",
+          "description": "Path to project configuration file"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "sinth.compile",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorTextFocus && editorLangId == sinth"
+      },
+      {
+        "command": "sinth.check",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "editorTextFocus && editorLangId == sinth"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "pretest": "npm run compile",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.2"
+  }
+}

@@ -62,7 +62,7 @@ export function resolveImports(
     }
   }
 
-  const importBuiltinNames = Object.keys(require("./builtins").BUILTIN_REGISTRY);
+  const importBuiltinNames = Object.keys(BUILTIN_MAP);
 
   for (const imp of file.imports) {
     if (imp.kind === "builtin") {

@@ -10,6 +10,7 @@ import { processStyleBlock } from "./style-processor";
 import { buildHeadData, renderHead } from "./head-builder";
 import { compileCustomElement } from "./runtime/custom-element";
 import { renderCompUse, renderChild, collectScripts, buildRuntime } from "./compiler";
+import { getNativeFunction, NATIVE_CONSTANTS } from "./native-functions";
 
 
 export interface CompileOptions {
@@ -224,28 +225,51 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     if (expr.kind === "variable" && expr.name) {
       const vd = varDecls.find(v => v.name === expr.name);
       if (vd) return vd.varType === "str[]" ? "str[]" : vd.varType;
+      // Check for native constants
+      if (NATIVE_CONSTANTS[expr.name]) return NATIVE_CONSTANTS[expr.name].type;
       return null;
     }
     if (expr.kind === "call" && expr.callee?.kind === "variable" && expr.callee.name) {
       const fd = functionDefs.find(f => f.name === expr.callee!.name);
       if (fd?.returnType) return fd.returnType;
+      // Check for native functions
+      const nativeFn = getNativeFunction(expr.callee.name);
+      if (nativeFn) return nativeFn.returnType;
       return null;
     }
     if (expr.kind === "binary") {
       const leftType  = inferType(expr.left!, varDecls, functionDefs);
       const rightType = inferType(expr.right!, varDecls, functionDefs);
       const isNum = (t: string | null) => t === "int" || t === "num";
-      if (leftType && rightType && isNum(leftType) && isNum(rightType)) {
-        return "num";
+      const isComparison = ["==", "!=", "<", ">", "<=", ">="].includes(expr.op!);
+      const isLogical = ["and", "or"].includes(expr.op!);
+      const isArithmetic = ["+", "-", "*", "/", "%"].includes(expr.op!);
+      
+      if (isComparison) {
+        if (leftType && rightType && leftType === rightType) return "bool";
+        return "bool"; // comparisons always return bool
       }
-      if (expr.op === "+") {
-        return "str";
+      if (isLogical) {
+        return "bool"; // logical ops always return bool
+      }
+      if (isArithmetic) {
+        if (leftType && rightType && isNum(leftType) && isNum(rightType)) {
+          return "num";
+        }
+        if (expr.op === "+") {
+          return "str";
+        }
       }
       return null;
     }
     if (expr.kind === "unary") {
       if (expr.op === "not") return "bool";
       if (expr.op === "-") {
+        const operandType = inferType(expr.operand!, varDecls, functionDefs);
+        if (operandType === "int" || operandType === "num") return "num";
+        return null;
+      }
+      if (expr.op === "+") {
         const operandType = inferType(expr.operand!, varDecls, functionDefs);
         if (operandType === "int" || operandType === "num") return "num";
         return null;
@@ -295,6 +319,14 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   }
 
   function checkCallArgs(fnDef: FunctionDef, args: Expression[], loc: Loc, varDecls: VarDeclaration[], functionDefs: FunctionDef[]): void {
+    // Check for missing required parameters
+    const requiredParams = fnDef.params.filter(p => p.defaultVal === undefined);
+    if (args.length < requiredParams.length) {
+      throw new SinthError(
+        `Function '${fnDef.name}' requires ${requiredParams.length} argument(s) but ${args.length} provided. Missing: ${requiredParams.slice(args.length).map(p => p.name).join(", ")}`,
+        loc
+      );
+    }
     for (let i = 0; i < fnDef.params.length && i < args.length; i++) {
       const param = fnDef.params[i];
       const arg = args[i];
@@ -310,6 +342,25 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
         );
       }
     }
+  }
+
+  function checkNativeCallArgs(nativeName: string, args: Expression[], loc: Loc, _varDecls: VarDeclaration[], _functionDefs: FunctionDef[]): void {
+    const nativeFn = getNativeFunction(nativeName);
+    if (!nativeFn) return;
+    
+    // For simplicity, we just check arg count for native functions that have fixed params
+    // Skip variadic functions (those with ... in params)
+    const hasVariadic = nativeFn.params.some(p => p.includes("..."));
+    if (!hasVariadic) {
+      const expectedCount = nativeFn.params.length;
+      if (args.length > expectedCount) {
+        throw new SinthError(
+          `Native function '${nativeName}' expects at most ${expectedCount} argument(s) but ${args.length} provided`,
+          loc
+        );
+      }
+    }
+    // Type checking for native functions could be added here if needed
   }
 
   function checkTypeInExpr(expr: Expression | undefined, varDecls: VarDeclaration[], functionDefs: FunctionDef[], loc?: Loc): void {
@@ -366,7 +417,11 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     }
     if (expr.kind === "call" && expr.callee?.kind === "variable" && expr.callee.name) {
       const fnDef = functionDefs.find(f => f.name === expr.callee!.name);
-      if (fnDef) checkCallArgs(fnDef, expr.args ?? [], loc || fnDef.loc, varDecls, functionDefs);
+      if (fnDef) {
+        checkCallArgs(fnDef, expr.args ?? [], loc || fnDef.loc, varDecls, functionDefs);
+      } else if (getNativeFunction(expr.callee.name)) {
+        checkNativeCallArgs(expr.callee.name, expr.args ?? [], loc || { file: "", line: 0, col: 0 }, varDecls, functionDefs);
+      }
     }
     if (expr.left)    checkTypeInExpr(expr.left,    varDecls, functionDefs, loc);
     if (expr.right)   checkTypeInExpr(expr.right,   varDecls, functionDefs, loc);
@@ -528,7 +583,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   });
 
   let builtinCssFile: { filename: string; content: string } | undefined;
-  let builtinCssLinks: string[] = [];
+  const builtinCssLinks: string[] = [];
   if (!opts.inlineCSS && builtinCss.length > 0) {
     const sortedBuiltinCss = [...builtinCss].sort((a, b) => a.name.localeCompare(b.name));
     const allBuiltinCss = sortedBuiltinCss.map(b => b.content).join("\n");

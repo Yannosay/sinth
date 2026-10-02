@@ -1,39 +1,85 @@
-
-
-
-
-
-
-//              The Entry point for the Sinth Language Compiler CLI
-//              Exact information about Sinth can be found here: https://api.yannosay.com/sinth
-//              or here: https://api.npmjs.org/downloads/point/2015-01-01:2100-01-01/@yannosay/sinth
-
-
-
-
-
-
 import * as fs from "fs";
 import * as path from "path";
-import * as https from "https";
-import { execSync } from "child_process";
 import { SinthWarning } from "./core/types";
 import { compileFile, CompileOptions, findSinthPages, copyDir } from "./core/cli-compiler";
 import { startDevServer } from "./server";
+import { previewBuild } from "./preview";
+import { deployToCloudflare } from "./deploy";
 import * as readline from "readline";
 import { checkForUpdate } from "./update-check";
 
+interface SinthConfig {
+  outDir?: string;
+  libraryPaths?: string[];
+  staticDirs?: string[];
+  minify?: boolean;
+  sharedRuntime?: boolean;
+  inlineJS?: boolean;
+  inlineCSS?: boolean;
+  port?: number;
+  cloudflare?: {
+    accountId?: string;
+    projectName?: string;
+    productionBranch?: string;
+    compatibilityDate?: string;
+    compatibilityFlags?: string[];
+    kvNamespaces?: { binding: string; id: string }[];
+    d1Databases?: { binding: string; name: string }[];
+    r2Buckets?: { binding: string; bucketName: string }[];
+  };
+  development?: Partial<Omit<SinthConfig, "development" | "cloudflare">>;
+  production?: Partial<Omit<SinthConfig, "development" | "cloudflare">>;
+}
 
+const COLORS = {
+  reset: "\u001b[0m",
+  bold: "\u001b[1m",
+  dim: "\u001b[2m",
+  underline: "\u001b[4m",
+  red: "\u001b[31m",
+  green: "\u001b[32m",
+  yellow: "\u001b[33m",
+  blue: "\u001b[34m",
+  magenta: "\u001b[35m",
+  cyan: "\u001b[36m",
+  gray: "\u001b[90m",
+};
 
+const ICONS = {
+  success: "✓",
+  error: "✗",
+  warning: "⚠",
+  info: "ℹ",
+  arrow: "→",
+  bullet: "•",
+  spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+};
 
+function colorize(text: string, color: keyof typeof COLORS): string {
+  return `${COLORS[color]}${text}${COLORS.reset}`;
+}
 
+function underline(text: string): string {
+  return `${COLORS.underline}${text}${COLORS.reset}`;
+}
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
 
-function loadConfig(root: string): Record<string, unknown> {
+function loadConfig(root: string): SinthConfig {
   const cfgPath = path.join(root, "sinth.config.json");
   if (fs.existsSync(cfgPath)) {
-    try { return JSON.parse(fs.readFileSync(cfgPath, "utf-8")) as Record<string, unknown>; }
+    try { return JSON.parse(fs.readFileSync(cfgPath, "utf-8")) as SinthConfig; }
     catch (e) {
       SinthWarning.emit("Could not parse sinth.config.json. Make sure it contains valid JSON.", { file: cfgPath, line: 0, col: 0 });
       console.error(e);
@@ -42,30 +88,57 @@ function loadConfig(root: string): Record<string, unknown> {
   return {};
 }
 
+function mergeConfig(base: SinthConfig, env: "development" | "production"): SinthConfig {
+  const envConfig = base[env] || {};
+  return { ...base, ...envConfig, [env]: undefined };
+}
 
+function printHeader(title: string): void {
+  const width = process.stdout.columns || 80;
+  const line = "═".repeat(Math.min(width - 4, 60));
+  console.log(colorize(`╔${line}╗`, "cyan"));
+  console.log(colorize(`║ ${title.padEnd(line.length - 2)} ║`, "cyan"));
+  console.log(colorize(`╚${line}╝`, "cyan"));
+}
 
+function printStep(step: string, total: number, current: number): void {
+  const prefix = colorize(`[${current}/${total}]`, "gray");
+  console.log(`${prefix} ${step}`);
+}
 
+function printSuccess(message: string): void {
+  console.log(`  ${colorize(ICONS.success, "green")} ${message}`);
+}
 
+function printError(message: string): void {
+  console.log(`  ${colorize(ICONS.error, "red")} ${message}`);
+}
 
+function printWarning(message: string): void {
+  console.log(`  ${colorize(ICONS.warning, "yellow")} ${message}`);
+}
 
-
-
+function printInfo(message: string): void {
+  console.log(`  ${colorize(ICONS.info, "blue")} ${message}`);
+}
 
 async function main(): Promise<void> {
   const [,, command, ...args] = process.argv;
   const cwd = process.cwd();
-  const cfg = loadConfig(cwd);
+  const isProd = command === "build" && args.includes("--prod");
+  const baseConfig = loadConfig(cwd);
+  const cfg = isProd ? mergeConfig(baseConfig, "production") : mergeConfig(baseConfig, "development");
 
   const outDirIdx    = args.indexOf("--out");
-  const outDir       = outDirIdx !== -1 ? args[outDirIdx + 1] : (cfg.outDir as string | undefined) ?? path.join(cwd, "dist");
+  const outDir       = outDirIdx !== -1 ? args[outDirIdx + 1] : cfg.outDir ?? path.join(cwd, "dist");
   const portIdx      = args.indexOf("--port");
-  const port         = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : (cfg.port as number | undefined) ?? 3000;
+  const port         = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : cfg.port ?? 3000;
   const minify       = args.includes("--prod") || Boolean(cfg.minify);
   const sharedRuntime = args.includes("--shared-runtime") || Boolean(cfg.sharedRuntime);
   const inlineJS      = args.includes("--inline-js") || Boolean(cfg.inlineJS);
   const inlineCSS     = args.includes("--inline-css") || Boolean(cfg.inlineCSS);
-  const libraryPaths = (cfg.libraryPaths as string[] | undefined) ?? [path.join(cwd, "libraries")];
-  const staticDirs   = (cfg.staticDirs as string[] | undefined) ?? ["assets"];
+  const libraryPaths = cfg.libraryPaths ?? [path.join(cwd, "libraries")];
+  const staticDirs   = cfg.staticDirs ?? ["assets"];
 
   const flagValues = new Set<string>();
   if (outDirIdx !== -1) flagValues.add(args[outDirIdx + 1]);
@@ -74,41 +147,48 @@ async function main(): Promise<void> {
 
   const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, staticDirs, minify, checkOnly: false, sharedRuntime, inlineJS, inlineCSS };
 
+  const pkgPath = path.join(__dirname, "..", "package.json");
+  const pkgVersion = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version : "0.0.0";
+
   switch (command) {
     case "build": {
-      const nonSinth = cleanArgs.filter(a => !a.endsWith(".sinth"));
+      printHeader(`Sinth Build v${pkgVersion}`);
       const buildStart = Date.now();
-      const pkgPath4 = path.join(__dirname, "..", "package.json");
-      if (fs.existsSync(pkgPath4)) {
-        const pkg4 = JSON.parse(fs.readFileSync(pkgPath4, "utf-8"));
-        checkForUpdate(pkg4.version);
-      }
-      if (nonSinth.length > 0) process.stdout.write(`\u001b[33mSkipping non-.sinth files:\u001b[0m ${nonSinth.join(", ")}\n`);
+      
+      checkForUpdate(pkgVersion);
+
+      const nonSinth = cleanArgs.filter(a => !a.endsWith(".sinth"));
+      if (nonSinth.length > 0) printWarning(`Skipping non-.sinth files: ${nonSinth.join(", ")}`);
 
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
-      const pages    = fileArgs.length > 0
+      const pages = fileArgs.length > 0
         ? fileArgs.map(f => path.resolve(cwd, f)).filter(f => fs.existsSync(f))
         : findSinthPages(cwd, outDir, libraryPaths);
 
-      if (pages.length === 0) { process.stdout.write("No .sinth files found.\n"); process.exit(0); }
+      if (pages.length === 0) { printInfo("No .sinth files found."); process.exit(0); }
+
+      printStep(`Found ${pages.length} page(s)`, pages.length, 0);
+      console.log();
 
       let hadError = false, built = 0;
-
       const sharedRuntimes: string[] = [];
       const compiledJsDir = path.join(outDir, "_sinth", "js");
       const compiledCssDir = path.join(outDir, "_sinth", "styles");
+
       if (!opts.checkOnly) {
         fs.rmSync(compiledJsDir, { recursive: true, force: true });
         fs.rmSync(compiledCssDir, { recursive: true, force: true });
       }
-      for (const p of pages) {
+
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        printStep(`Compiling ${path.relative(cwd, p)}`, pages.length, i + 1);
+        
         try {
           const result = compileFile(p, opts);
           if (!result) continue;
-          const html = result.html;
-          if (result.shared) {
-            sharedRuntimes.push(result.shared);
-          }
+          
+          if (result.shared) sharedRuntimes.push(result.shared);
           if (result.jsFile) {
             fs.mkdirSync(compiledJsDir, { recursive: true });
             fs.writeFileSync(path.join(compiledJsDir, result.jsFile.filename), result.jsFile.content);
@@ -123,15 +203,17 @@ async function main(): Promise<void> {
               fs.copyFileSync(asset.src, asset.dest);
             }
           }
+          
           const rel = path.relative(cwd, p).replace(/\.sinth$/, ".html");
           const out = path.join(outDir, rel);
           fs.mkdirSync(path.dirname(out), { recursive: true });
-          fs.writeFileSync(out, html);
-          process.stdout.write(`  \u001b[32m✓\u001b[0m ${rel}\n`);
+          fs.writeFileSync(out, result.html);
+          
+          printSuccess(`${rel} ${colorize(formatBytes(Buffer.byteLength(result.html, "utf8")), "gray")}`);
           built++;
-        } 
-        catch (e: unknown) {
-          process.stderr.write(`  \u001b[31m✗\u001b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
+        } catch (e: unknown) {
+          printError(`${path.relative(cwd, p)}`);
+          console.log(`    ${(e as Error).message}`);
           hadError = true;
         }
       }
@@ -139,7 +221,7 @@ async function main(): Promise<void> {
       if (sharedRuntimes.length > 0) {
         const combined = sharedRuntimes.join("\n");
         fs.writeFileSync(path.join(outDir, "sinth-runtime.js"), combined);
-        process.stdout.write(`  \u001b[32m✓\u001b[0m sinth-runtime.js (shared)\n`);
+        printSuccess(`sinth-runtime.js (shared) ${colorize(formatBytes(Buffer.byteLength(combined, "utf8")), "gray")}`);
       }
 
       for (const dir of staticDirs) {
@@ -147,7 +229,7 @@ async function main(): Promise<void> {
         const staticOut = path.isAbsolute(dir) ? path.join(outDir, path.basename(dir)) : path.join(outDir, dir);
         if (fs.existsSync(staticIn)) {
           copyDir(staticIn, staticOut);
-          process.stdout.write(`  \x1b[32m✓\x1b[0m ${dir}/ → ${path.relative(cwd, staticOut)}/\n`);
+          printSuccess(`${dir}/ → ${path.relative(cwd, staticOut)}/`);
         }
       }
 
@@ -157,128 +239,113 @@ async function main(): Promise<void> {
         const libFiles = fs.readdirSync(libOut, { recursive: true }) as string[];
         for (const f of libFiles) {
           if (f.endsWith(".sinth") || f.endsWith(".html")) {
-            try { 
-              fs.unlinkSync(path.join(libOut, f)); 
-            } catch (e) {
-              console.warn(`Failed to delete ${f}:`, e);
-            }
+            try { fs.unlinkSync(path.join(libOut, f)); } catch { /* ignore */ }
           }
         }
-        process.stdout.write(`  \u001b[32m✓\u001b[0m libraries/ → ${path.relative(cwd, libOut)}/\n`);
+        printSuccess(`libraries/ → ${path.relative(cwd, libOut)}/`);
       }
 
-      const buildTime = ((Date.now() - buildStart) / 1000).toFixed(2);
-      process.stdout.write(`\n\u001b[1mBuilt ${built} page(s)\u001b[0m${hadError ? " with errors" : ""} \u001b[2min ${buildTime}s\u001b[0m\n`);
-      return process.exit(hadError ? 1 : 0);
+      const buildTime = Date.now() - buildStart;
+      console.log();
+      console.log(`${colorize(ICONS.success, "green")} Built ${colorize(String(built), "bold")} page(s)${hadError ? colorize(" with errors", "red") : ""} in ${colorize(formatDuration(buildTime), "bold")}`);
+      process.exit(hadError ? 1 : 0);
     }
+    // break; // process.exit exits function
 
+    // eslint-disable-next-line no-fallthrough
     case "dev": {
-      const pkgPath3 = path.join(__dirname, "..", "package.json");
-      if (fs.existsSync(pkgPath3)) {
-        const pkg3 = JSON.parse(fs.readFileSync(pkgPath3, "utf-8"));
-        checkForUpdate(pkg3.version);
-      }
+      printHeader(`Sinth Dev Server v${pkgVersion}`);
+      checkForUpdate(pkgVersion);
+      
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
-      const files    = fileArgs.length > 0
+      const files = fileArgs.length > 0
         ? fileArgs.map(f => path.resolve(cwd, f)).filter(f => fs.existsSync(f))
         : undefined;
+      
+      printInfo(`Starting dev server on ${colorize(`http://localhost:${port}`, "cyan")}`);
+      if (files) printInfo(`Watching ${files.length} file(s)`);
+      
       await startDevServer({ ...opts, port, files });
       return;
     }
+    // break; // return exits function
 
     case "check": {
-      opts.checkOnly = true;
-      const pages    = findSinthPages(cwd, outDir, libraryPaths);
-      let hadError   = false;
-      for (const p of pages) {
+      printHeader(`Sinth Type Check v${pkgVersion}`);
+      const pages = findSinthPages(cwd, outDir, libraryPaths);
+      let hadError = false;
+      
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        printStep(`Checking ${path.relative(cwd, p)}`, pages.length, i + 1);
         try {
-          compileFile(p, opts);
-          process.stdout.write(`  \u001b[32m✓\u001b[0m ${path.relative(cwd, p)}\n`);
+          compileFile(p, { ...opts, checkOnly: true });
+          printSuccess(path.relative(cwd, p));
         } catch (e: unknown) {
-          process.stderr.write(`  \u001b[31m✗\u001b[0m ${path.relative(cwd, p)}\n${(e as Error).message}\n`);
+          printError(`${path.relative(cwd, p)}`);
+          console.log(`    ${(e as Error).message}`);
           hadError = true;
         }
       }
-      return process.exit(hadError ? 1 : 0);
-      
+      process.exit(hadError ? 1 : 0);
     }
-    
+    // break; // process.exit exits
 
+    // eslint-disable-next-line no-fallthrough
+    case "preview": {
+      printHeader(`Sinth Preview v${pkgVersion}`);
+      checkForUpdate(pkgVersion);
+      const previewPort = portIdx !== -1 ? port : 4000;
+      printInfo(`Previewing build output at ${colorize(`http://localhost:${previewPort}`, "cyan")}`);
+      await previewBuild({ ...opts, port: previewPort });
+      return;
+    }
+    // break; // return exits
 
-    case "update": {
-      const pkgPath2 = path.join(__dirname, "..", "package.json");
-      const current = fs.existsSync(pkgPath2) ? JSON.parse(fs.readFileSync(pkgPath2, "utf-8")).version : null;
-      https.get("https://registry.npmjs.org/@yannosay/sinth/latest", { timeout: 5000 }, (res: import("http").IncomingMessage) => {
-        let data = "";
-        res.on("data", (chunk: Buffer) => data += chunk.toString());
-        res.on("end", () => {
-          try {
-            const latest = JSON.parse(data).version;
-            if (latest === current) {
-              process.stdout.write(`\u001b[32mAlready on latest version: ${current} ✓\u001b[0m\n`);
-            } else if (latest) {
-              process.stdout.write(`\u001b[36mUpdating Sinth ${current} → ${latest}...\u001b[0m\n`);
-              execSync("npm install -g @yannosay/sinth@latest", { stdio: "inherit" });
-              process.stdout.write(`\u001b[32m✓ Sinth updated to ${latest}!\u001b[0m\n`);
-            }
-          } catch {
-            process.stderr.write("\u001b[31mCould not check for updates.\u001b[0m\n");
-          }
-        });
-      }).on("error", () => process.stderr.write("\u001b[31mCould not reach npm registry.\u001b[0m\n"));
+    case "deploy": {
+      printHeader(`Sinth Deploy v${pkgVersion}`);
+      checkForUpdate(pkgVersion);
+      await deployToCloudflare({ ...opts, port });
+      return;
+    }
+    // break; // return exits
+
+    case "init": {
+      await interactiveInit(cwd, pkgVersion);
       return;
     }
 
     case "version":
     case "--version":
-    case "-v": {
-      const pkgPath = path.join(__dirname, "..", "package.json");
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        process.stdout.write(`Sinth Compiler v${pkg.version}\n`);
-        checkForUpdate(pkg.version); // fire & forget
-      } else {
-        process.stdout.write("Sinth Compiler v1.0.0\n");
-      }
+    case "-v": { // fallthrough intended
+      console.log(`${colorize("Sinth Compiler", "bold")} v${pkgVersion}`);
+      checkForUpdate(pkgVersion);
       return;
     }
 
-    case "init": {
-      await interactiveInit(cwd);
-      process.stdin.destroy();
-      return process.exit(0);
-    }
-
     default: {
-      let version = "1.0.0";
-      const paths = [
-        path.resolve(__dirname, "..", "package.json"),
-        path.resolve(__dirname, "package.json"),
-        path.resolve(process.cwd(), "package.json"),
-        path.resolve(process.cwd(), "..", "package.json"),
-      ];
-      for (const p of paths) {
-        if (fs.existsSync(p)) {
-          try {
-            const pkg = JSON.parse(fs.readFileSync(p, "utf-8"));
-            version = pkg.version;
-            break;
-          } catch {
-            // ignore -- use default version
-          }
-        }
-      }
-      process.stdout.write(`
-\u001b[1mSinth Compiler v${version}\u001b[0m
+      console.log(`
+${colorize("Sinth Compiler", "bold")} v${pkgVersion}
 
-\u001b[1mCommands:\u001b[0m
-  sinth build   [files] [--out ./dist]             Compile .sinth pages
-                [--prod] [--shared-runtime] 
-                [--inline-js] [--inline-css]
-  sinth dev     [files] [--port 3000]              Live-reload dev server
-  sinth check                                      Lint without emitting
-  sinth init    [name]                             Scaffold a new project
-  sinth version                                    Print version
+${colorize("Commands:", "bold")}
+  ${colorize("sinth build", "cyan")}    [files] [--out ./dist]       Compile .sinth pages
+                  [--prod] [--shared-runtime] 
+                  [--inline-js] [--inline-css]
+  ${colorize("sinth dev", "cyan")}     [files] [--port 3000]        Live-reload dev server with HMR
+  ${colorize("sinth preview", "cyan")}  [--port 4000]               Preview built output
+  ${colorize("sinth deploy", "cyan")}   [--out ./dist]             Deploy to Cloudflare Pages
+  ${colorize("sinth check", "cyan")}                                    Lint without emitting
+  ${colorize("sinth init", "cyan")}    [name] [--preset <name>]     Scaffold a new project
+  ${colorize("sinth version", "cyan")}                                 Print version
+
+${colorize("Config:", "bold")}
+  ${colorize("sinth.config.json", "cyan")} - Project configuration (optional)
+  ${colorize("Environment configs:", "dim")} development / production overrides
+
+${colorize("Examples:", "bold")}
+  sinth build --prod                    # Production build
+  sinth dev                             # Start dev server with HMR
+  sinth init my-app --preset full       # Scaffold full project
 `);
       return;
     }
@@ -293,7 +360,9 @@ const PRESETS: { value: Preset; label: string; description: string }[] = [
   { value: "blank", label: "Blank", description: "Folders + config only" },
 ];
 
-async function interactiveInit(cwd: string): Promise<void> {
+async function interactiveInit(cwd: string, version: string): Promise<void> {
+  printHeader("Sinth Project Setup");
+  
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -301,71 +370,50 @@ async function interactiveInit(cwd: string): Promise<void> {
     escapeCodeTimeout: 50,
   });
 
-  process.stdout.write("\u001b[s\u001b[1m\n✨ Welcome to Sinth project setup!\n\n\u001b[0m");
-
-  const rawName = await question(rl, "\u001b[45m\u001b[30m Project name: \u001b[0m ", "my-sinth-project");
-  rl.close();
-  process.stdin.pause();
-  process.stdin.removeAllListeners();
-  process.stdin.read();
-  process.stdout.write("\n");
+  const rawName = await question(rl, `${colorize("Project name:", "cyan")} `, "my-sinth-project");
   const projectName = rawName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-  const preset = await select();
+  const preset = await selectPreset(rl);
+  rl.close();
 
-  process.stdout.write("\u001b[u\u001b[0J");
   const root = path.resolve(cwd, projectName);
   const start = Date.now();
-  scaffoldByPreset(root, projectName, preset);
+  scaffoldByPreset(root, projectName, preset, version);
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
 
-  process.stdout.write(`
-\u001b[1m✨ Success!\u001b[0m
-
- \u001b[45m\u001b[30m Project name: \u001b[0m  ${projectName}
- \u001b[43m\u001b[30m Preset: \u001b[0m ${preset}
-\u001b[32m✓ ${projectName} scaffolded at \u001b[4m${projectName}/\u001b[0m\u001b[32m in ${elapsed}s\u001b[0m
-
-\u001b[47m\u001b[30m Get started: \u001b[0m
-  \u001b[100m\u001b[37m sinth dev \u001b[0m to start dev server.
-`);
+  console.log();
+  console.log(`${colorize(ICONS.success, "green")} ${colorize("Success!", "bold")}`);
+  console.log();
+  console.log(`  ${colorize("Project name:", "cyan")}  ${projectName}`);
+  console.log(`  ${colorize("Preset:", "cyan")} ${preset}`);
+  console.log(`  ${colorize(ICONS.success, "green")} ${projectName} scaffolded at ${underline(projectName + "/")} in ${elapsed}s`);
+  console.log();
+  console.log(`  ${colorize("Get started:", "bold")}`);
+  console.log(`    cd ${projectName}`);
+  console.log(`    ${colorize("sinth dev", "cyan")} to start dev server`);
 }
 
-function question(rl: readline.Interface, prompt: string, defaultVal: string): Promise<string> {
-  return new Promise<string>((resolve: (value: string) => void) => {
-    rl.question(prompt, (answer: string) => {
-      resolve(answer.trim() || defaultVal);
-    });
+function question(_rl: readline.Interface, prompt: string, defaultVal: string): Promise<string> {
+  return new Promise((resolve) => {
+    _rl.question(prompt, (answer) => resolve(answer.trim() || defaultVal));
   });
 }
 
-function select(): Promise<Preset> {
-  return new Promise<Preset>((resolve: (value: Preset) => void) => {
-    const items = PRESETS;
+async function selectPreset(_rl: readline.Interface): Promise<Preset> {
+  return new Promise((resolve) => {
     let selected = 1;
+    const items = PRESETS;
 
-    const prefix = "  ";
-    const cursor = "\u001b[36m❯\u001b[0m";
-    const empty  = " ";
-
-    function render(first: boolean = false) {
-      if (!first) {
-        process.stdout.write(`\u001b[${items.length + 1}A`);
-      }
-      process.stdout.write(`\u001b[43m\u001b[30m Select preset: \u001b[0m\n`);
+    const render = (first = false) => {
+      if (!first) process.stdout.write(`\u001b[${items.length + 1}A`);
+      console.log(`\n  ${colorize("Select preset:", "yellow")}`);
       for (let i = 0; i < items.length; i++) {
-        const pointer = i === selected ? cursor : empty;
-        const isFull  = items[i].value === "full";
-        let label: string;
-        if (i === selected) {
-          label = isFull ? `\u001b[1m\u001b[35m${items[i].label}\u001b[0m` : `\u001b[1m${items[i].label}\u001b[0m`;
-        } else {
-          label = items[i].label;
-        }
-        const desc    = `\u001b[2m- ${items[i].description}\u001b[0m`;
-        process.stdout.write(`${prefix}${pointer} ${label} ${desc}\u001b[0K\n`);
+        const pointer = i === selected ? colorize("❯", "cyan") : " ";
+        const label = i === selected ? colorize(items[i].label, "bold") : items[i].label;
+        const desc = colorize(`- ${items[i].description}`, "gray");
+        console.log(`  ${pointer} ${label} ${desc}`);
       }
-    }
+    };
 
     process.stdin.setRawMode(true);
     process.stdin.resume();
@@ -373,17 +421,13 @@ function select(): Promise<Preset> {
 
     const onData = (key: Buffer) => {
       const str = key.toString();
-      if (str === "\u001b[A") {
-        selected = (selected - 1 + items.length) % items.length;
-        render();
-      } else if (str === "\u001b[B") {
-        selected = (selected + 1) % items.length;
-        render();
-      } else if (str === "\r" || str === "\n") {
+      if (str === "\u001b[A") { selected = (selected - 1 + items.length) % items.length; render(); }
+      else if (str === "\u001b[B") { selected = (selected + 1) % items.length; render(); }
+      else if (str === "\r" || str === "\n") {
         process.stdin.setRawMode(false);
         process.stdin.removeAllListeners("data");
-        process.stdin.resume();
-        process.stdout.write(`\u001b[${items.length + 1}A\u001b[0J`);
+        process.stdin.pause();
+        console.log(`\u001b[${items.length + 1}A\u001b[0J`);
         resolve(items[selected].value);
       } else if (str === "\u0003") {
         process.stdin.setRawMode(false);
@@ -397,18 +441,22 @@ function select(): Promise<Preset> {
   });
 }
 
-function scaffoldByPreset(root: string, name: string, preset: Preset): void {
+function scaffoldByPreset(root: string, name: string, preset: Preset, version: string): void {
   const dirs = ["pages", "components", "styles", "libraries", "assets"];
   for (const d of dirs) fs.mkdirSync(path.join(root, d), { recursive: true });
 
-  fs.writeFileSync(path.join(root, "sinth.config.json"),
-    JSON.stringify({ outDir: "./dist", libraryPaths: ["./libraries"], minify: false }, null, 2)
-  );
+  const config: SinthConfig = {
+    outDir: "./dist",
+    libraryPaths: ["./libraries"],
+    minify: false,
+    sharedRuntime: false,
+  };
+  fs.writeFileSync(path.join(root, "sinth.config.json"), JSON.stringify(config, null, 2));
   fs.writeFileSync(path.join(root, ".gitignore"), "dist/\nnode_modules/\n");
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({
     name: name.toLowerCase().replace(/\s+/g, "-"),
     version: "1.0.0",
-    scripts: { build: "sinth build", dev: "sinth dev" },
+    scripts: { build: "sinth build", dev: "sinth dev", preview: "sinth preview" },
     dependencies: { "sass": "^1.70.0" },
   }, null, 2));
 
@@ -417,6 +465,7 @@ function scaffoldByPreset(root: string, name: string, preset: Preset): void {
   fs.writeFileSync(path.join(root, "styles", "reset.css"),
     `*, *::before, *::after { box-sizing: border-box; }\nbody { margin: 0; font-family: system-ui, sans-serif; line-height: 1.6; }\nimg { max-width: 100%; display: block; }\n`
   );
+
   fs.writeFileSync(path.join(root, "components", "Navbar.sinth"), `-- Navbar component
 
 component Navbar {
@@ -486,9 +535,9 @@ import css "../styles/reset.css"
 
 title = "My Site"
 fav   = "assets/favicon.ico"
-descr = "Built with Sinth v1.0.0."
+descr = "Built with Sinth v${version}."
 
-var int score = 0
+var num score = 0
 var str message = "Click to begin"
 
 Navbar
@@ -535,8 +584,8 @@ script {
 
 component Card(title, color = "blue") {
   Div(class: "card") {
-    Heading(level: 3) { "$title" }
-    Div(class: "card-body") { "$slot" }
+    Heading(level: 3) { title }
+    Div(class: "card-body") { $slot }
   }
 
   style {
@@ -556,7 +605,8 @@ component Card(title, color = "blue") {
 }
 `);
 }
+
 main().catch(e => {
-  process.stderr.write(`\u001b[31m${(e as Error).message}\u001b[0m\n`);
+  console.error(colorize(ICONS.error, "red"), (e as Error).message);
   process.exit(1);
 });

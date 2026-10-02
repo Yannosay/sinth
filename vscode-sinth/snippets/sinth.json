@@ -1,0 +1,238 @@
+{
+  "page": {
+    "prefix": "page",
+    "body": [
+      "page",
+      "",
+      "import \"../components/Navbar.sinth\"",
+      "import css \"../styles/reset.css\"",
+      "",
+      "title = \"${1:Page Title}\"",
+      "descr = \"${2:SEO description}\"",
+      "fav   = \"assets/favicon.ico\"",
+      "",
+      "var num ${3:count} = 0",
+      "var str ${4:name} = \"${5:World}\"",
+      "",
+      "Navbar",
+      "",
+      "Main {",
+      "  Heading(level: 1) { \"${1:Page Title}\" }",
+      "  Paragraph { \"Welcome, \" + ${4:name} }",
+      "  Button(onClick: ${3:count} += 1) { \"Clicked \" + ${3:count} + \" times\" }",
+      "}",
+      "",
+      "style {",
+      "  main { padding: \"2rem\"; textAlign: \"center\"; }",
+      "  button { marginTop: \"1rem\"; padding: \"0.5rem 1rem\"; }",
+      "}",
+      "",
+      "script {",
+      "  function ${6:handleClick}() {",
+      "    ${3:count} += 1",
+      "    sinthRender()",
+      "  }",
+      "}"
+    ],
+    "description": "Sinth page template"
+  },
+  "component": {
+    "prefix": "component",
+    "body": [
+      "component ${1:ComponentName}(${2:props}) {",
+      "  Div(class: \"${1:component-name}\") {",
+      "    Heading(level: 3) { \"${1:ComponentName}\" }",
+      "    Div(class: \"body\") { $$slot }",
+      "  }",
+      "",
+      "  style {",
+      "    .${1:component-name} {",
+      "      padding: \"1rem\"",
+      "      borderRadius: \"0.5rem\"",
+      "      backgroundColor: \"white\"",
+      "      boxShadow: \"0 2px 8px rgba(0,0,0,0.1)\"",
+      "      ",
+      "      &:hover {",
+      "        boxShadow: \"0 4px 16px rgba(0,0,0,0.15)\"",
+      "        transform: \"translateY(-2px)\"",
+      "        transition: \"all 0.2s\"",
+      "      }",
+      "    }",
+      "  }",
+      "}"
+    ],
+    "description": "Sinth component template"
+  },
+  "function": {
+    "prefix": "function",
+    "body": [
+      "function ${1:name}(${2:params}) -> ${3:returnType} {",
+      "  ${4:// body}",
+      "  return ${5:value}",
+      "}"
+    ],
+    "description": "Sinth function template"
+  },
+  "if": {
+    "prefix": "if",
+    "body": [
+      "if (${1:condition}) {",
+      "  ${2:// then}",
+      "} else {",
+      "  ${3:// else}",
+      "}"
+    ],
+    "description": "If/else block"
+  },
+  "if-elif-else": {
+    "prefix": "ifel",
+    "body": [
+      "if (${1:condition}) {",
+      "  ${2:// then}",
+      "} else if (${3:condition}) {",
+      "  ${4:// else if}",
+      "} else {",
+      "  ${5:// else}",
+      "}"
+    ],
+    "description": "If/elif/else chain"
+  },
+  "for": {
+    "prefix": "for",
+    "body": [
+      "for (${1:item} in ${2:items}) key (${1:item}.${3:id}) {",
+      "  ${4:// body}",
+      "}"
+    ],
+    "description": "For loop with key"
+  },
+  "for-index": {
+    "prefix": "fori",
+    "body": [
+      "for (${1:item}, ${2:index} in ${3:items}) key (${1:item}.${4:id}) {",
+      "  ${5:// body}",
+      "}"
+    ],
+    "description": "For loop with index"
+  },
+  "var": {
+    "prefix": "var",
+    "body": [
+      "var ${1:type} ${2:name} = ${3:value}"
+    ],
+    "description": "Variable declaration"
+  },
+  "import": {
+    "prefix": "import",
+    "body": [
+      "import \"${1:path}\""
+    ],
+    "description": "Import Sinth component"
+  },
+  "import-css": {
+    "prefix": "importcss",
+    "body": [
+      "import css \"${1:path}\""
+    ],
+    "description": "Import CSS file"
+  },
+  "import-js": {
+    "prefix": "importjs",
+    "body": [
+      "import js \"${1:path}\""
+    ],
+    "description": "Import JavaScript file"
+  },
+  "style": {
+    "prefix": "style",
+    "body": [
+      "style {",
+      "  ${1:selector} {",
+      "    ${2:property}: \"${3:value}\";",
+      "  }",
+      "}"
+    ],
+    "description": "Style block"
+  },
+  "script": {
+    "prefix": "script",
+    "body": [
+      "script {",
+      "  function ${1:name}() {",
+      "    ${2:// body}",
+      "  }",
+      "}"
+    ],
+    "description": "Script block"
+  },
+  "button": {
+    "prefix": "btn",
+    "body": [
+      "Button(onClick: ${1:handler}) { ${2:Label} }"
+    ],
+    "description": "Button component"
+  },
+  "input": {
+    "prefix": "input",
+    "body": [
+      "Input(type: \"${1:text}\", model: ${2:value}, placeholder: \"${3:Placeholder}\")"
+    ],
+    "description": "Input component"
+  },
+  "checkbox": {
+    "prefix": "checkbox",
+    "body": [
+      "Checkbox(model: ${1:value}, label: \"${2:Label}\")"
+    ],
+    "description": "Checkbox component"
+  },
+  "select": {
+    "prefix": "select",
+    "body": [
+      "Select(model: ${1:value}) {",
+      "  Option(value: \"\") { \"Select...\" }",
+      "  Option(value: \"${2:option1}\") { \"${3:Label 1}\" }",
+      "  Option(value: \"${4:option2}\") { \"${5:Label 2}\" }",
+      "}"
+    ],
+    "description": "Select component"
+  },
+  "modal": {
+    "prefix": "modal",
+    "body": [
+      "component ${1:Modal}(${2:open}, ${3:onClose}) {",
+      "  if (${2:open}) persist replace delay(200) {",
+      "    Div(class: \"modal-overlay\", onClick: ${3:onClose}) {",
+      "      Div(class: \"modal\", onClick: (e) => e.stopPropagation()) {",
+      "        $$slot",
+      "        Button(onClick: ${3:onClose}) { \"Close\" }",
+      "      }",
+      "    }",
+      "  }",
+      "}"
+    ],
+    "description": "Modal component with animations"
+  },
+  "form": {
+    "prefix": "form",
+    "body": [
+      "Form(onSubmit: ${1:handler}) {",
+      "  Fieldset {",
+      "    Legend { \"${1:Title}\" }",
+      "    ",
+      "    Div(class: \"field\") {",
+      "      Label { \"${2:Label}\" }",
+      "      Input(type: \"${3:text}\", model: ${4:value}, placeholder: \"${5:Placeholder}\")",
+      "    }",
+      "    ",
+      "    Div(class: \"field checkbox\") {",
+      "      Checkbox(model: ${6:checked}, label: \"${7:Label}\")",
+      "    }",
+      "    ",
+      "    Button(type: \"submit\") { \"${8:Submit}\" }",
+      "  }",
+      "}"
+    ],
+    "description": "Form template"
+  }
+}

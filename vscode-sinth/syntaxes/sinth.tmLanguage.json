@@ -1,0 +1,287 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Sinth",
+  "scopeName": "source.sinith",
+  "fileTypes": ["sinth"],
+  "injectionSelector": "L:source.sinith -string -comment",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#component-names"
+    },
+    {
+      "include": "#function-calls"
+    },
+    {
+      "include": "#attributes"
+    },
+    {
+      "include": "#interpolation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.sinith",
+          "match": "--(?!\\[).*$"
+        },
+        {
+          "name": "comment.block.sinith",
+          "begin": "--\\[",
+          "end": "]--",
+          "patterns": [
+            {
+              "include": "#comments"
+            }
+          ]
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.sinith",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sinith",
+              "match": "\\\\."
+            },
+            {
+              "include": "#interpolation"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.sinith",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sinith",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.template.sinith",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sinith",
+              "match": "\\\\."
+            },
+            {
+              "include": "#interpolation"
+            }
+          ]
+        }
+      ]
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "name": "meta.interpolation.sinith",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#expressions"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.sinith",
+          "match": "\\b(page|component|function|if|else|elif|for|in|var|const|return|import|export|as|css|js|style|script|custom-element|custom|remove|break|continue)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.sinith",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.other.sinith",
+          "match": "\\b(slot|model|bind|persist|replace|delay|hide|key)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.sinith",
+          "match": "\\b(str|num|int|bool|obj|arr|ui|void|any)\\b"
+        },
+        {
+          "name": "storage.modifier.sinith",
+          "match": "\\b(->)\\b"
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.sinith",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.sinith",
+          "match": "\\b(null|undefined)\\b"
+        },
+        {
+          "name": "constant.numeric.sinith",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.sinith",
+          "match": "(\\+=|-=|\\*=|/=|%=|=)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.sinith",
+          "match": "([+\\-*/%])"
+        },
+        {
+          "name": "keyword.operator.comparison.sinith",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.ternary.sinith",
+          "match": "[?:]"
+        },
+        {
+          "name": "keyword.operator.spread.sinith",
+          "match": "(\\.\\.\\.)"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.bracket.curly.sinith",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.bracket.square.sinith",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.bracket.round.sinith",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.separator.sinith",
+          "match": "[,;:]"
+        },
+        {
+          "name": "punctuation.accessor.sinith",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.arrow.sinith",
+          "match": "->"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.parameter.sinith",
+          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*:)"
+        },
+        {
+          "name": "variable.other.sinith",
+          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*[=+\\-*/%]?=)"
+        },
+        {
+          "name": "variable.other.readwrite.sinith",
+          "match": "\\b([a-z_][\\w$]*)\\b"
+        }
+      ]
+    },
+    "component-names": {
+      "patterns": [
+        {
+          "name": "entity.name.type.component.sinith",
+          "match": "\\b([A-Z][\\w]*)\\b(?=\\s*[{(\\s])"
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "name": "entity.name.function.sinith",
+          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*\\()"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "name": "meta.attribute.sinith",
+          "begin": "(\\b[a-z_][\\w-]*\\b)(?=\\s*:)",
+          "end": "(?=\\s*[},)\\s]|$)",
+          "patterns": [
+            {
+              "name": "entity.other.attribute-name.sinith",
+              "match": "\\b[a-z_][\\w-]*\\b"
+            },
+            {
+              "include": "#expressions"
+            }
+          ]
+        }
+      ]
+    },
+    "expressions": {
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#literals"
+        },
+        {
+          "include": "#variables"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#function-calls"
+        }
+      ]
+    }
+  }
+}

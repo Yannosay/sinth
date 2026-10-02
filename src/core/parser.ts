@@ -12,7 +12,7 @@ export class Parser {
 
 
   parse(): SinthFile {
-    let   isPage   = false;
+    let isPage = false;
     const imports:   ImportNode[]    = [];
     const meta:      MetaEntry[]     = [];
     const defs:      CompDef[]       = [];
@@ -25,7 +25,7 @@ export class Parser {
     const initLogic: string[] = [];
     this._varDecls = varDecls;
 
-    if (this.check(TT.KW_PAGE)) { this.consume(TT.KW_PAGE); }
+    if (this.check(TT.KW_PAGE)) { this.consume(TT.KW_PAGE); isPage = true; }
 
     while (this.check(TT.KW_IMPORT)) imports.push(this.parseImport());
 
@@ -68,58 +68,68 @@ export class Parser {
         this.consume(TT.RPAREN);
         uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc }], loc });
       }
-else if (this.check(TT.IDENT)) {
-const savedPos = this.pos;
-const identName = this.peek().value;
-const nextType  = this.tokens[this.pos + 1]?.type;
+      else if (this.check(TT.IDENT)) {
+        const savedPos = this.pos;
+        const identName = this.peek().value;
+        const nextType  = this.tokens[this.pos + 1]?.type;
 
-const isComparison = [TT.OP_EQEQ, TT.OP_NEQ, TT.OP_LT, TT.OP_GT, TT.OP_LTEQ, TT.OP_GTEQ].includes(nextType);
-const isLogicAndOr = nextType === TT.IDENT && (this.tokens[this.pos + 1]?.value === "and" || this.tokens[this.pos + 1]?.value === "or");
+        const isComparison = [TT.OP_EQEQ, TT.OP_NEQ, TT.OP_LT, TT.OP_GT, TT.OP_LTEQ, TT.OP_GTEQ].includes(nextType);
+        const isLogicAndOr = nextType === TT.IDENT && (this.tokens[this.pos + 1]?.value === "and" || this.tokens[this.pos + 1]?.value === "or");
 
-if (isComparison || isLogicAndOr) {
-    throw new SinthError(
-        `Unexpected expression '${identName} ...' at top level. Did you mean to wrap this in an 'if' block?`,
-        this.peek().loc,
-    );
-}
+        if (isComparison || isLogicAndOr) {
+            throw new SinthError(
+                `Unexpected expression '${identName} ...' at top level. Did you mean to wrap this in an 'if' block?`,
+                this.peek().loc,
+            );
+        }
 
-// top-level assignment: ident = expr
-if (nextType === TT.EQUALS ||
-(nextType === TT.OP_PLUS  && this.tokens[this.pos + 2]?.type === TT.EQUALS) ||
-(nextType === TT.OP_MINUS && this.tokens[this.pos + 2]?.type === TT.EQUALS)) {
-    this.consume(TT.IDENT); // consume name
-    let op: AssignOp = "=";
-    if      (this.check(TT.OP_PLUS))  { this.consume(TT.OP_PLUS);  op = "+="; }
-    else if (this.check(TT.OP_MINUS)) { this.consume(TT.OP_MINUS); op = "-="; }
-    this.consume(TT.EQUALS);
-    const expr = this.parseExpression();
-    if (expr) {
-        initLogic.push(`${identName} ${op} ${compileExprToJS(expr)};`);
-    }
-    continue;
-}
+        // top-level assignment: ident = expr
+        if (nextType === TT.EQUALS ||
+        (nextType === TT.OP_PLUS  && this.tokens[this.pos + 2]?.type === TT.EQUALS) ||
+        (nextType === TT.OP_MINUS && this.tokens[this.pos + 2]?.type === TT.EQUALS)) {
+            this.consume(TT.IDENT); // consume name
+            let op: AssignOp = "=";
+            if      (this.check(TT.OP_PLUS))  { this.consume(TT.OP_PLUS);  op = "+="; }
+            else if (this.check(TT.OP_MINUS)) { this.consume(TT.OP_MINUS); op = "-="; }
+            this.consume(TT.EQUALS);
+            const expr = this.parseExpression();
+            if (expr) {
+                initLogic.push(`${identName} ${op} ${compileExprToJS(expr)};`);
+            }
+            continue;
+        }
 
-if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
-  this.consume(TT.IDENT);
-  this.consume(TT.LPAREN);
-  const args: Expression[] = [];
-  if (!this.check(TT.RPAREN)) {
-    args.push(this.parseExpression()!);
-    while (this.check(TT.COMMA)) {
-      this.consume(TT.COMMA);
-      args.push(this.parseExpression()!);
-    }
-  }
-  this.consume(TT.RPAREN);
-  const isMemo = identName.startsWith("$");
-  const realName = isMemo ? identName.substring(1) : identName;
-  const expr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
-  uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc: this.peek().loc }], loc: this.peek().loc });
-} else {
-  this.pos = savedPos;
-  uses.push(this.parseCompUse());
-}
-}
+        if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
+          this.consume(TT.IDENT);
+          this.consume(TT.LPAREN);
+          const args: Expression[] = [];
+          if (!this.check(TT.RPAREN)) {
+            args.push(this.parseExpression()!);
+            while (this.check(TT.COMMA)) {
+              this.consume(TT.COMMA);
+              args.push(this.parseExpression()!);
+            }
+          }
+          this.consume(TT.RPAREN);
+          const isMemo = identName.startsWith("$");
+          const realName = isMemo ? identName.substring(1) : identName;
+          const expr: Expression = { kind: "call", callee: { kind: "variable", name: realName }, args, memo: isMemo || undefined };
+          uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc: this.peek().loc }], loc: this.peek().loc });
+        } else if (nextType === TT.DOT) {
+          // Handle dotted function calls like console.log(...)
+          this.pos = savedPos;
+          const expr = this.parseExpression();
+          if (expr && expr.kind === "call") {
+            uses.push({ kind: "use", name: "__IF_ROOT__", attrs: [], children: [{ kind: "expr", expression: expr, loc: this.peek().loc }], loc: this.peek().loc });
+          } else {
+            this.pos = savedPos;
+            uses.push(this.parseCompUse());
+          }
+        } else {
+          this.pos = savedPos;
+          uses.push(this.parseCompUse());
+        }
+      }
       else throw new SinthError(
         `Unexpected token '${this.peek().value}' (${TT[this.peek().type]}) at top level`,
         this.peek().loc,
@@ -279,7 +289,14 @@ private parseArrayLiteral(): Literal {
     this.consume(TT.LBRACE);
     const obj: Record<string, string | number | boolean | null> = {};
     while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
-      const key = this.consume(TT.IDENT).value;
+      let key: string;
+      if (this.check(TT.IDENT)) {
+        key = this.consume(TT.IDENT).value;
+      } else if (this.check(TT.STRING)) {
+        key = this.consume(TT.STRING).value;
+      } else {
+        throw new SinthError(`Expected identifier or string as object key`, this.peek().loc);
+      }
       this.consume(TT.COLON);
       if (this.check(TT.STRING)) {
         obj[key] = this.consume(TT.STRING).value;
@@ -296,6 +313,14 @@ private parseArrayLiteral(): Literal {
         obj[key] = null;
       } else if (this.check(TT.IDENT)) {
         obj[key] = `__VAR__${this.consume(TT.IDENT).value}`;
+      } else if (this.check(TT.LBRACE)) {
+        const nestedObj = this.parseObjectLiteral();
+        obj[key] = JSON.stringify(nestedObj);
+      } else if (this.check(TT.LBRACKET)) {
+        const arrLit = this.parseArrayLiteral();
+        if (arrLit.kind === "str") {
+          obj[key] = arrLit.value;
+        }
       } else {
         throw new SinthError(`Expected literal value for key '${key}'`, this.peek().loc);
       }
@@ -394,11 +419,22 @@ private parseArrayLiteral(): Literal {
 
   private parseUnary(): Expression {
     const tok = this.peek();
-    if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT || tok.type === TT.OP_MINUS) {
-      const op: UnaryOp = (tok.type === TT.IDENT && tok.value === "not") ? "not" : tok.type === TT.OP_MINUS ? "-" : "not";
-      if (tok.type === TT.IDENT) this.consume(TT.IDENT);
-      else if (tok.type === TT.OP_NOT) this.consume(TT.OP_NOT);
-      else this.consume(TT.OP_MINUS);
+    if ((tok.type === TT.IDENT && tok.value === "not") || tok.type === TT.OP_NOT || tok.type === TT.OP_MINUS || tok.type === TT.OP_PLUS) {
+      let op: UnaryOp;
+      if (tok.type === TT.IDENT && tok.value === "not") {
+        op = "not";
+        this.consume(TT.IDENT);
+      } else if (tok.type === TT.OP_NOT) {
+        op = "not";
+        this.consume(TT.OP_NOT);
+      } else if (tok.type === TT.OP_MINUS) {
+        op = "-";
+        this.consume(TT.OP_MINUS);
+      } else {
+        // unary plus - just consume and parse operand (no-op in JS)
+        this.consume(TT.OP_PLUS);
+        return this.parseUnary();
+      }
       const operand = this.parseUnary();
       return { kind: "unary", op, operand };
     }
@@ -408,8 +444,7 @@ private parseArrayLiteral(): Literal {
     return primary;
   }
 
-  private parseTerm(): Expression {
-    let left = this.parseUnary();
+  private parseTerm(left: Expression): Expression {
     while (true) {
       const t = this.peek().type;
       if (t === TT.OP_STAR || t === TT.OP_SLASH || t === TT.OP_MOD) {
@@ -430,7 +465,7 @@ private parseArrayLiteral(): Literal {
       if (t === TT.OP_PLUS || t === TT.OP_MINUS) {
         const op: BinaryOp = t === TT.OP_PLUS ? "+" : "-";
         this.pos++;
-        const right = this.parseTerm();
+        const right = this.parseTerm(this.parseUnary());
         left = { kind: "binary", left, op, right };
       } else {
         break;
@@ -440,7 +475,7 @@ private parseArrayLiteral(): Literal {
   }
 
   private parseAdditionExpression(): Expression {
-    return this.parseAddition(this.parseTerm());
+    return this.parseAddition(this.parseTerm(this.parseUnary()));
   }
 
   private parseComparisonExpression(): Expression {
@@ -489,6 +524,7 @@ private parseArrayLiteral(): Literal {
 
 
   private parseBinaryRHS(left: Expression): Expression {
+    left = this.parseTerm(left);
     left = this.parseAddition(left);
     left = this.parseComparison(left);
     left = this.parseLogical(left);
