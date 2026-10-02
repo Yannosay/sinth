@@ -25,11 +25,23 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
     cache.clear();
     const pages = (opts.files && opts.files.length > 0)
       ? opts.files.filter(f => fs.existsSync(f))
-      : findSinthPages(opts.projectRoot, opts.outDir);
+      : findSinthPages(opts.projectRoot, opts.outDir, opts.libraryPaths);
+    const jsDir = path.join(path.resolve(opts.outDir), "_sinth", "js");
+    const cssDir = path.join(path.resolve(opts.outDir), "_sinth", "styles");
+    fs.rmSync(jsDir, { recursive: true, force: true });
+    fs.rmSync(cssDir, { recursive: true, force: true });
     for (const p of pages) {
       try {
         const result = compileFile(p, { ...opts, checkOnly: false });
         if (!result) continue;
+        if (result.jsFile) {
+          fs.mkdirSync(jsDir, { recursive: true });
+          fs.writeFileSync(path.join(jsDir, result.jsFile.filename), result.jsFile.content);
+        }
+        if (result.cssFile) {
+          fs.mkdirSync(cssDir, { recursive: true });
+          fs.writeFileSync(path.join(cssDir, result.cssFile.filename), result.cssFile.content);
+        }
         const html = result.html;
         const rel = path.relative(opts.projectRoot, p).replace(/\.sinth$/, ".html").replace(/\\/g, "/");
         const url = "/" + rel;
@@ -73,7 +85,7 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
     const mtimes = new Map<string, number>();
     const poller = setInterval(() => {
       const pages = (opts.files && opts.files.length > 0)
-        ? opts.files : findSinthPages(opts.projectRoot, opts.outDir);
+        ? opts.files : findSinthPages(opts.projectRoot, opts.outDir, opts.libraryPaths);
       for (const p of pages) {
         try {
           const mtime = fs.statSync(p).mtimeMs;
@@ -112,6 +124,16 @@ export async function startDevServer(opts: CompileOptions & { port: number; file
     const cached = cache.get(reqUrl) ??
       cache.get(reqUrl.endsWith("/") ? reqUrl + "index.html" : reqUrl + ".html");
     if (cached) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); res.end(cached); return; }
+
+    if (reqUrl.startsWith("/_sinth/")) {
+      const assetPath = path.join(path.resolve(opts.outDir), reqUrl);
+      if (fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+        const ctype = EXT_TYPES[path.extname(assetPath).toLowerCase()] ?? "application/octet-stream";
+        res.writeHead(200, { "Content-Type": ctype });
+        res.end(fs.readFileSync(assetPath));
+        return;
+      }
+    }
 
     let filePath = path.join(opts.projectRoot, reqUrl);
     if (reqUrl.endsWith("/")) filePath = path.join(filePath, "index.html");

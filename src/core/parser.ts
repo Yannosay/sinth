@@ -25,14 +25,13 @@ export class Parser {
     const initLogic: string[] = [];
     this._varDecls = varDecls;
 
-    if (this.check(TT.KW_PAGE)) { this.consume(TT.KW_PAGE); isPage = true; }
+    if (this.check(TT.KW_PAGE)) { this.consume(TT.KW_PAGE); }
 
     while (this.check(TT.KW_IMPORT)) imports.push(this.parseImport());
 
     while (this.isMetaStart()) {
       const entry = this.parseMeta();
       meta.push(entry);
-      if (entry.key === "title") isPage = true;
     }
 
 
@@ -156,13 +155,26 @@ if (nextType === TT.LPAREN && identName[0] === identName[0].toLowerCase()) {
       return { kind: "css", path: this.consume(TT.STRING).value, loc };
     }
     if (this.check(TT.STRING)) {
-      return { kind: "sinth", path: this.consume(TT.STRING).value, loc };
+      const value = this.consume(TT.STRING).value;
+      if (value.endsWith(".css") || value.endsWith(".scss")) {
+        return { kind: "css", path: value, loc };
+      }
+      if (value.endsWith(".js") || value.endsWith(".mjs")) {
+        return { kind: "js", name: value, loc };
+      }
+      if (value.endsWith(".sinth") || value.startsWith("./") || value.startsWith("../") || value.includes("/") || value.includes("\\")) {
+        return { kind: "sinth", path: value, loc };
+      }
+      return { kind: "builtin", name: value, loc };
     }
     if (this.check(TT.IDENT)) {
       const name = this.consume(TT.IDENT).value;
       let alias: string | undefined;
       if (this.check(TT.KW_AS)) { this.consume(TT.KW_AS); alias = this.consume(TT.IDENT).value; }
-      return { kind: "js", name, alias, loc };
+      if (name.endsWith(".js") || name.endsWith(".mjs")) {
+        return { kind: "js", name, alias, loc };
+      }
+      return { kind: "builtin", name, alias, loc };
     }
     throw new SinthError(`Expected import path, library name, or 'css'`, loc);
   }

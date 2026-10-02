@@ -63,14 +63,16 @@ async function main(): Promise<void> {
   const minify       = args.includes("--prod") || Boolean(cfg.minify);
   const sharedRuntime = args.includes("--shared-runtime") || Boolean(cfg.sharedRuntime);
   const inlineJS      = args.includes("--inline-js") || Boolean(cfg.inlineJS);
+  const inlineCSS     = args.includes("--inline-css") || Boolean(cfg.inlineCSS);
   const libraryPaths = (cfg.libraryPaths as string[] | undefined) ?? [path.join(cwd, "libraries")];
+  const staticDirs   = (cfg.staticDirs as string[] | undefined) ?? ["assets"];
 
   const flagValues = new Set<string>();
   if (outDirIdx !== -1) flagValues.add(args[outDirIdx + 1]);
   if (portIdx   !== -1) flagValues.add(args[portIdx + 1]);
   const cleanArgs = args.filter(a => !a.startsWith("--") && !flagValues.has(a));
 
-  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, minify, checkOnly: false, sharedRuntime, inlineJS };
+  const opts: CompileOptions = { projectRoot: cwd, outDir, libraryPaths, staticDirs, minify, checkOnly: false, sharedRuntime, inlineJS, inlineCSS };
 
   switch (command) {
     case "build": {
@@ -86,7 +88,7 @@ async function main(): Promise<void> {
       const fileArgs = cleanArgs.filter(a => a.endsWith(".sinth"));
       const pages    = fileArgs.length > 0
         ? fileArgs.map(f => path.resolve(cwd, f)).filter(f => fs.existsSync(f))
-        : findSinthPages(cwd, outDir);
+        : findSinthPages(cwd, outDir, libraryPaths);
 
       if (pages.length === 0) { process.stdout.write("No .sinth files found.\n"); process.exit(0); }
 
@@ -94,8 +96,10 @@ async function main(): Promise<void> {
 
       const sharedRuntimes: string[] = [];
       const compiledJsDir = path.join(outDir, "_sinth", "js");
+      const compiledCssDir = path.join(outDir, "_sinth", "styles");
       if (!opts.checkOnly) {
         fs.rmSync(compiledJsDir, { recursive: true, force: true });
+        fs.rmSync(compiledCssDir, { recursive: true, force: true });
       }
       for (const p of pages) {
         try {
@@ -108,6 +112,16 @@ async function main(): Promise<void> {
           if (result.jsFile) {
             fs.mkdirSync(compiledJsDir, { recursive: true });
             fs.writeFileSync(path.join(compiledJsDir, result.jsFile.filename), result.jsFile.content);
+          }
+          if (result.cssFile) {
+            fs.mkdirSync(compiledCssDir, { recursive: true });
+            fs.writeFileSync(path.join(compiledCssDir, result.cssFile.filename), result.cssFile.content);
+          }
+          if (result.copiedAssets) {
+            for (const asset of result.copiedAssets) {
+              fs.mkdirSync(path.dirname(asset.dest), { recursive: true });
+              fs.copyFileSync(asset.src, asset.dest);
+            }
           }
           const rel = path.relative(cwd, p).replace(/\.sinth$/, ".html");
           const out = path.join(outDir, rel);
@@ -128,10 +142,13 @@ async function main(): Promise<void> {
         process.stdout.write(`  \u001b[32m✓\u001b[0m sinth-runtime.js (shared)\n`);
       }
 
-      const assetsIn = path.join(cwd, "assets"), assetsOut = path.join(outDir, "assets");
-      if (fs.existsSync(assetsIn)) {
-        copyDir(assetsIn, assetsOut);
-        process.stdout.write(`  \u001b[32m✓\u001b[0m assets/ → ${path.relative(cwd, assetsOut)}/\n`);
+      for (const dir of staticDirs) {
+        const staticIn = path.isAbsolute(dir) ? dir : path.join(cwd, dir);
+        const staticOut = path.isAbsolute(dir) ? path.join(outDir, path.basename(dir)) : path.join(outDir, dir);
+        if (fs.existsSync(staticIn)) {
+          copyDir(staticIn, staticOut);
+          process.stdout.write(`  \x1b[32m✓\x1b[0m ${dir}/ → ${path.relative(cwd, staticOut)}/\n`);
+        }
       }
 
       const libIn = path.join(cwd, "libraries"), libOut = path.join(outDir, "libraries");
@@ -171,7 +188,7 @@ async function main(): Promise<void> {
 
     case "check": {
       opts.checkOnly = true;
-      const pages    = findSinthPages(cwd, outDir);
+      const pages    = findSinthPages(cwd, outDir, libraryPaths);
       let hadError   = false;
       for (const p of pages) {
         try {
@@ -257,7 +274,7 @@ async function main(): Promise<void> {
 \u001b[1mCommands:\u001b[0m
   sinth build   [files] [--out ./dist]             Compile .sinth pages
                 [--prod] [--shared-runtime] 
-                [--inline-js]
+                [--inline-js] [--inline-css]
   sinth dev     [files] [--port 3000]              Live-reload dev server
   sinth check                                      Lint without emitting
   sinth init    [name]                             Scaffold a new project

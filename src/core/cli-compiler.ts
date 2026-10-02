@@ -4,7 +4,7 @@ import { createHash } from "crypto";
 import { Expression, Child, CompUse, IfBlock, ForLoop, Loc, ReturnStmt, VarDeclaration, CompileCtx, SinthError, SinthWarning } from "./types";
 import { fnv1a, escAttr } from "../utils";
 import { FunctionDef } from "./types";
-import { parseFile, resolveImports, ResolverConfig } from "../resolver";
+import { parseFile, resolveImports, resolveSinthPath, ResolverConfig } from "../resolver";
 import { compileFunctionDef } from "./runtime/functions";
 import { processStyleBlock } from "./style-processor";
 import { buildHeadData, renderHead } from "./head-builder";
@@ -16,17 +16,21 @@ export interface CompileOptions {
   projectRoot:  string;
   outDir:       string;
   libraryPaths: string[];
+  staticDirs:   string[];
   minify:       boolean;
   checkOnly:    boolean;
   sharedRuntime: boolean;
   inlineJS:     boolean;
+  inlineCSS:    boolean;
 }
 
-export function compileFile(filePath: string, opts: CompileOptions): { html: string; shared?: string; jsFile?: { filename: string; content: string } } | null {
+export function compileFile(filePath: string, opts: CompileOptions): { html: string; shared?: string; jsFile?: { filename: string; content: string }; cssFile?: { filename: string; content: string }; copiedAssets?: { src: string; dest: string }[] } | null {
   const absPath = path.resolve(filePath);
   const file    = parseFile(absPath);
+  file.isPage   = true;
   const cfg: ResolverConfig = { projectRoot: opts.projectRoot, libraryPaths: opts.libraryPaths };
-  const { allDefs, customEls, cssLinks, jsLinks } = resolveImports(file, cfg);
+  const { allDefs, customEls, cssLinks, jsLinks, builtinCss } = resolveImports(file, cfg);
+  const copiedAssets: { src: string; dest: string }[] = [];
   const hash = "_" + fnv1a(absPath);
   const allVarDecls: VarDeclaration[] = file.varDecls;
   const functionDefs: FunctionDef[]   = file.functions;
@@ -462,7 +466,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
 
   const bodyHTML = flatUses.map(u => renderChild(u, ctx, new Map(), 0)).join("\n");
   const pageCSS   = file.styles.map(s => processStyleBlock(s, hash, new Map())).join("\n");
-  const scopedCSS = [pageCSS, ...ctx.extraCSS].filter(c => c.trim()).join("\n");
+  const scopedCSS = [pageCSS, ...ctx.extraCSS, ...(opts.inlineCSS ? builtinCss.map(b => b.content) : [])].filter(c => c.trim()).join("\n");
   const { componentScripts, pageScripts } = collectScripts(file, allDefs);
 
   // collect all assigned variables for default-value warnings
@@ -489,17 +493,56 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
     return fs.existsSync(base) ? path.basename(base) : undefined;
   })();
 
+  const htmlOutDirForAssets = path.dirname(path.join(opts.outDir, path.relative(opts.projectRoot, absPath).replace(/\.sinth$/, ".html")));
+
   const relativeCssLinks = cssLinks.map(css => {
-    const rel = path.relative(path.dirname(absPath), css).replace(/\\/g, "/");
+    if (css.startsWith("//") || /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(css)) return css;
+    const resolved = path.isAbsolute(css) ? css : path.resolve(path.dirname(absPath), css);
+    const relToProject = path.relative(opts.projectRoot, resolved).replace(/\\/g, "/");
+    if (!relToProject.startsWith("..") && !path.isAbsolute(relToProject)) {
+      copiedAssets.push({ src: resolved, dest: path.join(opts.outDir, relToProject) });
+    }
+    const rel = path.relative(htmlOutDirForAssets, path.join(opts.outDir, relToProject)).replace(/\\/g, "/");
+    if (rel === "") return "./" + path.basename(resolved);
     return rel.startsWith(".") ? rel : "./" + rel;
   });
-  const relativeJsLinks = jsLinks.map(js => ({
-    ...js,
-    src: (() => {
-      const rel = path.relative(path.dirname(absPath), js.src).replace(/\\/g, "/");
-      return rel.startsWith(".") ? rel : "./" + rel;
-    })(),
-  }));
+
+  const relativeJsLinks = jsLinks.map(js => {
+    const jsResolved = path.isAbsolute(js.src) ? js.src : path.resolve(path.dirname(absPath), js.src);
+    if (jsResolved.startsWith(path.resolve(opts.projectRoot) + path.sep)) {
+      const relToProject = path.relative(opts.projectRoot, jsResolved).replace(/\\/g, "/");
+      if (!relToProject.startsWith("..") && !path.isAbsolute(relToProject)) {
+        copiedAssets.push({ src: jsResolved, dest: path.join(opts.outDir, relToProject) });
+      }
+      const rel = path.relative(htmlOutDirForAssets, path.join(opts.outDir, relToProject)).replace(/\\/g, "/");
+      return {
+        ...js,
+        src: rel === "" ? "./" + path.basename(jsResolved) : (rel.startsWith(".") ? rel : "./" + rel),
+      };
+    }
+    const rel = path.relative(htmlOutDirForAssets, jsResolved).replace(/\\/g, "/");
+    return {
+      ...js,
+      src: rel === "" ? "./" + path.basename(jsResolved) : (rel.startsWith(".") ? rel : "./" + rel),
+    };
+  });
+
+  let builtinCssFile: { filename: string; content: string } | undefined;
+  let builtinCssLinks: string[] = [];
+  if (!opts.inlineCSS && builtinCss.length > 0) {
+    const sortedBuiltinCss = [...builtinCss].sort((a, b) => a.name.localeCompare(b.name));
+    const allBuiltinCss = sortedBuiltinCss.map(b => b.content).join("\n");
+    const contentHash = createHash("sha256").update(allBuiltinCss).digest("hex").substring(0, 8);
+    const cssFilename = `sinthui.${contentHash}.css`;
+    const compiledCssDir = path.join(opts.outDir, "_sinth", "styles");
+    const htmlOutPath = path.join(opts.outDir, path.relative(opts.projectRoot, absPath).replace(/\.sinth$/, ".html"));
+    const htmlOutDir = path.dirname(htmlOutPath);
+    const relToCssDir = path.relative(htmlOutDir, compiledCssDir).replace(/\\/g, "/");
+    const srcPath = relToCssDir ? `${relToCssDir}/${cssFilename}` : `./${cssFilename}`;
+    builtinCssLinks.push(srcPath);
+    builtinCssFile = { filename: cssFilename, content: allBuiltinCss };
+  }
+  const allCssLinks = [...relativeCssLinks, ...builtinCssLinks];
 
   const runtimeResult = buildRuntime({
     varDecls:     pageVarDecls,
@@ -547,7 +590,7 @@ export function compileFile(filePath: string, opts: CompileOptions): { html: str
   }
 
 
-  const head = renderHead(headData, relativeCssLinks, relativeJsLinks, scopedCSS, companionJS);
+  const head = renderHead(headData, allCssLinks, relativeJsLinks, scopedCSS, companionJS);
   const scriptTags: string[] = [];
   const externalScripts: string[] = [];
   if (opts.inlineJS) {
@@ -648,9 +691,11 @@ const sharedRuntimeTag = (() => {
   }
 
   const finalHTML = opts.minify ? minifyHTML(html) : html;
-  const result: { html: string; shared?: string; jsFile?: { filename: string; content: string } } = { html: finalHTML };
+  const result: { html: string; shared?: string; jsFile?: { filename: string; content: string }; cssFile?: { filename: string; content: string }; copiedAssets?: { src: string; dest: string }[] } = { html: finalHTML };
   if (sharedJS) result.shared = sharedJS;
   if (jsFile) result.jsFile = jsFile;
+  if (builtinCssFile) result.cssFile = builtinCssFile;
+  if (copiedAssets.length > 0) result.copiedAssets = copiedAssets;
   return result;
 }
 
@@ -662,16 +707,40 @@ export function minifyHTML(html: string): string {
 
 // file discovery & asset copy
 
-export function findSinthPages(dir: string, outDir?: string): string[] {
+function findSinthFiles(dir: string, outDir?: string): string[] {
   const results: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
     const full = path.join(dir, entry.name);
     if (outDir && path.resolve(full) === path.resolve(outDir)) continue;
-    if (entry.isDirectory()) results.push(...findSinthPages(full, outDir));
+    if (entry.isDirectory()) results.push(...findSinthFiles(full, outDir));
     else if (entry.name.endsWith(".sinth")) results.push(full);
   }
   return results;
+}
+
+export function findSinthPages(dir: string, outDir?: string, libraryPaths: string[] = []): string[] {
+  const all = findSinthFiles(dir, outDir);
+  const imported = new Set<string>();
+  const cfg: ResolverConfig = { projectRoot: dir, libraryPaths };
+  for (const file of all) {
+    let parsed;
+    try {
+      parsed = parseFile(file);
+    } catch {
+      continue;
+    }
+    for (const imp of parsed.imports) {
+      if (imp.kind !== "sinth") continue;
+      try {
+        const resolved = resolveSinthPath(imp.path, file, cfg);
+        imported.add(path.resolve(resolved));
+      } catch {
+        void 0;
+      }
+    }
+  }
+  return all.filter(f => !imported.has(path.resolve(f)));
 }
 
 export function copyDir(src: string, dest: string): void {

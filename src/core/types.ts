@@ -102,7 +102,8 @@ export interface VarDeclaration { kind: "var"; name: string; varType: VarType; v
 export type ImportNode =
   | { kind: "sinth"; path: string; loc: Loc }
   | { kind: "css";   path: string; loc: Loc }
-  | { kind: "js";    name: string; alias?: string; loc: Loc };
+  | { kind: "js";    name: string; alias?: string; loc: Loc }
+  | { kind: "builtin"; name: string; alias?: string; loc: Loc };
 
 export interface MetaEntry { key: string; value: Literal; loc: Loc }
 

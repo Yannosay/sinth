@@ -775,12 +775,23 @@ depth:   number,
   const hasComp = allChildren.some(c => c.kind === "use");
 
   if (!hasComp) {
-    throw new SinthError(
-      `If-blocks containing only text/expressions are not supported inside component bodies. ` +
-      `Wrap the component in the if-block instead. Example:\n` +
-      `  if condition {\n    Component { "text" }\n  } else {\n    Component { "other" }\n  }`,
-      ifBlock.loc
+    const logicSafe = allChildren.every(c =>
+      c.kind === "assign_stmt" ||
+      c.kind === "expr" ||
+      c.kind === "if"
     );
+
+    if (!logicSafe) {
+      throw new SinthError(
+        `If-blocks without a component can only contain assignments, expressions, or nested if blocks. ` +
+        `Wrap components in the if-block for conditional UI. Example:\n` +
+        `  if condition {\n    Component { "text" }\n  } else {\n    Component { "other" }\n  }`,
+        ifBlock.loc
+      );
+    }
+
+    ctx.logicBlocks.push(compileIfToJS(ifBlock, undefined, ctx.namespace, ctx.declaredVars));
+    return "";
   }
 
   if (!hasAssign && !hasExprAssign && !hasComp) {
