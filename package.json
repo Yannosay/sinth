@@ -1,6 +1,6 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "description": "A declarative, reactive UI language that compiles to fast, secure, static-first HTML, CSS and JavaScript.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",

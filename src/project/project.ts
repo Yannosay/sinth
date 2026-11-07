@@ -72,7 +72,8 @@ export class Project {
     const parsed = parseSinth(source, abs);
     parsed.isPage = this.isPageFile(abs, parsed);
     if (parsed.isPage) {
-      const params = routeParams(path.relative(this.pagesBase(), abs));
+      const rel = relativeInside(this.pagesBase(), abs);
+      const params = rel ? routeParams(rel) : [];
       if (params.length) parsed.params = params;
     }
     this.parsed.set(abs, { mtime: stat.mtimeMs, file: parsed });
@@ -89,11 +90,11 @@ export class Project {
     const pagesDir = this.config.pagesDir;
     const hasPagesDir = fs.existsSync(pagesDir);
     const base = hasPagesDir ? pagesDir : this.root;
-    const rel = path.relative(base, abs);
-    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+    const rel = relativeInside(base, abs);
+    if (!rel) return false;
     const parts = rel.split(/[\\/]/);
     if (parts.some(p => p.startsWith("_") || p.startsWith(".") || IGNORED_DIRS.has(p))) return false;
-    if (path.resolve(abs).startsWith(path.resolve(this.config.outDir) + path.sep)) return false;
+    if (relativeInside(this.config.outDir, abs)) return false;
     if (!hasPagesDir && parts.length > 1 && ROOT_MODULE_DIRS.has(parts[0])) return false;
     const hasPageContent = parsed.body.length > 0 || parsed.meta.length > 0;
     if (hasPageContent) return true;
@@ -455,6 +456,24 @@ export class Project {
       }
     }
     return this.config.base + value.replace(/^\.\//, "");
+  }
+}
+
+/**
+ * Path of `file` relative to `dir`, or undefined when it is outside. Falls back to real paths,
+ * because bundlers resolve symlinks (macOS /var -> /private/var, junctions, linked workspaces).
+ */
+function relativeInside(dir: string, file: string): string | undefined {
+  const check = (d: string, f: string): string | undefined => {
+    const rel = path.relative(d, f);
+    return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : undefined;
+  };
+  const direct = check(dir, file);
+  if (direct) return direct;
+  try {
+    return check(fs.realpathSync.native(dir), fs.realpathSync.native(file));
+  } catch {
+    return undefined;
   }
 }
 

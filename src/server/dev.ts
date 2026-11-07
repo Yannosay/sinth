@@ -75,7 +75,7 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
       hashes = next;
       for (const w of out.warnings) printDiagnostic(w);
       broadcast({ type: "update", pages: next, full: routesChanged });
-      if (changed) log.success(`${c.gray(path.relative(project.root, changed))} ${c.dim("updated in " + formatMs(Date.now() - started))}`);
+      if (changed) log.success(`${c.gray(path.relative(project.root, changed).replace(/\\/g, "/"))} ${c.dim("updated in " + formatMs(Date.now() - started))}`);
     } catch (err) {
       if (!(err instanceof SinthError)) {
         log.error((err as Error).stack ?? String(err));

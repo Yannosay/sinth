@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.1
+
+- Dynamic routes and page detection now work when the project path contains a symlink or junction (macOS temp folders, linked workspaces).
+- Dev server logs use forward slashes on Windows.
+- CI: ESLint runs on Node 22 only.
+
 ## 5.1.0
 
 ### Routing
