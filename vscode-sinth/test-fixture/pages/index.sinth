@@ -1,4 +1,3 @@
-page
 import { Card } from "../components/Card.sinth"
 
 title = "Fixture"

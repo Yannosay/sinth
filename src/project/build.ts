@@ -211,7 +211,9 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   project.invalidate();
   const pages = project.findPages();
   if (!pages.length) {
-    throw new SinthError("E0802", `No pages found in ${path.relative(project.root, cfg.pagesDir) || "."}`, undefined, "A page is a .sinth file that starts with 'page'. Create pages/index.sinth to get started");
+    throw new SinthError("E0802", fs.existsSync(cfg.pagesDir) ? `No pages found in ${path.relative(project.root, cfg.pagesDir) || "."}` : `No pages found (no ${path.relative(project.root, cfg.pagesDir) || "pages"}/ folder, and no .sinth file with markup in the project root)`, undefined, fs.existsSync(cfg.pagesDir)
+      ? "Every .sinth file in this folder is a page (files starting with '_' are skipped). Add markup to pages/index.sinth, for example: Main { Heading { \"Hello\" } }"
+      : `Create ${path.relative(project.root, cfg.pagesDir) || "pages"}/index.sinth with some markup, for example: Main { Heading { "Hello" } }`);
   }
   const compiled = pages.map(p => project.compilePage(p));
   const entries = new Map<string, string>();
@@ -280,8 +282,6 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
       cssOut = meta.cssBundle;
       for (const imp of meta.imports) if (imp.kind === "import-statement" && !imp.external) preloads.push(toUrl(imp.path));
     }
-    const file = project.getFile(c.page.file);
-    const head = buildHead(file.meta, v => project.resolveAsset(v, c.page.file));
     const styles: string[] = [];
     const inlineHead: string[] = [];
     if (c.fonts.length) {
@@ -294,13 +294,18 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     if (c.interactive && jsOut) scripts.push({ src: toUrl(jsOut), module: true, attrs: {} });
     if (options.devClient) inlineHead.push(`<script type="module" src="${options.devClient}"></script>`);
     if (!c.interactive && jsOut) files.delete(path.relative(cfg.outDir, path.resolve(project.root, jsOut)).replace(/\\/g, "/"));
-    const body = c.prerendered ? c.prerendered : c.interactive ? "" : "";
-    const html = renderDocument(head, body, { styles, scripts, preloads: c.interactive ? preloads : [], inlineHead });
-    files.set(c.page.outFile, { path: path.join(cfg.outDir, c.page.outFile), contents: Buffer.from(html) });
-    pageOutputs.push({
-      page: c.page, html, interactive: c.interactive, bytes: Buffer.byteLength(html),
-      js: c.interactive && jsOut ? toUrl(jsOut) : undefined, css: cssOut ? toUrl(cssOut) : undefined,
-    });
+    for (const inst of c.instances) {
+      const head = buildHead(inst.meta, v => project.resolveAsset(v, c.page.file));
+      const pageHead = inst.params && c.interactive
+        ? [...inlineHead, '<script type="application/json" id="sinth-params">' + JSON.stringify(inst.params).replace(/</g, "\\u003c") + "</script>"]
+        : inlineHead;
+      const html = renderDocument(head, inst.prerendered, { styles, scripts, preloads: c.interactive ? preloads : [], inlineHead: pageHead });
+      files.set(inst.page.outFile, { path: path.join(cfg.outDir, inst.page.outFile), contents: Buffer.from(html) });
+      pageOutputs.push({
+        page: inst.page, html, interactive: c.interactive, bytes: Buffer.byteLength(html),
+        js: c.interactive && jsOut ? toUrl(jsOut) : undefined, css: cssOut ? toUrl(cssOut) : undefined,
+      });
+    }
   }
 
   if (!project.dev) {

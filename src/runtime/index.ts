@@ -912,3 +912,18 @@ function coerce(value: string, kind: string | undefined): unknown {
   }
   return value;
 }
+
+let routeParams: Record<string, string> | undefined;
+
+/** Reads a route parameter of a dynamic page (`pages/blog/[slug].sinth`). */
+export function param(name: string): string {
+  if (!routeParams) {
+    const node = typeof document !== "undefined" ? document.getElementById("sinth-params") : null;
+    try {
+      routeParams = node?.textContent ? (JSON.parse(node.textContent) as Record<string, string>) : {};
+    } catch {
+      routeParams = {};
+    }
+  }
+  return routeParams[name] ?? "";
+}

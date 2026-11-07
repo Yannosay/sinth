@@ -62,7 +62,7 @@ export const SINTH_UI: Readonly<Record<string, UiComponent>> = {
 export const TYPES: readonly string[] = ["str", "num", "bool", "obj", "any", "ui", "void", "fn"];
 
 export const KEYWORD_DOCS: Readonly<Record<string, string>> = {
-  page: "Marks the file as a page. Pages become HTML files; other files are modules you import.",
+  page: "Optional since Sinth 5: every file in pages/ is already a page. Still accepted, and forces a page anywhere.",
   import: "Imports components, stores, npm packages, CSS, JSON or fonts.\n\n`import { Card } from \"./components/Card.sinth\"`",
   from: "Source of an import.",
   extern: "Declares a browser global created by an external script: `extern Chart`.",
@@ -112,6 +112,7 @@ export const META_KEYS: Readonly<Record<string, string>> = {
   htmlClass: "Class added to <html>",
   viewport: "Viewport meta (has a sensible default)",
   base: "<base href>",
+  paths: "Dynamic routes only (pages/blog/[slug].sinth): the values to generate, e.g. paths = posts.map((p) => p.slug)",
 };
 
 export const DIRECTIVES: Readonly<Record<string, string>> = {

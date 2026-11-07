@@ -2,11 +2,9 @@
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=a855f7&label=npm&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![downloads](https://img.shields.io/npm/dt/@yannosay/sinth?color=c084fc&label=downloads&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![CI](https://img.shields.io/github/actions/workflow/status/Yannosay/sinth/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Yannosay/sinth/actions) [![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&style=for-the-badge)](./LICENSE)
 
-**Sinth is a small, reactive language for building websites and web apps.** Write pages and components in one readable syntax; Sinth compiles them to fast, static-first HTML, CSS and JavaScript with no runtime framework to learn.
+**Sinth is a reactive language for building websites and web apps of any size, from a landing page to a large multi-page product.** Write pages and components in one readable syntax. The compiler type-checks your whole project and turns it into static-first HTML, CSS and JavaScript, with no framework to learn.
 
 ```sinth
-page
-
 title = "Counter"
 
 var num count = 0
@@ -21,6 +19,7 @@ Main {
 
 - **Easy to read, easy to learn.** Markup, state, logic and styles live together in one file with no boilerplate.
 - **Reactive by default.** Change a variable and exactly the affected parts of the page update.
+- **Built to scale.** File-based routing with dynamic routes (`pages/blog/[slug].sinth` generates one page per post), shared layouts and components, project-wide type checking, code splitting and cached chunks. Thousands of pages build in seconds.
 - **Static first.** Every page is prerendered to HTML. Pages without interactivity ship zero JavaScript; interactive ones load a ~5 kB runtime.
 - **Catches mistakes before the browser does.** Unknown names, missing arguments, wrong types and missing component props are compile errors with "did you mean" hints.
 - **Secure by default.** No `eval`, escaped output, no inline handlers, strict CSP and security headers out of the box.

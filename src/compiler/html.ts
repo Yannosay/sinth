@@ -41,15 +41,24 @@ const NAME_MAP: Record<string, string> = {
   themeColor: "theme-color", colorScheme: "color-scheme", generator: "generator",
 };
 
-export function buildHead(meta: MetaEntry[], resolveAsset: (value: string) => string): HeadData {
+export interface MetaValue {
+  key: string;
+  value: unknown;
+  known: boolean;
+  loc: MetaEntry["loc"];
+}
+
+export function buildHead(meta: MetaValue[], resolveAsset: (value: string) => string): HeadData {
   const head: HeadData = {
     lang: "en", charset: "utf-8", viewport: "width=device-width, initial-scale=1", metaNames: [], metaProps: [],
   };
   for (const m of meta) {
-    if (m.value.k !== "lit" || m.value.value === null) {
-      throw new SinthError("E0700", `Metadata '${m.key}' must be a literal value`, m.loc);
+    if (!m.known) {
+      throw new SinthError("E0700", `Metadata '${m.key}' must be computable at build time`, m.loc, "Use literals, imported JSON, constants and route params. Values that need the browser (fetch, localStorage, user input) can't go in the page head");
     }
-    const value = String(m.value.value);
+    if (m.value === null || m.value === undefined || m.value === false) continue;
+    if (typeof m.value === "object") throw new SinthError("E0701", `Metadata '${m.key}' must be a string, number or boolean`, m.loc);
+    const value = String(m.value);
     switch (m.key) {
       case "title": head.title = value; break;
       case "lang": head.lang = value; break;

@@ -1,5 +1,22 @@
 # Changelog
 
+## 5.1.0
+
+### Routing
+
+- **No more `page` keyword.** Every `.sinth` file in `pages/` is a page. Files and folders starting with `_` are skipped, and files that only declare components or functions are treated as modules. Without a `pages/` folder, root files with markup are pages. `page` is still accepted.
+- **Dynamic routes.** `pages/blog/[slug].sinth` with `paths = posts.map((p) => p.slug)` generates one prerendered page per item, with route params available as constants, in metadata and at runtime. Several params per route are supported (`pages/[lang]/[page].sinth`).
+- **Computed metadata.** `title`, `descr` and other metadata can be expressions evaluated at build time (constants, imported JSON, route params).
+- Clearer `E0802` message when no pages are found, and new errors E0701 and E0710 to E0714 for metadata and dynamic routes.
+
+### CLI
+
+- `sinth build` lists at most 30 pages on large sites; `--verbose` lists all.
+
+### Editors
+
+- Templates, snippets and the VS Code extension no longer add `page`; `paths` has completions and hover docs.
+
 ## 5.0.0
 
 Sinth 5 is a ground-up rewrite of the compiler, runtime and toolchain. Most Sinth 4 code compiles unchanged; see [Migrating from Sinth 4](./DOCS.md#35-migrating-from-sinth-4).

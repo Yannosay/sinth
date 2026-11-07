@@ -75,6 +75,7 @@ const commands: Record<string, Command> = {
       out: { type: "string", description: "Output directory" },
       minify: { type: "boolean", description: "Minify output (default: on)" },
       sourcemap: { type: "boolean", description: "Emit source maps" },
+      verbose: { type: "boolean", description: "List every page, even on large sites" },
     },
     async run(args) {
       console.log(`\n  ${brand("build", VERSION)}\n`);
@@ -83,7 +84,9 @@ const commands: Record<string, Command> = {
       const out = await buildProject(project, { write: true });
       for (const w of out.warnings) printDiagnostic(w);
       const rows: string[][] = [];
-      for (const p of out.pages) {
+      const LIMIT = 40;
+      const listed = args.flags.verbose || out.pages.length <= LIMIT ? out.pages : out.pages.slice(0, LIMIT - 10);
+      for (const p of listed) {
         const js = p.js ? out.files.get(p.js.slice(project.config.base.length)) : undefined;
         const css = p.css ? out.files.get(p.css.slice(project.config.base.length)) : undefined;
         rows.push([
@@ -95,6 +98,7 @@ const commands: Record<string, Command> = {
         ]);
       }
       console.log(table(rows.map(r => ["  " + r[0], ...r.slice(1)])));
+      if (listed.length < out.pages.length) console.log(c.gray(`  ... and ${out.pages.length - listed.length} more (use --verbose to list all)`));
       const total = [...out.files.values()].reduce((n, f) => n + f.contents.byteLength, 0);
       console.log();
       log.success(`Built ${c.bold(String(out.pages.length))} page(s) into ${c.bold(path.relative(process.cwd(), project.config.outDir) || ".")} ${c.gray(`(${out.files.size} files, ${formatBytes(total)}) in ${formatMs(out.durationMs)}`)}`);

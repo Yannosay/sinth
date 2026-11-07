@@ -4,7 +4,8 @@ import { createRequire } from "module";
 import { ImportDecl, SinthFile } from "../compiler/ast";
 import { compileModule, collectExports, ModuleExports, ModuleOutput, ResolvedImport } from "../compiler/codegen";
 import { Diagnostic, SinthError, suggest } from "../compiler/diagnostics";
-import { prerenderPage } from "../compiler/prerender";
+import { evaluatePaths, prerenderPage, PrerenderHost } from "../compiler/prerender";
+import { MetaValue } from "../compiler/html";
 import { parseSinth } from "../compiler/parser";
 import { ScssCompiler } from "../compiler/style";
 import { SinthConfig } from "./config";
@@ -15,6 +16,7 @@ export const LIB_ROOT = path.join(PACKAGE_ROOT, "lib");
 
 const LEGACY_LIBRARIES: Record<string, string> = { SinthUI: "sinth:ui" };
 const IGNORED_DIRS = new Set(["node_modules", ".git", ".sinth", ".wrangler", ".vscode", ".idea"]);
+const ROOT_MODULE_DIRS = new Set(["components", "libraries", "lib", "styles", "assets", "public"]);
 
 export interface PageInfo {
   file: string;
@@ -22,12 +24,20 @@ export interface PageInfo {
   outFile: string;
 }
 
+export interface PageInstance {
+  page: PageInfo;
+  prerendered: string;
+  meta: MetaValue[];
+  params?: Record<string, string>;
+}
+
 export interface CompiledPage {
   page: PageInfo;
   module: ModuleOutput;
   graph: string[];
   interactive: boolean;
-  prerendered: string;
+  /** One entry per generated HTML file. Static routes have exactly one; dynamic routes one per `paths` item. */
+  instances: PageInstance[];
   styleImports: string[];
   externalStyles: string[];
   externalScripts: { src: string; attrs: Record<string, string | boolean> }[];
@@ -60,8 +70,35 @@ export class Project {
     if (cached && cached.mtime === stat.mtimeMs) return cached.file;
     const source = fs.readFileSync(abs, "utf-8");
     const parsed = parseSinth(source, abs);
+    parsed.isPage = this.isPageFile(abs, parsed);
+    if (parsed.isPage) {
+      const params = routeParams(path.relative(this.pagesBase(), abs));
+      if (params.length) parsed.params = params;
+    }
     this.parsed.set(abs, { mtime: stat.mtimeMs, file: parsed });
     return parsed;
+  }
+
+  /**
+   * A file is a page when it lives in the pages folder (or, without one, in the project root),
+   * is not hidden behind a leading underscore, and is not a pure component module. The Sinth 4
+   * `page` keyword still forces a page anywhere.
+   */
+  private isPageFile(abs: string, parsed: SinthFile): boolean {
+    if (parsed.isPage) return true;
+    const pagesDir = this.config.pagesDir;
+    const hasPagesDir = fs.existsSync(pagesDir);
+    const base = hasPagesDir ? pagesDir : this.root;
+    const rel = path.relative(base, abs);
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+    const parts = rel.split(/[\\/]/);
+    if (parts.some(p => p.startsWith("_") || p.startsWith(".") || IGNORED_DIRS.has(p))) return false;
+    if (path.resolve(abs).startsWith(path.resolve(this.config.outDir) + path.sep)) return false;
+    if (!hasPagesDir && parts.length > 1 && ROOT_MODULE_DIRS.has(parts[0])) return false;
+    const hasPageContent = parsed.body.length > 0 || parsed.meta.length > 0;
+    if (hasPageContent) return true;
+    const isModule = parsed.components.length > 0 || parsed.functions.length > 0;
+    return hasPagesDir && !isModule;
   }
 
   scss(): ScssCompiler | undefined {
@@ -95,10 +132,10 @@ export class Project {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith(".") || full === this.config.outDir) continue;
-          if (base === this.root && ["components", "libraries", "lib", "styles", "assets", "public"].includes(entry.name)) continue;
+          if (base === this.root && ROOT_MODULE_DIRS.has(entry.name)) continue;
           walk(full);
         } else if (entry.name.endsWith(".sinth") && !entry.name.startsWith("_")) {
-          if (!/^\s*(?:--[^\n]*\n\s*|--\[[\s\S]*?\]--\s*)*page\b/.test(fs.readFileSync(full, "utf-8"))) continue;
+          if (!this.getFile(full).isPage) continue;
           out.push(this.pageInfo(full, base));
         }
       }
@@ -107,7 +144,11 @@ export class Project {
     return out.sort((a, b) => a.route.localeCompare(b.route));
   }
 
-  pageInfo(file: string, base = fs.existsSync(this.config.pagesDir) ? this.config.pagesDir : this.root): PageInfo {
+  private pagesBase(): string {
+    return fs.existsSync(this.config.pagesDir) ? this.config.pagesDir : this.root;
+  }
+
+  pageInfo(file: string, base = this.pagesBase()): PageInfo {
     const rel = path.relative(base, file).replace(/\\/g, "/").replace(/\.sinth$/, "");
     const outRel = rel + ".html";
     const route = "/" + (rel === "index" ? "" : rel.endsWith("/index") ? rel.slice(0, -6) : rel);
@@ -262,7 +303,7 @@ export class Project {
 
   private sinthImport(decl: ImportDecl, target: string): ResolvedImport {
     const other = this.getFile(target);
-    if (other.isPage) throw new SinthError("E0608", `Cannot import page '${decl.source}'; pages are entry points`, decl.loc, "Move shared components into a component file without 'page'");
+    if (other.isPage) throw new SinthError("E0608", `Cannot import page '${decl.source}'; pages are entry points`, decl.loc, "Pages are entry points. Move shared components to components/ (or a file starting with '_') and import that");
     const exports: ModuleExports = collectExports(other);
     return { decl: { ...decl, kind: "sinth" }, kind: "sinth", specifier: target, exports };
   }
@@ -327,12 +368,60 @@ export class Project {
         if (imp.kind === "font") fonts.push(imp.specifier);
       }
     }
-    const pre = prerenderPage(this.getFile(page.file), { getFile: f => this.getFile(f), getImports: f => this.resolveImports(f) });
-    if (!pre.complete) interactive = true;
+    const host: PrerenderHost = { getFile: f => this.getFile(f), getImports: f => this.resolveImports(f) };
+    const file = this.getFile(page.file);
+    const instances: PageInstance[] = [];
+    for (const params of this.expandParams(page, file, host)) {
+      const pre = prerenderPage(file, host, params);
+      if (!pre.complete) interactive = true;
+      const inst: PageInstance = { page: params ? fillRoute(page, params) : page, prerendered: pre.html, meta: pre.meta, params };
+      for (const m of inst.meta) {
+        if (!m.known) throw new SinthError("E0700", `Metadata '${m.key}' must be computable at build time`, m.loc, "Use literals, imported JSON, constants and route params. Values that need the browser (fetch, localStorage, user input) can't go in the page head");
+      }
+      instances.push(inst);
+    }
     return {
-      page, module, graph, interactive, prerendered: pre.html, styleImports: unique(styleImports),
+      page, module, graph, interactive, instances, styleImports: unique(styleImports),
       externalStyles: unique(externalStyles), externalScripts, fonts: unique(fonts), warnings,
     };
+  }
+
+  private expandParams(page: PageInfo, file: SinthFile, host: PrerenderHost): (Record<string, string> | undefined)[] {
+    const names = file.params;
+    const pathsMeta = file.meta.find(m => m.key === "paths");
+    if (!names?.length) {
+      if (pathsMeta) throw new SinthError("E0713", "'paths' is only used by dynamic routes", pathsMeta.loc, "Name the file with a [param] segment, e.g. pages/blog/[slug].sinth");
+      return [undefined];
+    }
+    const where = path.relative(this.root, page.file).replace(/\\/g, "/");
+    if (!pathsMeta) {
+      throw new SinthError("E0710", `Dynamic route '${where}' needs 'paths'`, { file: page.file, line: 1, col: 1 },
+        names.length === 1 ? `List the values to generate, e.g. paths = posts.map((p) => p.${names[0]})` : `List objects with ${names.join(", ")}, e.g. paths = [{ ${names.map(n => n + ": \"...\"").join(", ")} }]`);
+    }
+    const res = evaluatePaths(file, host, names);
+    if (!res.known || !Array.isArray(res.value)) {
+      throw new SinthError("E0711", "'paths' must be an array that can be computed at build time", pathsMeta.loc, "Build it from literals, imported JSON or constants");
+    }
+    const seen = new Set<string>();
+    return res.value.map((item, i) => {
+      const params: Record<string, string> = {};
+      for (const n of names) {
+        const raw = typeof item === "object" && item !== null ? (item as Record<string, unknown>)[n] : names.length === 1 ? item : undefined;
+        if (typeof raw !== "string" && typeof raw !== "number") {
+          throw new SinthError("E0712", `paths[${i}] has no string value for '${n}'`, pathsMeta.loc, names.length === 1 ? "Use strings, or objects with that key" : `Each item needs ${names.join(", ")}`);
+        }
+        const v = String(raw);
+        // eslint-disable-next-line no-control-regex
+        if (!v || v === "." || v === ".." || /[\\/?#\u0000-\u001f]/.test(v)) {
+          throw new SinthError("E0712", `paths[${i}].${n} is not a valid URL segment: ${JSON.stringify(v)}`, pathsMeta.loc, "Values can't be empty or contain / \\ ? #");
+        }
+        params[n] = v;
+      }
+      const key = JSON.stringify(names.map(n => params[n]));
+      if (seen.has(key)) throw new SinthError("E0712", `paths contains a duplicate: ${JSON.stringify(params)}`, pathsMeta.loc);
+      seen.add(key);
+      return params;
+    });
   }
 
   private needsRuntime(pageFile: string): boolean {
@@ -367,6 +456,22 @@ export class Project {
     }
     return this.config.base + value.replace(/^\.\//, "");
   }
+}
+
+export function routeParams(rel: string): string[] {
+  const names: string[] = [];
+  const shown = rel.replace(/\\/g, "/");
+  for (const m of rel.replace(/\.sinth$/, "").matchAll(/\[([^\]]*)\]/g)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(m[1])) throw new SinthError("E0714", `Invalid route parameter '[${m[1]}]' in ${shown}`, undefined, "Use a plain name like [slug] or [id]");
+    if (names.includes(m[1])) throw new SinthError("E0714", `Route parameter '${m[1]}' is used twice in ${shown}`);
+    names.push(m[1]);
+  }
+  return names;
+}
+
+function fillRoute(page: PageInfo, params: Record<string, string>): PageInfo {
+  const fill = (s: string, enc: (v: string) => string): string => s.replace(/\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (_, n: string) => enc(params[n]));
+  return { file: page.file, route: fill(page.route, encodeURIComponent), outFile: fill(page.outFile, v => v) };
 }
 
 function unique<T>(items: T[]): T[] {

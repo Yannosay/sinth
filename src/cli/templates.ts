@@ -37,9 +37,7 @@ export function templateFiles(template: TemplateName, name: string, version: str
     return files;
   }
   if (template === "minimal") {
-    files["pages/index.sinth"] = `page
-
-title = "${name}"
+    files["pages/index.sinth"] = `title = "${name}"
 descr = "A Sinth site."
 
 var num count = 0
@@ -96,9 +94,7 @@ component Layout(str current = "/") {
   }
 }
 `;
-  files["pages/index.sinth"] = `page
-
-import { Layout } from "../components/Layout.sinth"
+  files["pages/index.sinth"] = `import { Layout } from "../components/Layout.sinth"
 import { Button, Card, Columns, Field, Badge, Alert } from "sinth:ui"
 
 title = "${name}"
@@ -175,9 +171,7 @@ Layout {
 }
 
 export function pageTemplate(title: string): string {
-  return `page
-
-title = "${title}"
+  return `title = "${title}"
 
 Main {
   Heading(level: 1) { "${title}" }

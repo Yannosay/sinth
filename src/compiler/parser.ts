@@ -8,7 +8,7 @@ import { Token, tokenize } from "./lexer";
 
 export const META_KEYS: ReadonlySet<string> = new Set([
   "title", "descr", "description", "fav", "favicon", "lang", "charset", "viewport", "author", "keywords", "robots",
-  "themeColor", "colorScheme", "canonical", "generator", "manifest", "appleTouchIcon", "base", "bodyClass", "htmlClass",
+  "themeColor", "colorScheme", "canonical", "generator", "manifest", "appleTouchIcon", "base", "bodyClass", "htmlClass", "paths",
 ]);
 
 export function isMetaKey(key: string): boolean {

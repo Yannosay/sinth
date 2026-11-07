@@ -1,7 +1,7 @@
 {
   "Page": {
     "prefix": "page",
-    "body": ["page", "", "title = \"${1:Title}\"", "descr = \"${2:Description}\"", "", "Main {", "  Heading(level: 1) { \"${1:Title}\" }", "  $0", "}"],
+    "body": ["title = \"${1:Title}\"", "descr = \"${2:Description}\"", "", "Main {", "  Heading(level: 1) { \"${1:Title}\" }", "  $0", "}"],
     "description": "New page"
   },
   "Component": {

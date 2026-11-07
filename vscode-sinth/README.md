@@ -1,6 +1,6 @@
 # Sinth for Visual Studio Code
 
-Official language support for [Sinth 5](https://github.com/Yannosay/sinth), the small reactive language for websites and web apps.
+Official language support for [Sinth 5](https://github.com/Yannosay/sinth), the reactive language for websites and web apps of any size.
 
 ## Features
 

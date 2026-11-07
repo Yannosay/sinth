@@ -64,8 +64,6 @@ Open `http://localhost:3000`. Edit `pages/index.sinth` and save; the page update
 A complete page:
 
 ```sinth
-page
-
 title = "Counter"
 
 var num count = 0
@@ -88,11 +86,12 @@ npm run deploy    # deploy to Cloudflare Pages
 
 ```
 my-site/
-├─ pages/              every .sinth file starting with `page` becomes an HTML page
+├─ pages/              every .sinth file in here is a page
 │  ├─ index.sinth      → /
 │  ├─ about.sinth      → /about
 │  ├─ 404.sinth        → 404.html (used by Cloudflare Pages and `sinth preview`)
-│  └─ blog/index.sinth → /blog
+│  ├─ blog/index.sinth → /blog
+│  └─ blog/[slug].sinth → /blog/hello-world, /blog/second-post, ... (dynamic route)
 ├─ components/         reusable components (any folder name works)
 ├─ public/             copied to the output root as-is (robots.txt, favicon.ico, ...)
 ├─ assets/             copied to dist/assets/
@@ -102,23 +101,25 @@ my-site/
 
 Rules:
 
-- Files in `pages/` whose names start with `_` are ignored (use them for drafts).
-- A `.sinth` file inside `pages/` that does not start with `page` is not a page (it can still be imported).
-- If there is no `pages/` folder, Sinth scans the project root for page files instead.
+- Every `.sinth` file in `pages/` is a page. No keyword or boilerplate is needed.
+- Files and folders whose names start with `_` are not pages (use them for drafts and page-local components: `pages/_partials/Hero.sinth`).
+- A file in `pages/` that only declares components or functions (no markup, no metadata) is treated as a module, so older projects keep working.
+- If there is no `pages/` folder, every `.sinth` file in the project root that contains markup or metadata is a page; `components/`, `lib/`, `styles/`, `assets/` and `public/` are skipped.
+- File and folder names in `[brackets]` are [dynamic routes](#dynamic-routes).
 
 ## 3. Files, pages and components
 
 There are two kinds of `.sinth` files.
 
-**Pages** start with the keyword `page`. They contain metadata, state, markup and styles, and are compiled to one HTML file each.
+**Pages** are the files in `pages/`. They contain metadata, state, markup and styles, and are compiled to one HTML file each (or one per path, for dynamic routes).
 
-**Modules** (any other `.sinth` file) contain components, functions and shared variables that pages import.
+**Modules** (files outside `pages/`, usually in `components/`) contain components, functions and shared variables that pages import.
+
+> Sinth 4 required pages to start with the keyword `page`. That keyword is no longer needed. It is still accepted, and a file that starts with it is a page wherever it lives.
 
 Order inside a page is flexible, but the usual layout is:
 
 ```sinth
-page
-
 import { Card } from "../components/Card.sinth"   -- 1. imports
 
 title = "Home"                                    -- 2. metadata
@@ -138,6 +139,44 @@ style {                                           -- 6. styles
 }
 ```
 
+### Dynamic routes
+
+Put a parameter name in brackets in a file or folder name to generate many pages from one file. List the values in `paths`; the parameter is then available as a `str` constant:
+
+```sinth
+-- pages/blog/[slug].sinth
+import posts from "../../content/posts.json"
+
+paths = posts.map((p) => p.slug)
+const post = posts.find((p) => p.slug == slug)
+
+title = post.title + " | Blog"
+descr = post.summary
+
+Main {
+  Heading(level: 1) { post.title }
+  Paragraph { post.body }
+}
+```
+
+With `content/posts.json` holding two posts, the build writes `blog/hello-world.html` and `blog/second-post.html`, each prerendered with its own title and description, and both listed in the sitemap.
+
+Several parameters work too. Then `paths` lists objects:
+
+```sinth
+-- pages/[lang]/docs/[page].sinth
+paths = [
+  { lang: "en", page: "intro" }
+  { lang: "de", page: "intro" }
+]
+```
+
+Rules:
+
+- `paths` is evaluated at build time from literals, constants, imported JSON and functions. Each value must be a non-empty string or number without `/`, `\`, `?` or `#`, and every combination must be unique.
+- Interactive dynamic pages share one JavaScript bundle; the current params are embedded as JSON and read at startup, so `slug` works in event handlers too.
+- In the dev server every generated page is served at its URL and updates on save.
+
 ## 4. Comments
 
 ```sinth
@@ -152,7 +191,15 @@ style {                                           -- 6. styles
 
 ## 5. Page metadata
 
-Metadata is written as `key = value` at the top level of a page. Values must be literals.
+Metadata is written as `key = value` at the top level of a page. Values are evaluated at build time, so they can use literals, constants, imported JSON and [route params](#dynamic-routes):
+
+```sinth
+const str site = "Acme"
+title = "Pricing | " + site
+descr = f"Plans for teams of every size at {site}"
+```
+
+Values that only exist in the browser (`fetch`, `localStorage`, user input) cannot be used in metadata (E0700). A value of `null` or `false` leaves the tag out.
 
 | Key | Output |
 |---|---|
@@ -612,7 +659,6 @@ component Card(str title, str? subtitle, str accent = "#7c3aed") {
 
 ```sinth
 -- pages/index.sinth
-page
 import { Card } from "../components/Card.sinth"
 
 Main {
@@ -915,7 +961,6 @@ function add(obj product) {
 ```
 
 ```sinth
-page
 import { items, count, add } from "../stores/cart.sinth"
 
 Button(onClick: add({ name: "Shirt" })) { "Add (" + count + ")" }
@@ -1243,7 +1288,13 @@ Errors are `SinthError` instances with `code`, `loc` and `diagnostic`; `formatDi
 | E0402 | SCSS compile error |
 | E0500, E0501 | Script block syntax error / `import` inside a component script |
 | E0600–E0609 | Import errors (file not found, unknown export, circular import, ...) |
-| E0700 | Non-literal metadata value |
+| E0700 | Metadata value can't be computed at build time |
+| E0701 | Metadata value is an object or array |
+| E0710 | Dynamic route without `paths` |
+| E0711 | `paths` is not an array computable at build time |
+| E0712 | Invalid, missing or duplicate value in `paths` |
+| E0713 | `paths` in a page that is not a dynamic route |
+| E0714 | Invalid route parameter name |
 | E0800 | Bundling error (e.g. missing npm package) |
 | E0801 | Output folder not created by Sinth |
 | E0802 | No pages found |
@@ -1266,6 +1317,7 @@ Most Sinth 4 code compiles unchanged. Things to check:
 
 | Sinth 4 | Sinth 5 |
 |---|---|
+| `page` at the top of every page | not needed: every file in `pages/` is a page (`page` is still accepted) |
 | `dist/pages/index.html` | `dist/index.html`: pages are now relative to `pages/` |
 | `var int x` | `var num x` (`int` still works with a warning) |
 | `==` was loose | `==` is strict: `1 == "1"` is a compile error |

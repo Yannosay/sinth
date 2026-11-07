@@ -1,4 +1,4 @@
-import { Attr, ComponentDecl, ElementNode, Expr, FunctionDecl, Node, SinthFile, Stmt, VarDecl } from "./ast";
+import { Attr, ComponentDecl, ElementNode, Expr, FunctionDecl, MetaEntry, Node, SinthFile, Stmt, VarDecl } from "./ast";
 import { attrNameToHtml, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, VOID_TAGS } from "./elements";
 import { escapeAttr, escapeHtml, hashString } from "./html";
 import { tokenize } from "./lexer";
@@ -64,20 +64,51 @@ export class Prerenderer {
 
   constructor(private readonly host: PrerenderHost) {}
 
-  renderPage(file: SinthFile): string {
-    const env = this.moduleEnv(file);
+  renderPage(file: SinthFile, params?: Record<string, string>): string {
+    const env = this.moduleEnv(file, params);
     return this.renderNodes(file.body, { env: new Env(env), file });
+  }
+
+  /** Evaluates metadata in the page's module scope. Values that need the browser come back as `undefined` with `known: false`. */
+  evalMeta(file: SinthFile, params?: Record<string, string>): { key: string; value: Value; known: boolean; loc: MetaEntry["loc"] }[] {
+    const env = this.moduleEnv(file, params);
+    return file.meta.filter(m => m.key !== "paths").map(m => {
+      let value: Value;
+      try {
+        value = this.eval(m.value, env, file);
+      } catch {
+        value = UNKNOWN;
+      }
+      return { key: m.key, value: value === UNKNOWN ? undefined : value, known: value !== UNKNOWN, loc: m.loc };
+    });
+  }
+
+  /** Evaluates `paths` for a dynamic route. Route params are unknown at this point. */
+  evalPaths(file: SinthFile, paramNames: string[]): { value: Value; known: boolean } {
+    const entry = file.meta.find(m => m.key === "paths");
+    if (!entry) return { value: undefined, known: true };
+    const unknownParams: Record<string, string> = {};
+    const env = this.moduleEnv(file, unknownParams, paramNames);
+    let value: Value;
+    try {
+      value = this.eval(entry.value, env, file);
+    } catch {
+      value = UNKNOWN;
+    }
+    return { value: value === UNKNOWN ? undefined : value, known: value !== UNKNOWN };
   }
 
   private tick(): void {
     if (++this.steps > MAX_STEPS) throw new Error("Prerender step limit exceeded");
   }
 
-  private moduleEnv(file: SinthFile): Env {
+  private moduleEnv(file: SinthFile, params?: Record<string, string>, unknownParams: string[] = []): Env {
     const cached = this.moduleEnvs.get(file.path);
     if (cached) return cached;
     const env = new Env(null);
     this.moduleEnvs.set(file.path, env);
+    for (const name of unknownParams) env.define(name, UNKNOWN);
+    if (params) for (const [k, v] of Object.entries(params)) env.define(k, v);
     for (const imp of this.host.getImports(file)) {
       const d = imp.decl;
       if (imp.kind === "json") {
@@ -97,7 +128,13 @@ export class Prerenderer {
     for (const ext of file.externs) env.define(ext.name, UNKNOWN);
     for (const f of file.functions) env.define(f.name, this.makeFunction(f, env, file));
     if (file.scripts.length) this.complete = false;
-    for (const v of file.vars) this.declare(v, env, file);
+    for (const v of file.vars) {
+      try {
+        this.declare(v, env, file);
+      } catch {
+        env.define(v.name, UNKNOWN);
+      }
+    }
     return env;
   }
 
@@ -732,12 +769,25 @@ function kebab(name: string): string {
   return name.replace(/^(Webkit|Moz|Ms)/, m => "-" + m.toLowerCase()).replace(/[A-Z]/g, m => "-" + m.toLowerCase());
 }
 
-export function prerenderPage(file: SinthFile, host: PrerenderHost): { html: string; complete: boolean } {
+export interface PrerenderResult {
+  html: string;
+  complete: boolean;
+  meta: { key: string; value: unknown; known: boolean; loc: MetaEntry["loc"] }[];
+}
+
+export function prerenderPage(file: SinthFile, host: PrerenderHost, params?: Record<string, string>): PrerenderResult {
   const p = new Prerenderer(host);
+  let html = "";
+  let complete = false;
   try {
-    const html = p.renderPage(file);
-    return { html, complete: p.complete };
+    html = p.renderPage(file, params);
+    complete = p.complete;
   } catch {
-    return { html: "", complete: false };
+    complete = false;
   }
+  return { html, complete, meta: p.evalMeta(file, params) };
+}
+
+export function evaluatePaths(file: SinthFile, host: PrerenderHost, paramNames: string[]): { value: unknown; known: boolean } {
+  return new Prerenderer(host).evalPaths(file, paramNames);
 }

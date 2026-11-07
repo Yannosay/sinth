@@ -223,6 +223,8 @@ export interface SinthFile {
   path: string;
   source: string;
   isPage: boolean;
+  /** Route parameters from `[name]` segments in the page's path, e.g. `pages/blog/[slug].sinth`. */
+  params?: string[];
   imports: ImportDecl[];
   meta: MetaEntry[];
   externs: { name: string; loc: Loc }[];

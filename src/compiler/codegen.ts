@@ -195,6 +195,7 @@ export class ModuleCompiler {
     this.importLines.push(`import * as $$ from ${JSON.stringify(this.opts.runtime)};`);
     this.declareImports();
     for (const ext of file.externs) this.moduleScope.define(ext.name, { kind: "global", js: ext.name });
+    for (const p of file.params ?? []) this.moduleScope.define(p, { kind: "const", js: p, type: T("str") });
     for (const c of file.components) this.defineComponent(this.moduleScope, c.name, c.name, { name: c.name, params: c.params, customTag: c.customTag }, `${file.path}#${c.name}`, c.loc);
     for (const f of file.functions) {
       this.moduleScope.define(f.name, { kind: "function", js: f.name, fn: { name: f.name, params: f.params, returnType: f.returnType, ui: f.returnType?.base === "ui" }, loc: f.loc });
@@ -205,6 +206,7 @@ export class ModuleCompiler {
     if (file.scripts.length) this.interactive = true;
 
     const body: string[] = [];
+    for (const p of file.params ?? []) body.push(`const ${p} = $$.param(${JSON.stringify(p)});`);
     for (const v of file.vars) {
       this.checkDuplicate(this.moduleScope, v.name, v.loc);
       body.push(this.genVarDecl(v, this.moduleScope, true));

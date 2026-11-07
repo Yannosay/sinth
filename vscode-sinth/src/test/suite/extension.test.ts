@@ -71,8 +71,8 @@ suite("Sinth extension", () => {
   });
 
   test("completes event modifiers", async () => {
-    const doc = await vscode.workspace.openTextDocument({ language: "sinth", content: "page\nMain {\n  Button(onClick." });
-    const list = await vscode.commands.executeCommand<vscode.CompletionList>("vscode.executeCompletionItemProvider", doc.uri, new vscode.Position(2, 17));
+    const doc = await vscode.workspace.openTextDocument({ language: "sinth", content: "Main {\n  Button(onClick." });
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>("vscode.executeCompletionItemProvider", doc.uri, new vscode.Position(1, 17));
     assert.ok(labels(list).includes("prevent"));
   });
 
