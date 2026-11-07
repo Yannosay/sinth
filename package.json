@@ -1,6 +1,6 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.2.2",
+  "version": "5.2.3",
   "description": "A reactive language for websites and web apps of any size: type-checked components, file-based and dynamic routing, prerendered pages and one-command deploys.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",

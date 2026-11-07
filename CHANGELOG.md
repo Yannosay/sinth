@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.3
+
+- `script { }` and `style { }` blocks are now recognized on the line after a statement that ends in `)` or `]`, such as `var data = JSON.parse(text)`. Before, this failed with a confusing syntax error.
+
 ## 5.2.2
 
 - Documentation: clearer README and package description, working links for the VS Code extension and Sinth IDE.
