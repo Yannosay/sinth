@@ -44,8 +44,8 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.runtime.json --noEmit",
-    "test": "npm run build && node --test \"test/*.test.js\"",
-    "prepublishOnly": "npm run clean && npm run build && npm run lint && node --test \"test/*.test.js\""
+    "test": "npm run build && node scripts/test.js",
+    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/test.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

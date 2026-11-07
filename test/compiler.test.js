@@ -160,3 +160,8 @@ test("component styles are scoped and reactive values become custom properties",
   assert.match(boxOut.css, /\.box:hover\.s-[a-z0-9]+/);
   assert.match(boxOut.js, /\$\$\.cssVars/);
 });
+
+test("string event handlers are compile errors with a fix hint", () => {
+  const err = expectError(() => compilePage('page\nMain { Button(onClick: "save") { "x" } }'), "E0351");
+  assert.match(err.diagnostic.hint, /onClick: save\(\)/);
+});

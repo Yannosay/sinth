@@ -26,9 +26,9 @@ Security patches are provided only for the following versions:
 
 | Version              | Supported                                                                     | Status           |
 |----------------------|-------------------------------------------------------------------------------|------------------|
-| 3.0.0 and later      | ![supported](https://img.shields.io/badge/supported-4caf50?style=flat-square) | Active support   |
-| 1.9.0 through 1.11.x | ![security](https://img.shields.io/badge/security-ff9800?style=flat-square)   | Security support |
-| earlier than 1.9.0   | ![eol](https://img.shields.io/badge/X-f44336?style=flat-square)               | End of life      |
+| 5.x                  | ![supported](https://img.shields.io/badge/supported-4caf50?style=flat-square) | Active support   |
+| 4.x                  | ![security](https://img.shields.io/badge/security-ff9800?style=flat-square)   | Security fixes until 2027-05-01 |
+| < 4.0                | ![unsupported](https://img.shields.io/badge/unsupported-9e9e9e?style=flat-square) | Unsupported |
 
 Users must upgrade to a supported version before a report can be triaged.
 

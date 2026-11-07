@@ -765,6 +765,11 @@ export class ModuleCompiler {
     if (stmts.length === 1 && stmts[0].k === "expr") {
       const ex = stmts[0].expr;
       if (ex.k === "arrow") return this.expr(ex, scope);
+      if (ex.k === "lit" || ex.k === "tpl") {
+        const raw = ex.k === "lit" ? String(ex.value) : "";
+        const name = raw.replace(/\(\s*\)\s*;?$/, "");
+        this.fail("E0351", "Event handlers cannot be strings", ex.loc, /^[A-Za-z_$][\w$]*$/.test(name) ? `Write ${a.name}: ${name}() instead of ${a.name}: "${raw}"` : `Write the handler as code, e.g. ${a.name}: count += 1`);
+      }
       if (ex.k === "id" || ex.k === "member") {
         const b = ex.k === "id" ? scope.lookup(ex.name) : undefined;
         if (ex.k === "id" && !b) this.unknownName(ex.name, ex.loc, scope);

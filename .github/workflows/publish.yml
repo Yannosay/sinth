@@ -1,22 +1,40 @@
 name: Publish to npm
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm publish --provenance --access public
+      - run: npm run lint
+      - run: node scripts/test.js
+      - name: Check tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "${{ github.event.release.tag_name }}" ]; then
+            echo "Tag ${{ github.event.release.tag_name }} does not match package version v$VERSION"
+            exit 1
+          fi
+      - name: Publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *-* ]]; then TAG=next; else TAG=latest; fi
+          npm publish --provenance --access public --tag "$TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

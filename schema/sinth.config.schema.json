@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sinth configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "options": {
+      "type": "object",
+      "properties": {
+        "outDir": { "type": "string", "description": "Build output folder", "default": "dist" },
+        "pagesDir": { "type": "string", "description": "Folder containing pages", "default": "pages" },
+        "publicDir": { "type": "string", "description": "Copied to the output root", "default": "public" },
+        "staticDirs": { "type": "array", "items": { "type": "string" }, "description": "Folders copied to <outDir>/<name>", "default": ["assets"] },
+        "libraryPaths": { "type": "array", "items": { "type": "string" }, "description": "Folders searched for bare imports", "default": ["libraries"] },
+        "site": { "type": "string", "pattern": "^https?://", "description": "Public URL, enables sitemap.xml and robots.txt" },
+        "base": { "type": "string", "description": "URL prefix when hosting in a subfolder", "default": "/" },
+        "minify": { "type": "boolean", "description": "Minify JS and CSS" },
+        "sourcemap": { "type": "boolean", "description": "Emit source maps" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 3000 },
+        "host": { "type": "string", "default": "127.0.0.1" },
+        "previewPort": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 4000 },
+        "target": { "type": "array", "items": { "type": "string" }, "description": "esbuild targets" },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headers": { "type": "boolean", "default": true, "description": "Write a _headers file" },
+            "csp": { "type": ["boolean", "string"], "default": true, "description": "true (generated), false, or a custom Content-Security-Policy" }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [{ "$ref": "#/definitions/options" }],
+  "properties": {
+    "$schema": { "type": "string" },
+    "outDir": {}, "pagesDir": {}, "publicDir": {}, "staticDirs": {}, "libraryPaths": {}, "site": {}, "base": {},
+    "minify": {}, "sourcemap": {}, "port": {}, "host": {}, "previewPort": {}, "target": {}, "security": {},
+    "cloudflare": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,56}[a-z0-9]$" },
+        "accountId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+        "productionBranch": { "type": "string", "default": "main" }
+      }
+    },
+    "development": { "$ref": "#/definitions/options" },
+    "production": { "$ref": "#/definitions/options" },
+    "sharedRuntime": { "deprecated": true, "description": "Ignored since Sinth 5" },
+    "inlineJS": { "deprecated": true, "description": "Ignored since Sinth 5" },
+    "inlineCSS": { "deprecated": true, "description": "Ignored since Sinth 5" }
+  }
+}
