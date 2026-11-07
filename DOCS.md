@@ -77,7 +77,7 @@ Main {
 When you are ready:
 
 ```bash
-npm run build     # optimized static site in dist/
+npm run build     # optimized production build in dist/
 npm run preview   # serve dist/ locally with production headers
 npm run deploy    # deploy to Cloudflare Pages
 ```
@@ -1038,7 +1038,7 @@ component Counter(num start = 0, str label = "Count") as <sinth-counter> {
 ## 25. Rendering model and performance
 
 - **Prerendering**: every page is rendered to static HTML at build time, so content is visible immediately and indexable by search engines.
-- **Zero JavaScript for static pages**: if a page has no events, bindings, scripts, watchers or values that can only be known in the browser, Sinth ships no JavaScript at all for it.
+- **No JavaScript when none is needed**: if a page has no events, bindings, scripts, watchers or values that can only be known in the browser, Sinth ships no JavaScript at all for it.
 - **Fine-grained updates**: interactive pages mount a ~5 kB runtime. Each binding is updated only when its value actually changes. Text, attributes and keyed lists are patched in place; nothing is re-rendered with `innerHTML`.
 - **Code splitting**: shared code across pages is split into cached chunks, and `<link rel="modulepreload">` tags are added automatically.
 - **Static subtrees**: purely static markup inside interactive pages is created from cached templates.
@@ -1178,7 +1178,7 @@ dist/
 └─ contents of public/ and static folders
 ```
 
-The output is a plain static site. It works on Cloudflare Pages, Netlify, Vercel, GitHub Pages, S3, nginx or any static host. Pages are written as `about.html`; most hosts serve them at `/about` (on GitHub Pages and nginx, links to `/about.html` or a rewrite rule may be needed).
+The output is standard HTML, CSS and JavaScript with no server runtime, so it runs on Cloudflare Pages, Netlify, Vercel, GitHub Pages, S3, nginx or any static host. Pages are written as `about.html`; most hosts serve them at `/about` (on GitHub Pages and nginx, links to `/about.html` or a rewrite rule may be needed).
 
 The build prints every page with its size and whether it ships JavaScript:
 
@@ -1336,7 +1336,7 @@ Run `sinth check` after upgrading. It reports every incompatibility with its loc
 ## 36. FAQ
 
 **Does Sinth need a framework or runtime on the server?**
-No. The output is static HTML, CSS and JavaScript.
+No. The output is HTML, CSS and JavaScript that any web host can serve.
 
 **Can I use npm packages?**
 Yes. Install them and import them. They are bundled and tree-shaken.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.2
+
+- Documentation: clearer README and package description, working links for the VS Code extension and Sinth IDE.
+
 ## 5.2.1
 
 - The E0104 hint now covers projects without a `pages/` folder, where root files are pages.
@@ -13,7 +17,6 @@
 
 - Dynamic routes and page detection now work when the project path contains a symlink or junction (macOS temp folders, linked workspaces).
 - Dev server logs use forward slashes on Windows.
-- CI: ESLint runs on Node 22 only.
 
 ## 5.1.0
 

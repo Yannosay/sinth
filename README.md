@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=a855f7&label=npm&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![downloads](https://img.shields.io/npm/dt/@yannosay/sinth?color=c084fc&label=downloads&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![CI](https://img.shields.io/github/actions/workflow/status/Yannosay/sinth/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Yannosay/sinth/actions) [![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&style=for-the-badge)](./LICENSE)
 
-**Sinth is a reactive language for building websites and web apps of any size, from a landing page to a large multi-page product.** Write pages and components in one readable syntax. The compiler type-checks your whole project and turns it into static-first HTML, CSS and JavaScript, with no framework to learn.
+**Sinth is a reactive language for building websites and web apps of any size, from a landing page to a large multi-page product.** Write pages and components in one readable syntax. The compiler type-checks your whole project and produces fast, secure HTML, CSS and JavaScript, with no framework to learn.
 
 ```sinth
 title = "Counter"
@@ -20,7 +20,7 @@ Main {
 - **Easy to read, easy to learn.** Markup, state, logic and styles live together in one file with no boilerplate.
 - **Reactive by default.** Change a variable and exactly the affected parts of the page update.
 - **Built to scale.** File-based routing with dynamic routes (`pages/blog/[slug].sinth` generates one page per post), shared layouts and components, project-wide type checking, code splitting and cached chunks. Thousands of pages build in seconds.
-- **Static first.** Every page is prerendered to HTML. Pages without interactivity ship zero JavaScript; interactive ones load a ~5 kB runtime.
+- **Fast by default.** Every page is rendered at build time, so it appears instantly and is fully indexable by search engines. Interactivity runs on a ~5 kB runtime with fine-grained updates, and pages that need no JavaScript load none.
 - **Catches mistakes before the browser does.** Unknown names, missing arguments, wrong types and missing component props are compile errors with "did you mean" hints.
 - **Secure by default.** No `eval`, escaped output, no inline handlers, strict CSP and security headers out of the box.
 - **Batteries included.** Dev server with hot reload that keeps state, scoped CSS, a component library (`sinth:ui`), npm packages, SCSS, JSON imports, Google Fonts, custom elements, sitemaps and one-command Cloudflare deploys.
@@ -94,7 +94,8 @@ component TodoList(str title = "Todos") {
 - **[Full reference (DOCS.md)](./DOCS.md)**: every feature, option and error code
 - [Website](https://sinth.yannosay.com)
 - [Changelog](./CHANGELOG.md)
-- [VS Code extension](https://marketplace.visualstudio.com/items?itemName=YannosayProductions.sinth-vscode)
+- [VS Code extension](https://github.com/Yannosay/sinth/releases/latest): download `sinth-vscode-*.vsix` from the latest release and run **Extensions: Install from VSIX**
+- [Sinth IDE](https://github.com/Yannosay/sinth-ide/releases/latest): the desktop editor for Sinth (Windows, macOS, Linux)
 
 ## Community
 
