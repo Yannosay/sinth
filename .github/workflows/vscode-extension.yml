@@ -1,0 +1,38 @@
+name: Release VS Code extension
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode-sinth
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx vsce package --no-dependencies
+      - name: Attach to release
+        if: github.event_name == 'release'
+        run: gh release upload "${{ github.event.release.tag_name }}" sinth-vscode-*.vsix --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Publish to the Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish --no-dependencies -p "$VSCE_PAT"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        run: npx --yes ovsx publish sinth-vscode-*.vsix -p "$OVSX_PAT"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}

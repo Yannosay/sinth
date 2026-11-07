@@ -8,12 +8,8 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node", "mocha", "vscode"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "out"]
+  "include": ["src/**/*"]
 }

@@ -1,238 +1,97 @@
 {
-  "page": {
+  "Page": {
     "prefix": "page",
-    "body": [
-      "page",
-      "",
-      "import \"../components/Navbar.sinth\"",
-      "import css \"../styles/reset.css\"",
-      "",
-      "title = \"${1:Page Title}\"",
-      "descr = \"${2:SEO description}\"",
-      "fav   = \"assets/favicon.ico\"",
-      "",
-      "var num ${3:count} = 0",
-      "var str ${4:name} = \"${5:World}\"",
-      "",
-      "Navbar",
-      "",
-      "Main {",
-      "  Heading(level: 1) { \"${1:Page Title}\" }",
-      "  Paragraph { \"Welcome, \" + ${4:name} }",
-      "  Button(onClick: ${3:count} += 1) { \"Clicked \" + ${3:count} + \" times\" }",
-      "}",
-      "",
-      "style {",
-      "  main { padding: \"2rem\"; textAlign: \"center\"; }",
-      "  button { marginTop: \"1rem\"; padding: \"0.5rem 1rem\"; }",
-      "}",
-      "",
-      "script {",
-      "  function ${6:handleClick}() {",
-      "    ${3:count} += 1",
-      "    sinthRender()",
-      "  }",
-      "}"
-    ],
-    "description": "Sinth page template"
+    "body": ["page", "", "title = \"${1:Title}\"", "descr = \"${2:Description}\"", "", "Main {", "  Heading(level: 1) { \"${1:Title}\" }", "  $0", "}"],
+    "description": "New page"
   },
-  "component": {
+  "Component": {
     "prefix": "component",
-    "body": [
-      "component ${1:ComponentName}(${2:props}) {",
-      "  Div(class: \"${1:component-name}\") {",
-      "    Heading(level: 3) { \"${1:ComponentName}\" }",
-      "    Div(class: \"body\") { $$slot }",
-      "  }",
-      "",
-      "  style {",
-      "    .${1:component-name} {",
-      "      padding: \"1rem\"",
-      "      borderRadius: \"0.5rem\"",
-      "      backgroundColor: \"white\"",
-      "      boxShadow: \"0 2px 8px rgba(0,0,0,0.1)\"",
-      "      ",
-      "      &:hover {",
-      "        boxShadow: \"0 4px 16px rgba(0,0,0,0.15)\"",
-      "        transform: \"translateY(-2px)\"",
-      "        transition: \"all 0.2s\"",
-      "      }",
-      "    }",
-      "  }",
-      "}"
-    ],
-    "description": "Sinth component template"
+    "body": ["component ${1:Name}(str ${2:title}) {", "  Div(class: \"${3:box}\") {", "    Heading(level: 3) { ${2:title} }", "    \\$slot", "  }", "", "  style {", "    .${3:box} {", "      padding: \"1rem\"", "    }", "  }", "}"],
+    "description": "Component with a slot and scoped styles"
   },
-  "function": {
+  "Function": {
     "prefix": "function",
-    "body": [
-      "function ${1:name}(${2:params}) -> ${3:returnType} {",
-      "  ${4:// body}",
-      "  return ${5:value}",
-      "}"
-    ],
-    "description": "Sinth function template"
+    "body": ["function ${1:name}(${2:num value}) -> ${3:num} {", "  return ${0:value}", "}"],
+    "description": "Typed function"
   },
-  "if": {
+  "UI function": {
+    "prefix": "uifunction",
+    "body": ["function ${1:name}(${2:str label}) -> ui {", "  ${3:Span} { ${4:label} }", "}"],
+    "description": "Function that renders markup"
+  },
+  "If": {
     "prefix": "if",
-    "body": [
-      "if (${1:condition}) {",
-      "  ${2:// then}",
-      "} else {",
-      "  ${3:// else}",
-      "}"
-    ],
-    "description": "If/else block"
+    "body": ["if ${1:condition} {", "  $0", "}"],
+    "description": "Conditional"
   },
-  "if-elif-else": {
-    "prefix": "ifel",
-    "body": [
-      "if (${1:condition}) {",
-      "  ${2:// then}",
-      "} else if (${3:condition}) {",
-      "  ${4:// else if}",
-      "} else {",
-      "  ${5:// else}",
-      "}"
-    ],
-    "description": "If/elif/else chain"
+  "If else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:condition} {", "  $2", "} else {", "  $0", "}"],
+    "description": "Conditional with else"
   },
-  "for": {
+  "For": {
     "prefix": "for",
-    "body": [
-      "for (${1:item} in ${2:items}) key (${1:item}.${3:id}) {",
-      "  ${4:// body}",
-      "}"
-    ],
-    "description": "For loop with key"
+    "body": ["for ${1:item} in ${2:items} {", "  $0", "}"],
+    "description": "Loop"
   },
-  "for-index": {
-    "prefix": "fori",
-    "body": [
-      "for (${1:item}, ${2:index} in ${3:items}) key (${1:item}.${4:id}) {",
-      "  ${5:// body}",
-      "}"
-    ],
-    "description": "For loop with index"
+  "For keyed": {
+    "prefix": "forkey",
+    "body": ["for ${1:item}, ${2:index} in ${3:items} key ${1:item}.${4:id} {", "  $0", "} else {", "  Paragraph { \"${5:Nothing here yet.}\" }", "}"],
+    "description": "Keyed loop with index and empty state"
   },
-  "var": {
+  "Variable": {
     "prefix": "var",
-    "body": [
-      "var ${1:type} ${2:name} = ${3:value}"
-    ],
-    "description": "Variable declaration"
+    "body": ["var ${1|str,num,bool,obj,str[],num[],obj[]|} ${2:name} = ${0}"],
+    "description": "Reactive variable"
   },
-  "import": {
+  "Computed": {
+    "prefix": "computed",
+    "body": ["computed ${1|num,str,bool|} ${2:name} = ${0}"],
+    "description": "Derived value"
+  },
+  "Counter": {
+    "prefix": "counter",
+    "body": ["var num ${1:count} = 0", "", "Button(onClick: ${1:count} += 1) { \"Clicked \" + ${1:count} + \" times\" }"],
+    "description": "Reactive counter"
+  },
+  "Form": {
+    "prefix": "form",
+    "body": ["var str ${1:email} = \"\"", "", "function submit() {", "  $0", "}", "", "Form(onSubmit.prevent: submit()) {", "  Input(type: \"email\", model: ${1:email}, required)", "  SubmitButton { \"Send\" }", "}"],
+    "description": "Form with binding and submit handler"
+  },
+  "Fetch on mount": {
+    "prefix": "fetch",
+    "body": ["var obj[] ${1:items} = []", "var bool loading = true", "", "onMount {", "  const res = await fetch(\"${2:/api/items}\")", "  ${1:items} = await res.json()", "  loading = false", "}"],
+    "description": "Load data when the page opens"
+  },
+  "Watch": {
+    "prefix": "watch",
+    "body": ["watch ${1:value} {", "  $0", "}"],
+    "description": "Run code when a value changes"
+  },
+  "Import": {
     "prefix": "import",
-    "body": [
-      "import \"${1:path}\""
-    ],
-    "description": "Import Sinth component"
+    "body": ["import { ${1:Name} } from \"${2:./components/${1:Name}.sinth}\""],
+    "description": "Import from a Sinth file"
   },
-  "import-css": {
-    "prefix": "importcss",
-    "body": [
-      "import css \"${1:path}\""
-    ],
-    "description": "Import CSS file"
+  "Import sinth:ui": {
+    "prefix": "importui",
+    "body": ["import { ${1:Button, Card} } from \"sinth:ui\""],
+    "description": "Import from the built-in component library"
   },
-  "import-js": {
-    "prefix": "importjs",
-    "body": [
-      "import js \"${1:path}\""
-    ],
-    "description": "Import JavaScript file"
-  },
-  "style": {
+  "Style": {
     "prefix": "style",
-    "body": [
-      "style {",
-      "  ${1:selector} {",
-      "    ${2:property}: \"${3:value}\";",
-      "  }",
-      "}"
-    ],
+    "body": ["style {", "  ${1:main} {", "    $0", "  }", "}"],
     "description": "Style block"
   },
-  "script": {
+  "Script": {
     "prefix": "script",
-    "body": [
-      "script {",
-      "  function ${1:name}() {",
-      "    ${2:// body}",
-      "  }",
-      "}"
-    ],
-    "description": "Script block"
+    "body": ["script {", "  $0", "}"],
+    "description": "JavaScript block"
   },
-  "button": {
-    "prefix": "btn",
-    "body": [
-      "Button(onClick: ${1:handler}) { ${2:Label} }"
-    ],
-    "description": "Button component"
-  },
-  "input": {
-    "prefix": "input",
-    "body": [
-      "Input(type: \"${1:text}\", model: ${2:value}, placeholder: \"${3:Placeholder}\")"
-    ],
-    "description": "Input component"
-  },
-  "checkbox": {
-    "prefix": "checkbox",
-    "body": [
-      "Checkbox(model: ${1:value}, label: \"${2:Label}\")"
-    ],
-    "description": "Checkbox component"
-  },
-  "select": {
-    "prefix": "select",
-    "body": [
-      "Select(model: ${1:value}) {",
-      "  Option(value: \"\") { \"Select...\" }",
-      "  Option(value: \"${2:option1}\") { \"${3:Label 1}\" }",
-      "  Option(value: \"${4:option2}\") { \"${5:Label 2}\" }",
-      "}"
-    ],
-    "description": "Select component"
-  },
-  "modal": {
-    "prefix": "modal",
-    "body": [
-      "component ${1:Modal}(${2:open}, ${3:onClose}) {",
-      "  if (${2:open}) persist replace delay(200) {",
-      "    Div(class: \"modal-overlay\", onClick: ${3:onClose}) {",
-      "      Div(class: \"modal\", onClick: (e) => e.stopPropagation()) {",
-      "        $$slot",
-      "        Button(onClick: ${3:onClose}) { \"Close\" }",
-      "      }",
-      "    }",
-      "  }",
-      "}"
-    ],
-    "description": "Modal component with animations"
-  },
-  "form": {
-    "prefix": "form",
-    "body": [
-      "Form(onSubmit: ${1:handler}) {",
-      "  Fieldset {",
-      "    Legend { \"${1:Title}\" }",
-      "    ",
-      "    Div(class: \"field\") {",
-      "      Label { \"${2:Label}\" }",
-      "      Input(type: \"${3:text}\", model: ${4:value}, placeholder: \"${5:Placeholder}\")",
-      "    }",
-      "    ",
-      "    Div(class: \"field checkbox\") {",
-      "      Checkbox(model: ${6:checked}, label: \"${7:Label}\")",
-      "    }",
-      "    ",
-      "    Button(type: \"submit\") { \"${8:Submit}\" }",
-      "  }",
-      "}"
-    ],
-    "description": "Form template"
+  "Custom element": {
+    "prefix": "element",
+    "body": ["component ${1:Widget}(${2:str label = \"Hi\"}) as <${3:my-widget}> {", "  $0", "}"],
+    "description": "Component exported as a custom HTML element"
   }
 }

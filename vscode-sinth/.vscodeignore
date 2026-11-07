@@ -1,0 +1,10 @@
+src/**
+test/**
+out/test/**
+**/*.map
+**/*.ts
+tsconfig.json
+.vscode-test/**
+node_modules/**
+*.vsix
+test-fixture/**

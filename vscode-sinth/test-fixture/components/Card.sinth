@@ -1,0 +1,6 @@
+component Card(str title, str accent = "#7c3aed") {
+  Article(class: "card") {
+    Heading(level: 3) { title }
+    $slot
+  }
+}

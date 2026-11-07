@@ -1,39 +1,48 @@
 {
-  "name": "sinth-language",
-  "displayName": "Sinth Language",
-  "description": "Official VSCode extension for Sinth 5 - declarative, component-based web UI language",
+  "name": "sinth-vscode",
+  "displayName": "Sinth",
+  "description": "Official Sinth 5 language support: syntax highlighting, IntelliSense, diagnostics, formatting and commands.",
   "version": "5.0.0",
   "publisher": "YannosayProductions",
+  "author": "Yannosay Productions",
+  "license": "AGPL-3.0",
   "icon": "assets/icon.png",
-  "license": "MIT",
+  "galleryBanner": {
+    "color": "#0A0A0B",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/Yannosay/sinth#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yannosay/sinth-language"
+    "url": "https://github.com/Yannosay/sinth.git",
+    "directory": "vscode-sinth"
   },
   "bugs": {
-    "url": "https://github.com/yannosay/sinth-language/issues"
+    "url": "https://github.com/Yannosay/sinth/issues"
   },
-  "homepage": "https://sinth.yannosay.com",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
   "categories": [
     "Programming Languages",
     "Snippets",
-    "Linters"
+    "Linters",
+    "Formatters"
   ],
   "keywords": [
     "sinth",
     "web",
     "ui",
-    "components",
     "reactive",
-    "typescript"
+    "components",
+    "static site",
+    "html",
+    "css",
+    "intellisense"
   ],
-  "engines": {
-    "vscode": "^1.80.0"
-  },
   "activationEvents": [
-    "onLanguage:sinth",
-    "onCommand:sinth.compile",
-    "onCommand:sinth.check"
+    "workspaceContains:**/*.sinth",
+    "workspaceContains:sinth.config.json"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -47,14 +56,22 @@
         "extensions": [
           ".sinth"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./assets/file-icon.png",
+          "dark": "./assets/file-icon.png"
+        }
       }
     ],
     "grammars": [
       {
         "language": "sinth",
-        "scopeName": "source.sinith",
-        "path": "./syntaxes/sinth.tmLanguage.json"
+        "scopeName": "source.sinth",
+        "path": "./syntaxes/sinth.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.javascript.sinth": "javascript",
+          "meta.embedded.block.style.sinth": "css"
+        }
       }
     ],
     "snippets": [
@@ -65,80 +82,97 @@
     ],
     "commands": [
       {
-        "command": "sinth.compile",
-        "title": "Sinth: Compile Current File",
+        "command": "sinth.dev",
+        "title": "Start Dev Server",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.build",
+        "title": "Build for Production",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.preview",
+        "title": "Preview Production Build",
         "category": "Sinth"
       },
       {
         "command": "sinth.check",
-        "title": "Sinth: Type Check Project",
+        "title": "Check Project for Errors",
         "category": "Sinth"
       },
       {
-        "command": "sinth.dev",
-        "title": "Sinth: Start Dev Server",
+        "command": "sinth.deploy",
+        "title": "Deploy to Cloudflare Pages",
         "category": "Sinth"
       },
       {
-        "command": "sinth.restartServer",
-        "title": "Sinth: Restart Language Server",
+        "command": "sinth.newPage",
+        "title": "New Page",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.newComponent",
+        "title": "New Component",
+        "category": "Sinth"
+      },
+      {
+        "command": "sinth.openDocs",
+        "title": "Open Documentation",
         "category": "Sinth"
       }
     ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "sinth.dev",
+          "when": "resourceLangId == sinth",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Sinth",
       "properties": {
-        "sinth.enableDiagnostics": {
+        "sinth.diagnostics.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable real-time type checking and error diagnostics"
-        },
-        "sinth.enableCompletion": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable IntelliSense code completion"
+          "description": "Check Sinth files with `sinth check` when they are opened and saved."
         },
         "sinth.compilerPath": {
           "type": "string",
-          "default": "sinth",
-          "description": "Path to sinth compiler executable"
-        },
-        "sinth.configPath": {
-          "type": "string",
-          "default": "sinth.config.json",
-          "description": "Path to project configuration file"
+          "default": "",
+          "markdownDescription": "Path to the Sinth CLI (`bin/sinth.js` or an executable). Empty: use the project's `node_modules/@yannosay/sinth`, then a global `sinth`."
         }
       }
     },
-    "keybindings": [
+    "configurationDefaults": {
+      "[sinth]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.defaultFormatter": "YannosayProductions.sinth-vscode"
+      }
+    },
+    "jsonValidation": [
       {
-        "command": "sinth.compile",
-        "key": "ctrl+shift+c",
-        "mac": "cmd+shift+c",
-        "when": "editorTextFocus && editorLangId == sinth"
-      },
-      {
-        "command": "sinth.check",
-        "key": "ctrl+shift+t",
-        "mac": "cmd+shift+t",
-        "when": "editorTextFocus && editorLangId == sinth"
+        "fileMatch": "sinth.config.json",
+        "url": "./schema/sinth.config.schema.json"
       }
     ]
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -w -p ./",
-    "pretest": "npm run compile",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "vscode:prepublish": "npm run compile",
+    "test": "npm run compile && node ./out/test/runTests.js",
+    "package": "vsce package"
   },
   "devDependencies": {
-    "@types/node": "^18.0.0",
-    "@types/vscode": "^1.80.0",
-    "typescript": "^5.0.0",
-    "vsce": "^2.15.0"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^10.1.2"
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.80.0",
+    "@types/mocha": "^10.0.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.0",
+    "mocha": "^10.7.0",
+    "typescript": "^5.6.0"
   }
 }

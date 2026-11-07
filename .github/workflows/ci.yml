@@ -33,3 +33,19 @@ jobs:
           node bin/sinth.js check --root smoke
           node bin/sinth.js build --root smoke
           test -f smoke/dist/index.html
+
+  vscode-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm run build
+      - working-directory: vscode-sinth
+        run: npm ci
+      - working-directory: vscode-sinth
+        run: xvfb-run -a npm test
+      - working-directory: vscode-sinth
+        run: npx vsce package --no-dependencies

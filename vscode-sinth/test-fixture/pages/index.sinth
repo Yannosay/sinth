@@ -1,0 +1,12 @@
+page
+import { Card } from "../components/Card.sinth"
+
+title = "Fixture"
+
+var num count = 0
+
+Main {
+  Paragraph { "Count: " + cuont }
+  Card(title: "Hello") { "Body" }
+
+}

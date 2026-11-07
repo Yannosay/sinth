@@ -1,287 +1,194 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Sinth",
-  "scopeName": "source.sinith",
-  "fileTypes": ["sinth"],
-  "injectionSelector": "L:source.sinith -string -comment",
+  "scopeName": "source.sinth",
   "patterns": [
-    {
-      "include": "#comments"
-    },
-    {
-      "include": "#strings"
-    },
-    {
-      "include": "#keywords"
-    },
-    {
-      "include": "#types"
-    },
-    {
-      "include": "#literals"
-    },
-    {
-      "include": "#operators"
-    },
-    {
-      "include": "#punctuation"
-    },
-    {
-      "include": "#variables"
-    },
-    {
-      "include": "#component-names"
-    },
-    {
-      "include": "#function-calls"
-    },
-    {
-      "include": "#attributes"
-    },
-    {
-      "include": "#interpolation"
-    }
+    { "include": "#comments" },
+    { "include": "#style-block" },
+    { "include": "#script-block" },
+    { "include": "#declarations" },
+    { "include": "#markup" }
   ],
   "repository": {
     "comments": {
       "patterns": [
+        { "name": "comment.block.sinth", "begin": "--\\[", "end": "\\]--", "patterns": [{ "include": "#comments" }] },
+        { "name": "comment.line.double-dash.sinth", "match": "--(?![\\w-]*\\s*:).*$" },
+        { "name": "comment.line.double-slash.sinth", "match": "(?<![:\\w])//.*$" },
+        { "name": "comment.block.sinth", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "style-block": {
+      "name": "meta.embedded.block.style.sinth",
+      "begin": "\\b(style)\\b((?:\\s+(?:global|scoped|lang\\s*=\\s*\"[a-z]+\"))*)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.style.sinth" },
+        "2": { "name": "storage.modifier.sinth" },
+        "3": { "name": "punctuation.section.block.begin.sinth" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.sinth" } },
+      "patterns": [{ "include": "#style-body" }]
+    },
+    "style-body": {
+      "patterns": [
+        { "include": "#comments" },
+        { "begin": "\\{", "end": "\\}", "patterns": [{ "include": "#style-body" }] },
         {
-          "name": "comment.line.double-dash.sinith",
-          "match": "--(?!\\[).*$"
+          "match": "(--[\\w-]+|[A-Za-z$-][\\w-]*)\\s*(:)(?=[^{]*(?:$|;|\\}))",
+          "captures": { "1": { "name": "support.type.property-name.css" }, "2": { "name": "punctuation.separator.key-value.css" } }
+        },
+        { "name": "keyword.control.at-rule.css", "match": "@[\\w-]+" },
+        { "name": "keyword.other.media.sinth", "match": "\\b(media|dark|light|mobile|tablet|desktop|print|reducedMotion)\\b(?=\\s*[({])" },
+        { "name": "entity.other.attribute-name.pseudo-class.sinth", "match": "\\b(on[A-Z]\\w*|before|after|placeholder|selection|marker|backdrop|firstLine|firstLetter)\\b(?=\\s*\\{)" },
+        { "name": "entity.name.tag.sinth", "match": "\\b[A-Z][A-Za-z0-9]*\\b" },
+        { "name": "entity.other.attribute-name.class.css", "match": "\\.[A-Za-z_-][\\w-]*" },
+        { "name": "string.quoted.double.css", "begin": "\"", "end": "\"" },
+        { "name": "string.quoted.single.css", "begin": "'", "end": "'" },
+        { "name": "constant.other.color.rgb-value.css", "match": "#[0-9a-fA-F]{3,8}\\b" },
+        { "name": "constant.numeric.css", "match": "-?\\b\\d+(\\.\\d+)?(px|rem|em|%|vh|vw|vmin|vmax|ch|ex|s|ms|deg|fr|dvh|svh)?\\b" },
+        { "name": "keyword.operator.css", "match": "[&>+~]" },
+        { "name": "variable.other.scss", "match": "\\$[A-Za-z_][\\w-]*" }
+      ]
+    },
+    "script-block": {
+      "name": "meta.embedded.block.javascript.sinth",
+      "begin": "\\b(script)\\b([^{\\n]*)(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.script.sinth" },
+        "2": { "name": "entity.other.attribute-name.sinth" },
+        "3": { "name": "punctuation.section.block.begin.sinth" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.sinth" } },
+      "patterns": [{ "include": "#js-braces" }, { "include": "source.js" }]
+    },
+    "js-braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [{ "include": "#js-braces" }, { "include": "source.js" }]
+    },
+    "declarations": {
+      "patterns": [
+        { "name": "keyword.control.page.sinth", "match": "^\\s*page\\b" },
+        {
+          "match": "\\b(import)\\b(?:\\s+(css|style|js|script|font)\\b)?",
+          "captures": { "1": { "name": "keyword.control.import.sinth" }, "2": { "name": "storage.modifier.sinth" } }
+        },
+        { "name": "keyword.control.import.sinth", "match": "\\b(from|as|extern|export|private)\\b" },
+        {
+          "match": "\\b(component)\\s+([A-Z]\\w*)",
+          "captures": { "1": { "name": "storage.type.component.sinth" }, "2": { "name": "entity.name.type.component.sinth" } }
         },
         {
-          "name": "comment.block.sinith",
-          "begin": "--\\[",
-          "end": "]--",
-          "patterns": [
-            {
-              "include": "#comments"
-            }
-          ]
-        }
+          "match": "\\b(custom-element|custom)\\s+([A-Za-z]\\w*)",
+          "captures": { "1": { "name": "storage.type.component.sinth" }, "2": { "name": "entity.name.type.component.sinth" } }
+        },
+        {
+          "match": "\\b(async\\s+)?(function)\\s+([a-z_$][\\w$]*)",
+          "captures": {
+            "1": { "name": "storage.modifier.async.sinth" },
+            "2": { "name": "storage.type.function.sinth" },
+            "3": { "name": "entity.name.function.sinth" }
+          }
+        },
+        {
+          "match": "\\b(persist\\s+)?(var|const|computed)\\b\\s+(?:(str|num|int|bool|obj|ui|any|void|fn)((?:\\[\\])*\\??)\\s+)?([A-Za-z_$][\\w$]*)",
+          "captures": {
+            "1": { "name": "storage.modifier.persist.sinth" },
+            "2": { "name": "storage.type.sinth" },
+            "3": { "name": "support.type.primitive.sinth" },
+            "4": { "name": "support.type.primitive.sinth" },
+            "5": { "name": "variable.other.declaration.sinth" }
+          }
+        },
+        {
+          "match": "^\\s*(title|descr|description|fav|favicon|lang|charset|viewport|author|keywords|robots|themeColor|colorScheme|canonical|generator|manifest|appleTouchIcon|base|bodyClass|htmlClass|og[A-Z]\\w*|twitter[A-Z]\\w*)\\s*(=)",
+          "captures": { "1": { "name": "variable.other.property.meta.sinth" }, "2": { "name": "keyword.operator.assignment.sinth" } }
+        },
+        { "name": "keyword.control.lifecycle.sinth", "match": "\\b(onMount|onDestroy|watch)\\b(?=\\s)" }
+      ]
+    },
+    "markup": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "name": "keyword.control.flow.sinth", "match": "\\b(if|elif|else|for|in|key|while|return|break|continue|persist|replace)\\b" },
+        { "name": "support.function.modifier.sinth", "match": "\\b(delay|transition|hide)\\b(?=\\s*\\()" },
+        { "name": "keyword.operator.logical.sinth", "match": "\\b(and|or|not|typeof|await|new)\\b" },
+        { "name": "constant.language.sinth", "match": "\\b(true|false|null|undefined)\\b" },
+        { "name": "support.type.primitive.sinth", "match": "\\b(str|num|int|bool|obj|ui|any|void|fn)\\b(?=(\\[\\])*\\??\\s+[A-Za-z_])" },
+        { "name": "storage.modifier.bind.sinth", "match": "\\bbind\\b(?=\\s+[A-Za-z_])" },
+        { "name": "variable.language.slot.sinth", "match": "\\$slot\\b" },
+        { "name": "support.function.slot.sinth", "match": "\\bslot\\b(?=\\s*\\()" },
+        {
+          "match": "\\b(on[A-Z]\\w*)((?:\\.\\w+)*)\\s*(:)",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.event.sinth" },
+            "2": { "name": "storage.modifier.event.sinth" },
+            "3": { "name": "punctuation.separator.key-value.sinth" }
+          }
+        },
+        {
+          "match": "\\b([a-z][\\w]*(?:-[\\w]+)*)\\s*(:)(?!:)",
+          "captures": { "1": { "name": "entity.other.attribute-name.sinth" }, "2": { "name": "punctuation.separator.key-value.sinth" } }
+        },
+        {
+          "name": "support.class.builtin.js",
+          "match": "\\b(Math|JSON|Date|Number|String|Boolean|Array|Object|Promise|Intl|Symbol|RegExp|Error|URL|BigInt)\\b(?=\\s*[.(])"
+        },
+        { "name": "entity.name.tag.sinth", "match": "\\b[A-Z][\\w]*(?:\\.[A-Z]\\w*)*\\b" },
+        { "name": "entity.name.function.call.sinth", "match": "\\$?[a-z_][\\w$]*(?=\\s*\\()" },
+        { "name": "constant.numeric.sinth", "match": "\\b(0[xXbBoO][\\da-fA-F_]+|\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?)\\b" },
+        { "name": "keyword.operator.sinth", "match": "=>|->|\\?\\?=?|\\?\\.|\\*\\*=?|[=!<>]=|&&=?|\\|\\|=?|[-+*/%]=?|\\+\\+|[=<>!?:]" },
+        { "name": "variable.other.sinth", "match": "\\b[A-Za-z_$][\\w$]*\\b" }
       ]
     },
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.double.sinith",
-          "begin": "\"",
+          "name": "string.interpolated.sinth",
+          "begin": "\\b[fF]\"",
           "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.sinith",
-              "match": "\\\\."
-            },
-            {
-              "include": "#interpolation"
-            }
-          ]
+          "patterns": [{ "include": "#escapes" }, { "include": "#fstring-interp" }]
         },
         {
-          "name": "string.quoted.single.sinith",
-          "begin": "'",
+          "name": "string.interpolated.sinth",
+          "begin": "\\b[fF]'",
           "end": "'",
-          "patterns": [
-            {
-              "name": "constant.character.escape.sinith",
-              "match": "\\\\."
-            }
-          ]
+          "patterns": [{ "include": "#escapes" }, { "include": "#fstring-interp" }]
         },
         {
-          "name": "string.template.sinith",
+          "name": "string.template.sinth",
           "begin": "`",
           "end": "`",
           "patterns": [
+            { "include": "#escapes" },
             {
-              "name": "constant.character.escape.sinith",
-              "match": "\\\\."
-            },
-            {
-              "include": "#interpolation"
+              "name": "meta.template.expression.sinth",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.definition.template-expression.begin.sinth" } },
+              "endCaptures": { "0": { "name": "punctuation.definition.template-expression.end.sinth" } },
+              "patterns": [{ "include": "#markup" }]
             }
           ]
-        }
+        },
+        { "name": "string.quoted.double.sinth", "begin": "\"", "end": "\"", "patterns": [{ "include": "#escapes" }] },
+        { "name": "string.quoted.single.sinth", "begin": "'", "end": "'", "patterns": [{ "include": "#escapes" }] }
       ]
     },
-    "interpolation": {
-      "patterns": [
-        {
-          "name": "meta.interpolation.sinith",
-          "begin": "\\$\\{",
-          "end": "\\}",
-          "patterns": [
-            {
-              "include": "#expressions"
-            }
-          ]
-        }
-      ]
+    "fstring-interp": {
+      "name": "meta.interpolation.sinth",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.sinth" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.sinth" } },
+      "patterns": [{ "include": "#markup" }]
     },
-    "keywords": {
-      "patterns": [
-        {
-          "name": "keyword.control.sinith",
-          "match": "\\b(page|component|function|if|else|elif|for|in|var|const|return|import|export|as|css|js|style|script|custom-element|custom|remove|break|continue)\\b"
-        },
-        {
-          "name": "keyword.operator.logical.sinith",
-          "match": "\\b(and|or|not)\\b"
-        },
-        {
-          "name": "keyword.other.sinith",
-          "match": "\\b(slot|model|bind|persist|replace|delay|hide|key)\\b"
-        }
-      ]
-    },
-    "types": {
-      "patterns": [
-        {
-          "name": "storage.type.sinith",
-          "match": "\\b(str|num|int|bool|obj|arr|ui|void|any)\\b"
-        },
-        {
-          "name": "storage.modifier.sinith",
-          "match": "\\b(->)\\b"
-        }
-      ]
-    },
-    "literals": {
-      "patterns": [
-        {
-          "name": "constant.language.boolean.sinith",
-          "match": "\\b(true|false)\\b"
-        },
-        {
-          "name": "constant.language.null.sinith",
-          "match": "\\b(null|undefined)\\b"
-        },
-        {
-          "name": "constant.numeric.sinith",
-          "match": "\\b\\d+(\\.\\d+)?\\b"
-        }
-      ]
-    },
-    "operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.assignment.sinith",
-          "match": "(\\+=|-=|\\*=|/=|%=|=)"
-        },
-        {
-          "name": "keyword.operator.arithmetic.sinith",
-          "match": "([+\\-*/%])"
-        },
-        {
-          "name": "keyword.operator.comparison.sinith",
-          "match": "(==|!=|<=|>=|<|>)"
-        },
-        {
-          "name": "keyword.operator.ternary.sinith",
-          "match": "[?:]"
-        },
-        {
-          "name": "keyword.operator.spread.sinith",
-          "match": "(\\.\\.\\.)"
-        }
-      ]
-    },
-    "punctuation": {
-      "patterns": [
-        {
-          "name": "punctuation.bracket.curly.sinith",
-          "match": "[{}]"
-        },
-        {
-          "name": "punctuation.bracket.square.sinith",
-          "match": "[\\[\\]]"
-        },
-        {
-          "name": "punctuation.bracket.round.sinith",
-          "match": "[()]"
-        },
-        {
-          "name": "punctuation.separator.sinith",
-          "match": "[,;:]"
-        },
-        {
-          "name": "punctuation.accessor.sinith",
-          "match": "\\."
-        },
-        {
-          "name": "punctuation.arrow.sinith",
-          "match": "->"
-        }
-      ]
-    },
-    "variables": {
-      "patterns": [
-        {
-          "name": "variable.parameter.sinith",
-          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*:)"
-        },
-        {
-          "name": "variable.other.sinith",
-          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*[=+\\-*/%]?=)"
-        },
-        {
-          "name": "variable.other.readwrite.sinith",
-          "match": "\\b([a-z_][\\w$]*)\\b"
-        }
-      ]
-    },
-    "component-names": {
-      "patterns": [
-        {
-          "name": "entity.name.type.component.sinith",
-          "match": "\\b([A-Z][\\w]*)\\b(?=\\s*[{(\\s])"
-        }
-      ]
-    },
-    "function-calls": {
-      "patterns": [
-        {
-          "name": "entity.name.function.sinith",
-          "match": "\\b([a-z_][\\w$]*)\\b(?=\\s*\\()"
-        }
-      ]
-    },
-    "attributes": {
-      "patterns": [
-        {
-          "name": "meta.attribute.sinith",
-          "begin": "(\\b[a-z_][\\w-]*\\b)(?=\\s*:)",
-          "end": "(?=\\s*[},)\\s]|$)",
-          "patterns": [
-            {
-              "name": "entity.other.attribute-name.sinith",
-              "match": "\\b[a-z_][\\w-]*\\b"
-            },
-            {
-              "include": "#expressions"
-            }
-          ]
-        }
-      ]
-    },
-    "expressions": {
-      "patterns": [
-        {
-          "include": "#strings"
-        },
-        {
-          "include": "#literals"
-        },
-        {
-          "include": "#variables"
-        },
-        {
-          "include": "#operators"
-        },
-        {
-          "include": "#function-calls"
-        }
-      ]
+    "escapes": {
+      "name": "constant.character.escape.sinth",
+      "match": "\\\\(u\\{[0-9a-fA-F]+\\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)"
     }
   }
 }
