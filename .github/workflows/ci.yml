@@ -25,6 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
+        if: matrix.node == 22
       - run: node scripts/test.js
       - name: Smoke test the CLI
         shell: bash

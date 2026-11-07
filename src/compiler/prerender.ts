@@ -777,15 +777,14 @@ export interface PrerenderResult {
 
 export function prerenderPage(file: SinthFile, host: PrerenderHost, params?: Record<string, string>): PrerenderResult {
   const p = new Prerenderer(host);
-  let html = "";
-  let complete = false;
+  let html: string | undefined;
   try {
     html = p.renderPage(file, params);
-    complete = p.complete;
   } catch {
-    complete = false;
+    html = undefined;
   }
-  return { html, complete, meta: p.evalMeta(file, params) };
+  const complete = html !== undefined && p.complete;
+  return { html: html ?? "", complete, meta: p.evalMeta(file, params) };
 }
 
 export function evaluatePaths(file: SinthFile, host: PrerenderHost, paramNames: string[]): { value: unknown; known: boolean } {
