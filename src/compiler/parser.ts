@@ -133,7 +133,7 @@ export class Parser {
     };
     if (this.isIdent("page") && (this.peek(1).kind === "eof" || this.peek(1).newlineBefore)) {
       throw new SinthError("E0104", "The 'page' keyword was removed", this.tok.loc,
-        "Delete this line. Every .sinth file in pages/ is a page; files outside pages/ are modules");
+        "Delete this line. Files in pages/ (or in the project root when there is no pages/ folder) are pages automatically");
     }
     const declared = new Set<string>();
     while (this.tok.kind !== "eof") {

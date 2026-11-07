@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.1
+
+- The E0104 hint now covers projects without a `pages/` folder, where root files are pages.
+
 ## 5.2.0
 
 - **The `page` keyword is removed.** A file that starts with `page` now fails with E0104 and a hint to delete the line. Every `.sinth` file in `pages/` is a page, and files outside it are modules. `page` can still be used as a variable name.
