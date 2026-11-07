@@ -37,7 +37,7 @@ const ASSET_LOADERS: Record<string, esbuild.Loader> = {
   ".webm": "file", ".mp3": "file", ".wav": "file", ".txt": "text",
 };
 
-function sinthPlugin(project: Project, entries: Map<string, string>): esbuild.Plugin {
+function sinthPlugin(project: Project, entries: Map<string, string>, injectCss = false): esbuild.Plugin {
   return {
     name: "sinth",
     setup(b) {
@@ -45,7 +45,15 @@ function sinthPlugin(project: Project, entries: Map<string, string>): esbuild.Pl
       b.onResolve({ filter: /^sinth-entry:/ }, a => ({ path: a.path.slice("sinth-entry:".length), namespace: "sinth-entry" }));
       b.onLoad({ filter: /.*/, namespace: "sinth-entry" }, a => ({ contents: entries.get(a.path) ?? "", loader: "js", resolveDir: project.root }));
       b.onResolve({ filter: /^sinth-css:/ }, a => ({ path: a.path.slice("sinth-css:".length), namespace: "sinth-css" }));
-      b.onLoad({ filter: /.*/, namespace: "sinth-css" }, a => ({ contents: project.compile(a.path).css, loader: "css", resolveDir: path.dirname(a.path) }));
+      b.onLoad({ filter: /.*/, namespace: "sinth-css" }, a => (injectCss
+        ? { contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-" + a.path.length.toString(36) + "-" + path.basename(a.path))}, ${JSON.stringify(project.compile(a.path).css)});`, loader: "js", resolveDir: path.dirname(a.path) }
+        : { contents: project.compile(a.path).css, loader: "css", resolveDir: path.dirname(a.path) }));
+      if (injectCss) {
+        b.onLoad({ filter: /\.css$/ }, a => ({
+          contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-css-" + path.basename(a.path))}, ${JSON.stringify(fs.readFileSync(a.path, "utf-8"))});`,
+          loader: "js",
+        }));
+      }
       b.onLoad({ filter: /\.sinth$/ }, a => ({ contents: project.compile(a.path).js, loader: "js", resolveDir: path.dirname(a.path) }));
       b.onLoad({ filter: /\.s[ac]ss$/ }, a => {
         const scss = project.scss();
@@ -58,6 +66,52 @@ function sinthPlugin(project: Project, entries: Map<string, string>): esbuild.Pl
       });
     },
   };
+}
+
+function findCustomElementFiles(project: Project): string[] {
+  const out: string[] = [];
+  const skip = new Set(["node_modules", ".git", ".sinth", ".wrangler"]);
+  const walk = (dir: string): void => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!skip.has(e.name) && full !== project.config.outDir) walk(full);
+      } else if (e.name.endsWith(".sinth")) {
+        const src = fs.readFileSync(full, "utf-8");
+        if (/\bcustom(-element)?\s+[A-Za-z]/.test(src) || /\bcomponent\s+[A-Z]\w*\s*(\([^)]*\))?\s*as\s*</.test(src)) out.push(full);
+      }
+    }
+  };
+  walk(project.root);
+  return out;
+}
+
+async function buildCustomElements(project: Project): Promise<esbuild.OutputFile[]> {
+  const entries = new Map<string, string>();
+  const entryPoints: Record<string, string> = {};
+  for (const file of findCustomElementFiles(project)) {
+    const parsed = project.getFile(file);
+    if (parsed.isPage) continue;
+    project.compile(file);
+    for (const c of parsed.components) {
+      if (!c.customTag) continue;
+      const key = "elements/" + c.customTag;
+      entries.set(key, `import ${JSON.stringify(file)};`);
+      entryPoints[key] = "sinth-entry:" + key;
+    }
+  }
+  if (!entries.size) return [];
+  try {
+    const result = await esbuild.build({
+      entryPoints, bundle: true, format: "esm", platform: "browser", target: project.config.target,
+      outdir: project.config.outDir, entryNames: "[dir]/[name]", minify: project.config.minify, write: false,
+      logLevel: "silent", charset: "utf8", legalComments: "none", loader: { ...ASSET_LOADERS, ".svg": "dataurl", ".png": "dataurl" },
+      plugins: [sinthPlugin(project, entries, true)], absWorkingDir: project.root,
+    });
+    return result.outputFiles;
+  } catch (err) {
+    throw esbuildErrorToSinth(err, project);
+  }
 }
 
 function entryKey(page: PageInfo): string {
@@ -250,6 +304,9 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   }
 
   if (!project.dev) {
+    for (const f of await buildCustomElements(project)) {
+      files.set(path.relative(cfg.outDir, f.path).replace(/\\/g, "/"), { path: f.path, contents: f.contents });
+    }
     copyDir(cfg.publicDir, cfg.outDir, files, cfg.outDir);
     for (const d of cfg.staticDirs) copyDir(path.resolve(project.root, d), path.join(cfg.outDir, d), files, cfg.outDir);
     if (cfg.security.headers && !files.has("_headers")) {
