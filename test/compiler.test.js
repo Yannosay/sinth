@@ -165,3 +165,9 @@ test("string event handlers are compile errors with a fix hint", () => {
   const err = expectError(() => compilePage('Main { Button(onClick: "save") { "x" } }'), "E0351");
   assert.match(err.diagnostic.hint, /onClick: save\(\)/);
 });
+
+test("script and style blocks are recognized after a line ending in ) or ]", () => {
+  const out = compilePage('var obj data = JSON.parse("{}")\nscript {\n  function save() { return 1 }\n}\nvar num[] xs = [1]\nstyle {\n  main { padding: "1rem" }\n}\nMain { Button(onClick: save()) { "x" } }\n');
+  assert.match(out.js, /function save\(\)/);
+  assert.match(out.css, /padding/);
+});

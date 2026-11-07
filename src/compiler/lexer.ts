@@ -180,7 +180,11 @@ export class Lexer {
     const prev = this.tokens[this.tokens.length - 1];
     if (!prev) return true;
     if (prev.kind === "raw") return true;
-    if (prev.kind === "punct") return prev.value === "{" || prev.value === "}" || prev.value === ";";
+    if (prev.kind === "punct") {
+      if (prev.value === "{" || prev.value === "}" || prev.value === ";") return true;
+      // `var x = f()` or `var xs = [1]` followed by a block on the next line.
+      return this.sawNewline && (prev.value === ")" || prev.value === "]");
+    }
     return this.sawNewline && (prev.kind === "string" || prev.kind === "number" || prev.kind === "ident" || prev.kind === "template");
   }
 
