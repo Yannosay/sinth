@@ -1,7 +1,7 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.0.0-experimental_01",
-  "description": "An easy, powerful, declarative & reactive language that compiles to pure HTML, CSS, and JavaScript.",
+  "version": "5.0.0",
+  "description": "A declarative, reactive UI language that compiles to fast, secure, static-first HTML, CSS and JavaScript.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",
   "homepage": "https://sinth.yannosay.com",
@@ -13,16 +13,18 @@
     "url": "https://github.com/Yannosay/sinth/issues"
   },
   "keywords": [
+    "sinth",
+    "language",
+    "compiler",
+    "ui",
+    "reactive",
+    "declarative",
+    "static-site",
     "html",
     "css",
-    "javascript",
-    "compiler",
-    "declarative",
     "web",
     "components",
-    "scss",
-    "reactive",
-    "react"
+    "cloudflare-pages"
   ],
   "bin": {
     "sinth": "bin/sinth.js"
@@ -30,15 +32,20 @@
   "files": [
     "bin/",
     "dist/",
-    "assets/",
+    "lib/",
+    "schema/",
     "README.md",
+    "DOCS.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && node scripts/copy-builtin-assets.js",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "prepublishOnly": "npm run build"
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.runtime.json --noEmit",
+    "test": "npm run build && node --test \"test/*.test.js\"",
+    "prepublishOnly": "npm run clean && npm run build && npm run lint && node --test \"test/*.test.js\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -46,11 +53,22 @@
     "@typescript-eslint/eslint-plugin": "^8.61.0",
     "@typescript-eslint/parser": "^8.61.0",
     "eslint": "^10.5.0",
-    "ts-node": "^10.9.0",
+    "jsdom": "^25.0.1",
+    "sass": "^1.108.1",
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.61.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "acorn": "^8.19.0",
+    "esbuild": "^0.25.12"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

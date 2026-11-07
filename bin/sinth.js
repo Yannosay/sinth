@@ -1,2 +1,3 @@
 #!/usr/bin/env node
-require('../dist/cli.js');
+"use strict";
+require("../dist/cli/index.js").main(process.argv.slice(2));

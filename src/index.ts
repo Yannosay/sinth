@@ -1,0 +1,13 @@
+export { parseSinth, Parser } from "./compiler/parser";
+export { tokenize } from "./compiler/lexer";
+export { compileModule, collectExports } from "./compiler/codegen";
+export type { ModuleOutput, ModuleExports, ResolvedImport } from "./compiler/codegen";
+export { SinthError, formatDiagnostic } from "./compiler/diagnostics";
+export type { Diagnostic, Loc } from "./compiler/diagnostics";
+export { compileStyle } from "./compiler/style";
+export { loadConfig } from "./project/config";
+export type { SinthConfig } from "./project/config";
+export { Project } from "./project/project";
+export { buildProject, checkProject } from "./project/build";
+export type { BuildOutput } from "./project/build";
+export type * from "./compiler/ast";

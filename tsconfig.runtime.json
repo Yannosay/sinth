@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "outDir": "./dist/runtime",
+    "rootDir": "./src/runtime",
+    "strict": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src/runtime/**/*"]
+}
