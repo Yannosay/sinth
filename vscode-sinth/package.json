@@ -2,7 +2,7 @@
   "name": "sinth-vscode",
   "displayName": "Sinth",
   "description": "Official Sinth 5 language support: syntax highlighting, IntelliSense, diagnostics, formatting and commands.",
-  "version": "5.1.1",
+  "version": "5.2.0",
   "publisher": "YannosayProductions",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",

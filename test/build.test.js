@@ -10,7 +10,7 @@ const { buildProject } = require("../dist/project/build");
 
 test("static pages ship without JavaScript and are fully prerendered", async () => {
   const { out, text } = await build({
-    "pages/index.sinth": 'page\ntitle = "Home"\nvar str[] items = ["a", "b"]\nconst num year = 2026\nMain {\n  Heading(level: 1) { "Hi " + year }\n  for item, i in items { Paragraph { (i + 1) + ". " + item } }\n}\n',
+    "pages/index.sinth": 'title = "Home"\nvar str[] items = ["a", "b"]\nconst num year = 2026\nMain {\n  Heading(level: 1) { "Hi " + year }\n  for item, i in items { Paragraph { (i + 1) + ". " + item } }\n}\n',
   });
   const page = out.pages[0];
   assert.equal(page.interactive, false);
@@ -21,7 +21,7 @@ test("static pages ship without JavaScript and are fully prerendered", async () 
 });
 
 test("interactive pages load a module script and prerender initial state", async () => {
-  const { out, text } = await build({ "pages/index.sinth": "page\nvar num n = 41\nMain { Button(onClick: n += 1) { \"n=\" + (n + 1) } }\n" });
+  const { out, text } = await build({ "pages/index.sinth": "var num n = 41\nMain { Button(onClick: n += 1) { \"n=\" + (n + 1) } }\n" });
   assert.equal(out.pages[0].interactive, true);
   const html = text("index.html");
   assert.match(html, /<script type="module" src="\/_sinth\/index-[A-Z0-9]+\.js"><\/script>/);
@@ -29,7 +29,7 @@ test("interactive pages load a module script and prerender initial state", async
 });
 
 test("metadata produces SEO tags and escapes values", async () => {
-  const { text } = await build({ "pages/index.sinth": 'page\ntitle = "A <b> & \\"c\\""\ndescr = "Desc"\nogImage = "https://x.dev/i.png"\nMain { "x" }\n' });
+  const { text } = await build({ "pages/index.sinth": 'title = "A <b> & \\"c\\""\ndescr = "Desc"\nogImage = "https://x.dev/i.png"\nMain { "x" }\n' });
   const html = text("index.html");
   assert.match(html, /<title>A &lt;b&gt; &amp; "c"<\/title>/);
   assert.match(html, /<meta property="og:title" content="A &lt;b&gt; &amp; &quot;c&quot;">/);
@@ -37,7 +37,7 @@ test("metadata produces SEO tags and escapes values", async () => {
 });
 
 test("prerendered text is HTML-escaped", async () => {
-  const { text } = await build({ "pages/index.sinth": 'page\nvar str evil = "<img src=x onerror=alert(1)>"\nMain { Paragraph { evil } Link(href: "javascript:alert(1)") { "x" } }\n' });
+  const { text } = await build({ "pages/index.sinth": 'var str evil = "<img src=x onerror=alert(1)>"\nMain { Paragraph { evil } Link(href: "javascript:alert(1)") { "x" } }\n' });
   const html = text("index.html");
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   assert.doesNotMatch(html, /href="javascript:/);
@@ -45,17 +45,17 @@ test("prerendered text is HTML-escaped", async () => {
 
 test("routes map to clean output paths", async () => {
   const { out } = await build({
-    "pages/index.sinth": "page\nMain { \"home\" }\n",
-    "pages/about.sinth": "page\nMain { \"about\" }\n",
-    "pages/blog/index.sinth": "page\nMain { \"blog\" }\n",
-    "pages/_draft.sinth": "page\nMain { \"draft\" }\n",
+    "pages/index.sinth": "Main { \"home\" }\n",
+    "pages/about.sinth": "Main { \"about\" }\n",
+    "pages/blog/index.sinth": "Main { \"blog\" }\n",
+    "pages/_draft.sinth": "Main { \"draft\" }\n",
     "pages/Widget.sinth": "component Widget { Div { \"w\" } }\n",
   });
   assert.deepEqual(out.pages.map(p => [p.page.route, p.page.outFile]), [["/", "index.html"], ["/about", "about.html"], ["/blog", "blog/index.html"]]);
 });
 
 test("security headers and CSP are emitted", async () => {
-  const { text } = await build({ "pages/index.sinth": "page\nMain { \"x\" }\n" });
+  const { text } = await build({ "pages/index.sinth": "Main { \"x\" }\n" });
   const headers = text("_headers");
   assert.match(headers, /Content-Security-Policy: default-src 'self'; script-src 'self';/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
@@ -63,7 +63,7 @@ test("security headers and CSP are emitted", async () => {
 });
 
 test("sitemap and robots are generated when site is configured", async () => {
-  const p = project({ "sinth.config.json": '{ "site": "https://example.com" }', "pages/index.sinth": "page\nMain { \"x\" }\n", "pages/404.sinth": "page\nMain { \"nf\" }\n" });
+  const p = project({ "sinth.config.json": '{ "site": "https://example.com" }', "pages/index.sinth": "Main { \"x\" }\n", "pages/404.sinth": "Main { \"nf\" }\n" });
   const out = await buildProject(p, { write: false });
   const sitemap = Buffer.from(out.files.get("sitemap.xml").contents).toString();
   assert.match(sitemap, /<loc>https:\/\/example\.com\/<\/loc>/);
@@ -71,20 +71,20 @@ test("sitemap and robots are generated when site is configured", async () => {
 });
 
 test("public and static directories are copied", async () => {
-  const p = project({ "pages/index.sinth": "page\nMain { \"x\" }\n", "public/robots.txt": "ok", "assets/logo.svg": "<svg/>" });
+  const p = project({ "pages/index.sinth": "Main { \"x\" }\n", "public/robots.txt": "ok", "assets/logo.svg": "<svg/>" });
   const out = await buildProject(p, { write: false });
   assert.ok(out.files.has("robots.txt"));
   assert.ok(out.files.has("assets/logo.svg"));
 });
 
 test("refuses to wipe a foreign output directory", async () => {
-  const p = project({ "pages/index.sinth": "page\nMain { \"x\" }\n", "dist/important.txt": "keep me" });
+  const p = project({ "pages/index.sinth": "Main { \"x\" }\n", "dist/important.txt": "keep me" });
   await assert.rejects(buildProject(p, { write: true }), err => err.code === "E0801");
   assert.ok(fs.existsSync(path.join(p.root, "dist/important.txt")));
 });
 
 test("missing npm packages produce an install hint", async () => {
-  const p = project({ "pages/index.sinth": 'page\nimport confetti from "definitely-not-installed-pkg"\nMain { Button(onClick: confetti()) { "x" } }\n' });
+  const p = project({ "pages/index.sinth": 'import confetti from "definitely-not-installed-pkg"\nMain { Button(onClick: confetti()) { "x" } }\n' });
   await assert.rejects(buildProject(p, { write: false }), err => /npm install definitely-not-installed-pkg/.test(err.diagnostic.hint));
 });
 
@@ -108,7 +108,7 @@ test("every .sinth file in pages/ is a page without the 'page' keyword", async (
     "pages/about.sinth": 'Main { Heading { "About" } }\n',
     "pages/blog/index.sinth": '-- a comment first\nMain { "Blog" }\n',
     "pages/empty.sinth": "",
-    "pages/legacy.sinth": 'page\nMain { "Old style" }\n',
+    "pages/legacy.sinth": 'Main { "Old style" }\n',
     "pages/_draft.sinth": 'Main { "Draft" }\n',
     "pages/_partials/Hero.sinth": 'export component Hero { Heading { "Hero" } }\n',
     "pages/widgets.sinth": 'export component Widget { Span { "w" } }\n',
@@ -192,4 +192,13 @@ test("dynamic route errors are reported clearly", async () => {
 test("metadata can be computed from constants", async () => {
   const { text } = await build({ "pages/index.sinth": 'const str site = "Acme"\ntitle = "Home | " + site\nMain { "x" }\n' });
   assert.match(text("index.html"), /<title>Home \| Acme<\/title>/);
+});
+
+test("the removed 'page' keyword is a compile error with a fix", async () => {
+  const err = await build({ "pages/index.sinth": '-- home\npage\n\nMain { "x" }\n' }).then(() => null, e => e);
+  assert.equal(err?.code, "E0104");
+  assert.equal(err.loc.line, 2);
+  assert.match(err.diagnostic.hint, /Delete this line/);
+  const { text } = await build({ "pages/index.sinth": 'var num page = 2\nMain { "p" + page }\n' });
+  assert.match(text("index.html"), /p2/);
 });

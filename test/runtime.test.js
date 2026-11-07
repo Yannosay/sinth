@@ -31,7 +31,7 @@ async function run(source, extra = {}) {
 }
 
 test("counter updates only the bound text node", async () => {
-  const app = await run('page\nvar num n = 0\nMain { Button(id: "b", onClick: n += 1) { "n=" + n } Paragraph(id: "p") { "static" } }');
+  const app = await run('var num n = 0\nMain { Button(id: "b", onClick: n += 1) { "n=" + n } Paragraph(id: "p") { "static" } }');
   const p = app.$("#p");
   app.$("#b").click();
   app.$("#b").click();
@@ -40,7 +40,7 @@ test("counter updates only the bound text node", async () => {
 });
 
 test("keyed lists keep DOM nodes when reordered", async () => {
-  const app = await run('page\nvar obj[] items = [{ id: 1, t: "a" }, { id: 2, t: "b" }, { id: 3, t: "c" }]\nMain {\n  Ul(id: "l") { for it in items key it.id { Li { it.t } } }\n  Button(id: "rev", onClick: items = items.slice().reverse()) { "r" }\n  Button(id: "push", onClick: items.push({ id: 4, t: "d" })) { "p" }\n}');
+  const app = await run('var obj[] items = [{ id: 1, t: "a" }, { id: 2, t: "b" }, { id: 3, t: "c" }]\nMain {\n  Ul(id: "l") { for it in items key it.id { Li { it.t } } }\n  Button(id: "rev", onClick: items = items.slice().reverse()) { "r" }\n  Button(id: "push", onClick: items.push({ id: 4, t: "d" })) { "p" }\n}');
   const before = [...app.doc.querySelectorAll("#l li")];
   app.$("#rev").click();
   const after = [...app.doc.querySelectorAll("#l li")];
@@ -51,7 +51,7 @@ test("keyed lists keep DOM nodes when reordered", async () => {
 });
 
 test("if/else switches branches and persist keeps state", async () => {
-  const app = await run('page\nvar bool on = true\nMain {\n  if on persist { Input(id: "i") } else { Paragraph(id: "off") { "off" } }\n  Button(id: "t", onClick: on = not on) { "t" }\n}');
+  const app = await run('var bool on = true\nMain {\n  if on persist { Input(id: "i") } else { Paragraph(id: "off") { "off" } }\n  Button(id: "t", onClick: on = not on) { "t" }\n}');
   const input = app.$("#i");
   input.value = "kept";
   app.$("#t").click();
@@ -63,7 +63,7 @@ test("if/else switches branches and persist keeps state", async () => {
 });
 
 test("model binds text, numbers and checkboxes", async () => {
-  const app = await run('page\nvar str s = "a"\nvar num n = 1\nvar bool c = false\nMain {\n  Input(id: "s", model: s)\n  Input(id: "n", type: "number", model: n)\n  Checkbox(id: "c", model: c)\n  Paragraph(id: "out") { s + "|" + (n + 1) + "|" + c }\n}');
+  const app = await run('var str s = "a"\nvar num n = 1\nvar bool c = false\nMain {\n  Input(id: "s", model: s)\n  Input(id: "n", type: "number", model: n)\n  Checkbox(id: "c", model: c)\n  Paragraph(id: "out") { s + "|" + (n + 1) + "|" + c }\n}');
   const s = app.$("#s");
   s.value = "hello";
   s.dispatchEvent(new app.window.Event("input"));
@@ -76,7 +76,7 @@ test("model binds text, numbers and checkboxes", async () => {
 
 test("components receive reactive props and slots", async () => {
   const comp = 'component Badge(str label, str tone = "info") {\n  Span(class: "badge " + tone) { label $slot }\n}\n';
-  const app = await run('page\nimport { Badge } from "../components/Badge.sinth"\nvar str l = "one"\nMain {\n  Badge(label: l, id: "b") { "!" }\n  Button(id: "x", onClick: l = "two") { "x" }\n}', { "components/Badge.sinth": comp });
+  const app = await run('import { Badge } from "../components/Badge.sinth"\nvar str l = "one"\nMain {\n  Badge(label: l, id: "b") { "!" }\n  Button(id: "x", onClick: l = "two") { "x" }\n}', { "components/Badge.sinth": comp });
   assert.equal(app.text("#b"), "one!");
   assert.equal(app.$("#b").className.includes("info"), true);
   app.$("#x").click();
@@ -84,24 +84,24 @@ test("components receive reactive props and slots", async () => {
 });
 
 test("text is never interpreted as HTML", async () => {
-  const app = await run('page\nvar str v = "<b id=\\"inj\\">x</b>"\nMain { Paragraph(id: "p") { v } }');
+  const app = await run('var str v = "<b id=\\"inj\\">x</b>"\nMain { Paragraph(id: "p") { v } }');
   assert.equal(app.$("#inj"), null);
   assert.equal(app.text("#p"), '<b id="inj">x</b>');
 });
 
 test("javascript: URLs are blocked at runtime", async () => {
-  const app = await run('page\nvar str u = "javascript:alert(1)"\nMain { Link(id: "a", href: u) { "x" } }');
+  const app = await run('var str u = "javascript:alert(1)"\nMain { Link(id: "a", href: u) { "x" } }');
   assert.equal(app.$("#a").getAttribute("href"), "about:blank#blocked");
 });
 
 test("event modifiers and watchers", async () => {
-  const app = await run('page\nvar num hits = 0\nvar str log = ""\nwatch hits { log = "changed:" + value }\nMain {\n  Div(id: "outer", onClick: hits += 10) { Button(id: "inner", onClick.stop: hits += 1) { "b" } }\n  Paragraph(id: "log") { log }\n}');
+  const app = await run('var num hits = 0\nvar str log = ""\nwatch hits { log = "changed:" + value }\nMain {\n  Div(id: "outer", onClick: hits += 10) { Button(id: "inner", onClick.stop: hits += 1) { "b" } }\n  Paragraph(id: "log") { log }\n}');
   app.$("#inner").click();
   assert.equal(app.text("#log"), "changed:1");
 });
 
 test("script blocks can mutate state and call sinthRender", async () => {
-  const app = await run('page\nvar num n = 0\nMain { Paragraph(id: "p") { n } }\nscript {\n  n = 5\n  setTimeout(() => { n = 7; sinthRender() }, 30)\n}');
+  const app = await run('var num n = 0\nMain { Paragraph(id: "p") { n } }\nscript {\n  n = 5\n  setTimeout(() => { n = 7; sinthRender() }, 30)\n}');
   assert.equal(app.text("#p"), "5");
   await new Promise(r => setTimeout(r, 60));
   assert.equal(app.text("#p"), "7");

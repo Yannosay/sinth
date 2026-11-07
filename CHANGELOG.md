@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.2.0
+
+- **The `page` keyword is removed.** A file that starts with `page` now fails with E0104 and a hint to delete the line. Every `.sinth` file in `pages/` is a page, and files outside it are modules. `page` can still be used as a variable name.
+- Editors no longer suggest or highlight `page` as a keyword.
+
 ## 5.1.1
 
 - Dynamic routes and page detection now work when the project path contains a symlink or junction (macOS temp folders, linked workspaces).

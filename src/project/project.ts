@@ -82,11 +82,9 @@ export class Project {
 
   /**
    * A file is a page when it lives in the pages folder (or, without one, in the project root),
-   * is not hidden behind a leading underscore, and is not a pure component module. The Sinth 4
-   * `page` keyword still forces a page anywhere.
+   * is not hidden behind a leading underscore, and is not a pure component module.
    */
   private isPageFile(abs: string, parsed: SinthFile): boolean {
-    if (parsed.isPage) return true;
     const pagesDir = this.config.pagesDir;
     const hasPagesDir = fs.existsSync(pagesDir);
     const base = hasPagesDir ? pagesDir : this.root;

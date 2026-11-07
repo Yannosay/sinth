@@ -96,11 +96,16 @@ function importEdit(doc: vscode.TextDocument, name: string, source: string): vsc
   let line = 0;
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
-    if (/^\s*(page\b|import\b)/.test(lines[i])) line = i + 1;
+    if (/^\s*import\b/.test(lines[i])) line = i + 1;
     else if (lines[i].trim() && !lines[i].trim().startsWith("--")) break;
   }
-  const prefix = line > 0 && /^\s*page\b/.test(lines[line - 1]) ? "\n" : "";
-  return vscode.TextEdit.insert(new vscode.Position(line, 0), `${prefix}import { ${name} } from "${source}"\n`);
+  return vscode.TextEdit.insert(new vscode.Position(line, 0), `import { ${name} } from "${source}"\n`);
+}
+
+/** Pages live in a pages/ folder (or, in projects without one, have top-level markup). */
+function isPageDocument(doc: vscode.TextDocument): boolean {
+  if (/[\\/]pages[\\/]/.test(doc.uri.fsPath)) return true;
+  return doc.isUntitled || /^(?:title|descr|description)\s*=|^[A-Z]\w*\s*(?:\(|\{)/m.test(doc.getText());
 }
 
 function isEmpty(doc: vscode.TextDocument): boolean {
@@ -115,9 +120,9 @@ const completionProvider: vscode.CompletionItemProvider = {
     const K = vscode.CompletionItemKind;
 
     if (isEmpty(doc)) {
-      const page = new vscode.CompletionItem("page", K.Snippet);
-      page.insertText = new vscode.SnippetString('page\n\ntitle = "${1:Title}"\n\nMain {\n  Heading(level: 1) { "${1:Title}" }\n  $0\n}\n');
-      page.documentation = "New page";
+      const page = new vscode.CompletionItem({ label: "page", description: "page skeleton" }, K.Snippet);
+      page.insertText = new vscode.SnippetString('title = "${1:Title}"\n\nMain {\n  Heading(level: 1) { "${1:Title}" }\n  $0\n}\n');
+      page.documentation = "Title and main content for a new page";
       items.push(page);
     }
 
@@ -241,7 +246,7 @@ const completionProvider: vscode.CompletionItemProvider = {
       it.sortText = "8" + t;
       items.push(it);
     }
-    if (/^\s*\w*$/.test(before) && /^\s*page\b/m.test(doc.getText())) {
+    if (/^\s*\w*$/.test(before) && isPageDocument(doc)) {
       for (const [k, d] of Object.entries(META_KEYS)) {
         const it = new vscode.CompletionItem({ label: k, description: "metadata" }, K.Property);
         it.insertText = new vscode.SnippetString(`${k} = "$0"`);
@@ -500,7 +505,7 @@ async function createFile(kind: "page" | "component"): Promise<void> {
   const title = path.basename(name).replace(/[-_]+/g, " ").replace(/\b\w/g, m => m.toUpperCase());
   const cls = name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
   const content = kind === "page"
-    ? `page\n\ntitle = "${title}"\n\nMain {\n  Heading(level: 1) { "${title}" }\n}\n`
+    ? `title = "${title}"\n\nMain {\n  Heading(level: 1) { "${title}" }\n}\n`
     : `component ${name}(str title = "${name}") {\n  Div(class: "${cls}") {\n    Heading(level: 3) { title }\n    $slot\n  }\n\n  style {\n    .${cls} {\n      padding: "1rem"\n    }\n  }\n}\n`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, content);

@@ -248,7 +248,7 @@ export class ModuleCompiler {
       if (stateVars.some(v => v.persist) || file.lifecycle.length || file.watchers.length) this.interactive = true;
     } else if (file.body.length) {
       const first = file.body[0];
-      this.diagnostics.warn("W0101", "Markup outside a component in a non-page file is ignored", first.loc, "Add 'page' at the top of the file, or wrap the markup in a component");
+      this.diagnostics.warn("W0101", "Markup outside a component in a non-page file is ignored", first.loc, "Move the file into pages/ to make it a page, or wrap the markup in a component");
     }
 
     for (const c of file.components) {

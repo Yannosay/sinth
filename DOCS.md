@@ -115,7 +115,7 @@ There are two kinds of `.sinth` files.
 
 **Modules** (files outside `pages/`, usually in `components/`) contain components, functions and shared variables that pages import.
 
-> Sinth 4 required pages to start with the keyword `page`. That keyword is no longer needed. It is still accepted, and a file that starts with it is a page wherever it lives.
+> Sinth 4 required pages to start with the keyword `page`. That keyword has been removed: a file that still starts with it fails with E0104. Delete the line; where a file lives decides whether it is a page.
 
 Order inside a page is flexible, but the usual layout is:
 
@@ -1268,6 +1268,7 @@ Errors are `SinthError` instances with `code`, `loc` and `diagnostic`; `formatDi
 | E0100 | Syntax error |
 | E0102 | Reserved word used as a name |
 | E0103 | Invalid assignment target |
+| E0104 | The removed `page` keyword (delete the line) |
 | E0201 | Unknown type |
 | E0202 | Name declared twice in the same scope |
 | E0210 | `persist` outside page or component state |
@@ -1317,7 +1318,7 @@ Most Sinth 4 code compiles unchanged. Things to check:
 
 | Sinth 4 | Sinth 5 |
 |---|---|
-| `page` at the top of every page | not needed: every file in `pages/` is a page (`page` is still accepted) |
+| `page` at the top of every page | removed: delete the line (E0104). Every file in `pages/` is a page; move pages that lived elsewhere into `pages/` |
 | `dist/pages/index.html` | `dist/index.html`: pages are now relative to `pages/` |
 | `var int x` | `var num x` (`int` still works with a warning) |
 | `==` was loose | `==` is strict: `1 == "1"` is a compile error |

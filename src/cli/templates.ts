@@ -141,9 +141,7 @@ style {
   }
 }
 `;
-  files["pages/about.sinth"] = `page
-
-import { Layout } from "../components/Layout.sinth"
+  files["pages/about.sinth"] = `import { Layout } from "../components/Layout.sinth"
 
 title = "About | ${name}"
 descr = "About this site."
@@ -153,9 +151,7 @@ Layout(current: "/about") {
   Paragraph { "This page is static, so Sinth ships it without any JavaScript." }
 }
 `;
-  files["pages/404.sinth"] = `page
-
-import { Layout } from "../components/Layout.sinth"
+  files["pages/404.sinth"] = `import { Layout } from "../components/Layout.sinth"
 import { Button } from "sinth:ui"
 
 title = "Page not found"

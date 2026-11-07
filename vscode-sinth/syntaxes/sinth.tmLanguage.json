@@ -70,7 +70,6 @@
     },
     "declarations": {
       "patterns": [
-        { "name": "keyword.control.page.sinth", "match": "^\\s*page\\b" },
         {
           "match": "\\b(import)\\b(?:\\s+(css|style|js|script|font)\\b)?",
           "captures": { "1": { "name": "keyword.control.import.sinth" }, "2": { "name": "storage.modifier.sinth" } }
