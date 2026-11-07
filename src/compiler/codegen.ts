@@ -2,7 +2,7 @@ import {
   Arg, Attr, ComponentDecl, ElementNode, Expr, ForNode, FunctionDecl, IfNode, ImportDecl, Node, Param, SinthFile, Stmt,
   TypeRef, VarDecl,
 } from "./ast";
-import { DiagnosticBag, Loc, SinthError, suggest } from "./diagnostics";
+import { DiagnosticBag, levenshtein, Loc, SinthError, suggest } from "./diagnostics";
 import { attrNameToHtml, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, SPECIAL_ELEMENTS, VOID_TAGS } from "./elements";
 import { JS_GLOBALS, RUNTIME_GLOBALS } from "./globals";
 import { isStatementExpr, Parser } from "./parser";
@@ -943,7 +943,7 @@ export class ModuleCompiler {
   }
 
   private unknownName(name: string, loc: Loc, scope: Scope): never {
-    const s = suggest(name, [...scope.all(), ...JS_GLOBALS]);
+    const s = suggest(name, scope.all()) ?? [...JS_GLOBALS].find(g => g.toLowerCase() === name.toLowerCase() || levenshtein(g, name) === 1);
     this.fail("E0302", `Unknown name '${name}'`, loc, s ? `Did you mean '${s}'?` : `Declare it with 'var', import it, or declare a browser global with 'extern ${name}'`);
   }
 

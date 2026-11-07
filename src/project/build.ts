@@ -356,6 +356,7 @@ export function checkProject(project: Project): { pages: PageInfo[]; warnings: D
   const pages = project.findPages();
   const errors: SinthError[] = [];
   const warnings: Diagnostic[] = [];
+  const pageFiles = new Set(pages.map(p => p.file));
   for (const p of pages) {
     try {
       warnings.push(...project.compilePage(p).warnings);
@@ -364,5 +365,22 @@ export function checkProject(project: Project): { pages: PageInfo[]; warnings: D
       else throw err;
     }
   }
+  const skip = new Set(["node_modules", ".git", ".sinth", ".wrangler"]);
+  const walk = (dir: string): void => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!skip.has(e.name) && full !== project.config.outDir) walk(full);
+      } else if (e.name.endsWith(".sinth") && !pageFiles.has(full)) {
+        try {
+          if (!project.getFile(full).isPage) warnings.push(...project.compile(full).diagnostics.warnings);
+        } catch (err) {
+          if (!(err instanceof SinthError)) throw err;
+          if (!errors.some(x => x.message === err.message && x.loc?.file === err.loc?.file)) errors.push(err);
+        }
+      }
+    }
+  };
+  walk(project.root);
   return { pages, warnings: dedupeWarnings(warnings), errors };
 }

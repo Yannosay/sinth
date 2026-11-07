@@ -154,9 +154,16 @@ const commands: Record<string, Command> = {
   },
   check: {
     summary: "Type-check every page without writing output",
-    usage: "sinth check",
-    flags: { ...ROOT_FLAG },
+    usage: "sinth check [--json]",
+    flags: { ...ROOT_FLAG, json: { type: "boolean", description: "Print diagnostics as JSON (for editors)" } },
     async run(args) {
+      if (args.flags.json) {
+        const root = projectRoot(args);
+        const { config } = loadConfig(root, "production");
+        const result = checkProject(new Project(root, config, false));
+        process.stdout.write(JSON.stringify({ version: 1, errors: result.errors.map(e => e.diagnostic), warnings: result.warnings }) + "\n");
+        return result.errors.length ? 1 : 0;
+      }
       console.log(`\n  ${brand("check", VERSION)}\n`);
       const project = openProject(args, "production");
       const started = Date.now();
