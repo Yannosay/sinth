@@ -1,5 +1,48 @@
 # Changelog
 
+## 5.3.0
+
+### Instant navigation
+
+- Links between pages no longer reload the whole page. Sinth fetches the next page's prerendered HTML, updates the head, swaps the content and starts the page's code. Pages are prefetched on hover and focus. Back/forward, scroll positions and `#anchors` work as before, and every page is still a complete HTML file.
+- Each page starts with fresh state; shared stores keep theirs across pages. A `sinth:navigate` event fires after each navigation.
+- Opt out per link with `dataReload: true`, or for the whole site with `"router": false` (static pages then ship no JavaScript at all).
+
+### Server functions
+
+- Files in `functions/` are API routes, following the Cloudflare Pages Functions conventions: `onRequest` / `onRequestGet` / ... handlers, `[param]` and `[[catchall]]` segments, `_middleware` files, `env` from `.dev.vars`, and `next()` / `env.ASSETS`.
+- They run in `sinth dev` (reloaded on save) and `sinth preview`, and deploy with `sinth deploy` unchanged.
+
+### Language
+
+- State changed from timers, promise callbacks and other callbacks in Sinth code now updates the page, e.g. `setInterval(() => { seconds += 1 }, 1000)` in `onMount`. Before, only event handlers triggered updates. Updates are batched, and code in `script` blocks still calls `sinthRender()`.
+- `try` / `catch` / `finally` and `throw` in functions, handlers and lifecycle blocks.
+- `x--` reports that `--` starts a comment and suggests `x -= 1`, instead of a confusing syntax error.
+- `jsonLd` page metadata writes schema.org structured data.
+- Pages include `<meta name="generator" content="Sinth">` (override with `generator`).
+
+### Custom elements
+
+- `dist/elements/index.js` registers every element of the project at once.
+- A project with only components (no pages) builds just its elements, for use in any HTML site.
+- Elements are also served by the dev server.
+
+### Compiler API and playground
+
+- `compileFiles()` compiles in-memory sources without a file system or bundler.
+- A browser build of the compiler ships at `dist/browser/sinth.js`; it powers the new playground at sinth.yannosay.com/playground.
+
+### Fixes
+
+- `"base"` (hosting in a subfolder) now works in `sinth dev` and `sinth preview`: pages, assets and hot reload are served under the base path.
+- Rebuilding a site without interactive pages failed with E0801, because Sinth did not recognize its own output folder.
+- `public/` dotfiles such as `.nojekyll` and `.htaccess` are copied; OS junk files (`.DS_Store`, `Thumbs.db`, `desktop.ini`) are skipped.
+- The dev and preview servers accept POST, PUT, PATCH and DELETE requests for function routes.
+
+### Documentation
+
+- The documentation moved into this repository (`docs/`) and was rewritten, with a tutorial and new pages for data fetching, server functions, SEO and client-side navigation. Runnable examples are compiled in CI. `DOCS.md` was replaced by it.
+
 ## 5.2.3
 
 - `script { }` and `style { }` blocks are now recognized on the line after a statement that ends in `)` or `]`, such as `var data = JSON.parse(text)`. Before, this failed with a confusing syntax error.
