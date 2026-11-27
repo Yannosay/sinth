@@ -80,6 +80,8 @@ export type Stmt =
   | { k: "if"; test: Expr; then: Stmt[]; else?: Stmt[]; loc: Loc }
   | { k: "for"; names: string[]; iter: Expr; filter?: Expr; body: Stmt[]; loc: Loc }
   | { k: "while"; test: Expr; body: Stmt[]; loc: Loc }
+  | { k: "try"; body: Stmt[]; param?: string; handler?: Stmt[]; finalizer?: Stmt[]; loc: Loc }
+  | { k: "throw"; value: Expr; loc: Loc }
   | { k: "return"; value?: Expr; loc: Loc }
   | { k: "break"; loc: Loc }
   | { k: "continue"; loc: Loc };

@@ -8,7 +8,7 @@ import { Token, tokenize } from "./lexer";
 
 export const META_KEYS: ReadonlySet<string> = new Set([
   "title", "descr", "description", "fav", "favicon", "lang", "charset", "viewport", "author", "keywords", "robots",
-  "themeColor", "colorScheme", "canonical", "generator", "manifest", "appleTouchIcon", "base", "bodyClass", "htmlClass", "paths",
+  "themeColor", "colorScheme", "canonical", "generator", "manifest", "appleTouchIcon", "base", "bodyClass", "htmlClass", "paths", "jsonLd",
 ]);
 
 export function isMetaKey(key: string): boolean {
@@ -894,6 +894,29 @@ export class Parser {
           const test = this.parseExpr();
           return { k: "while", test, body: this.parseStmtBlock(), loc: t.loc };
         }
+        case "try": {
+          this.next();
+          const body = this.parseStmtBlock();
+          let param: string | undefined;
+          let handler: Stmt[] | undefined;
+          let finalizer: Stmt[] | undefined;
+          if (this.eatIdent("catch")) {
+            if (this.isPunct("(")) {
+              this.next();
+              param = this.expectIdent("a name for the caught error").value;
+              this.expect(")", "after the caught error name");
+            } else if (this.tok.kind === "ident") {
+              param = this.expectIdent("a name for the caught error").value;
+            }
+            handler = this.parseStmtBlock();
+          }
+          if (this.eatIdent("finally")) finalizer = this.parseStmtBlock();
+          if (!handler && !finalizer) this.fail("'try' needs a 'catch' or 'finally' block", t);
+          return { k: "try", body, param, handler, finalizer, loc: t.loc };
+        }
+        case "throw":
+          this.next();
+          return { k: "throw", value: this.parseExpr(), loc: t.loc };
         case "return": {
           this.next();
           if (this.isPunct("}") || this.isPunct(";") || this.tok.newlineBefore || this.tok.kind === "eof" || this.atAttrBoundary()) {

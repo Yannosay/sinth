@@ -8,7 +8,8 @@ import { buildProject, BuildOutput } from "../project/build";
 import { Project } from "../project/project";
 import { c, formatMs, log, printDiagnostic } from "../cli/ui";
 import { DEV_CLIENT } from "./client";
-import { decodePath, displayHost, fileIfExists, listen, mimeType, routeCandidates, safeJoin, send } from "./static";
+import { FunctionsHost, sendResponse, toRequest } from "./functions";
+import { Asset, assetResponse, decodePath, displayHost, fileIfExists, listen, mimeType, routeCandidates, safeJoin, send, sendAsset, stripBase } from "./static";
 
 interface PageHash {
   route: string;
@@ -21,6 +22,8 @@ interface PageHash {
 }
 
 const CLIENT_URL = "/__sinth/client.js";
+const HTML = "text/html; charset=utf-8";
+const NO_STORE = { "Cache-Control": "no-store" };
 const IGNORED = /(^|[\\/])(node_modules|\.git|\.sinth|\.wrangler|dist)([\\/]|$)/;
 const WATCHED_EXT = /\.(sinth|css|scss|sass|js|mjs|ts|tsx|jsx|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|txt|xml|webmanifest|html)$/i;
 
@@ -105,49 +108,69 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
   const started = Date.now();
   await rebuild();
 
-  const findPage = (urlPath: string): string | undefined => {
+  const findPage = (sitePath: string): string | undefined => {
     if (!output) return undefined;
-    for (const cand of routeCandidates(urlPath)) {
+    for (const cand of routeCandidates(sitePath)) {
       const f = output.files.get(cand.slice(1));
       if (f && cand.endsWith(".html")) return Buffer.from(f.contents).toString("utf-8");
     }
     return undefined;
   };
 
-  const server = http.createServer((req, res) => {
+  const resolve = (urlPath: string): Asset => {
+    const sitePath = stripBase(urlPath, cfg.base);
+    const notFound = (): Asset => ({ status: 404, body: findPage("/404") ?? errorPage("404 Not Found", `No page or file matches ${urlPath}`), type: HTML });
+    if (sitePath === null) return urlPath === "/" ? { status: 302, body: "", type: "text/plain", headers: { Location: cfg.base } } : notFound();
+    const isPageRequest = !/\.[a-z0-9]+$/i.test(sitePath) || sitePath.endsWith(".html");
+    if (isPageRequest && lastError && !output) return { status: 500, body: errorPage(lastError.title, lastError.message), type: HTML };
+    const html = isPageRequest ? findPage(sitePath) : undefined;
+    if (html) return { status: 200, body: html, type: HTML, headers: NO_STORE };
+    const mem = output?.files.get(sitePath.slice(1));
+    if (mem) return { status: 200, body: mem.contents, type: mimeType(sitePath), headers: NO_STORE };
+    const fromPublic = fileIfExists(safeJoin(cfg.publicDir, sitePath));
+    const fromStatic = cfg.staticDirs.some(d => sitePath.startsWith("/" + d + "/")) ? fileIfExists(safeJoin(project.root, sitePath)) : null;
+    const file = fromPublic ?? fromStatic;
+    if (file) return { status: 200, body: fs.readFileSync(file), type: mimeType(file), headers: NO_STORE };
+    return notFound();
+  };
+
+  const functions = new FunctionsHost(project.root);
+  const handle = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const urlPath = decodePath(req.url);
     if (!urlPath) return send(res, 400, "Bad request", "text/plain");
-    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed", "text/plain");
     if (urlPath === "/__sinth/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
-      res.write(`data: ${JSON.stringify({ type: "init", pages: hashes, error: lastError })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "init", pages: hashes, error: lastError, base: cfg.base })}\n\n`);
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
     }
-    if (urlPath === CLIENT_URL) return send(res, 200, DEV_CLIENT, "text/javascript; charset=utf-8", { "Cache-Control": "no-store" });
-
-    const isPageRequest = !/\.[a-z0-9]+$/i.test(urlPath) || urlPath.endsWith(".html");
-    if (isPageRequest && lastError && !output) return send(res, 500, errorPage(lastError.title, lastError.message), "text/html; charset=utf-8");
-
-    const html = isPageRequest ? findPage(urlPath) : undefined;
-    if (html) return send(res, 200, html, "text/html; charset=utf-8", { "Cache-Control": "no-store" });
-
-    const rel = urlPath.slice(1);
-    const mem = output?.files.get(rel);
-    if (mem) return send(res, 200, mem.contents, mimeType(rel), { "Cache-Control": "no-store" });
-
-    const fromPublic = fileIfExists(safeJoin(cfg.publicDir, urlPath));
-    const fromRoot = cfg.staticDirs.some(d => urlPath.startsWith("/" + d + "/")) ? fileIfExists(safeJoin(project.root, urlPath)) : null;
-    const file = fromPublic ?? fromRoot;
-    if (file) return send(res, 200, fs.readFileSync(file), mimeType(file), { "Cache-Control": "no-store" });
-
-    const notFound = findPage("/404");
-    return send(res, 404, notFound ?? errorPage("404 Not Found", `No page or file matches ${urlPath}`), "text/html; charset=utf-8");
+    if (urlPath === CLIENT_URL) return send(res, 200, DEV_CLIENT, "text/javascript; charset=utf-8", NO_STORE);
+    const head = req.method === "HEAD";
+    if (functions.enabled) {
+      try {
+        const response = await functions.handle(await toRequest(req), async r => assetResponse(resolve(decodePath(new URL(r.url).pathname) ?? "/")));
+        if (response) return await sendResponse(res, response, head);
+      } catch (err) {
+        if (err instanceof SinthError) printDiagnostic(err.diagnostic);
+        else log.error((err as Error).stack ?? String(err));
+        if (!res.headersSent) send(res, 500, errorPage("Function error", err instanceof SinthError ? formatDiagnostic(err.diagnostic, false) : String((err as Error).stack ?? err)), HTML);
+        return;
+      }
+    }
+    if (req.method !== "GET" && !head) return send(res, 405, "Method not allowed", "text/plain");
+    sendAsset(res, resolve(urlPath), head);
+  };
+  const server = http.createServer((req, res) => {
+    handle(req, res).catch(err => {
+      log.error((err as Error).stack ?? String(err));
+      if (!res.headersSent) send(res, 500, "Internal error", "text/plain");
+      else res.end();
+    });
   });
 
   const port = await listen(server, opts.port, opts.host);
-  const url = `http://${displayHost(opts.host)}:${port}`;
+  const url = `http://${displayHost(opts.host)}:${port}${cfg.base}`;
   log.blank();
   console.log(`  ${c.green("➜")}  ${c.bold("Local:")}   ${c.cyan(url)}`);
   if (opts.host === "0.0.0.0" || opts.host === "::") console.log(`  ${c.green("➜")}  ${c.bold("Network:")} exposed on all interfaces`);
@@ -166,6 +189,11 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
       const inStatic = file.startsWith(cfg.publicDir + path.sep) || cfg.staticDirs.some(d => file.startsWith(path.resolve(project.root, d) + path.sep));
       if (inStatic && !file.endsWith(".css") && !file.endsWith(".sinth")) {
         broadcast({ type: "reload" });
+        return;
+      }
+      if (file.startsWith(functions.dir + path.sep)) {
+        functions.invalidate();
+        log.success(`${c.gray(path.relative(project.root, file).replace(/\\/g, "/"))} ${c.dim("reloaded")}`);
         return;
       }
       if (path.basename(file) === "sinth.config.json") {

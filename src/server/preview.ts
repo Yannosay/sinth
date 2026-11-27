@@ -2,9 +2,10 @@ import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
 import { SinthError } from "../compiler/diagnostics";
-import { c, log } from "../cli/ui";
+import { c, log, printDiagnostic } from "../cli/ui";
 import { openBrowser } from "./dev";
-import { decodePath, displayHost, fileIfExists, listen, mimeType, routeCandidates, safeJoin, send } from "./static";
+import { FunctionsHost, sendResponse, toRequest } from "./functions";
+import { Asset, assetResponse, decodePath, displayHost, fileIfExists, listen, mimeType, routeCandidates, safeJoin, send, sendAsset, stripBase } from "./static";
 
 interface HeaderRule {
   pattern: RegExp;
@@ -33,6 +34,8 @@ export interface PreviewOptions {
   port: number;
   host: string;
   open: boolean;
+  base: string;
+  root: string;
 }
 
 export async function startPreview(outDir: string, opts: PreviewOptions): Promise<void> {
@@ -45,32 +48,49 @@ export async function startPreview(outDir: string, opts: PreviewOptions): Promis
     for (const r of rules) if (r.pattern.test(urlPath)) Object.assign(out, r.headers);
     return out;
   };
+  const html = (file: string): string => (file.endsWith(".html") ? "text/html; charset=utf-8" : mimeType(file));
 
-  const server = http.createServer((req, res) => {
-    const urlPath = decodePath(req.url);
-    if (!urlPath) return send(res, 400, "Bad request", "text/plain");
-    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed", "text/plain");
-    if (urlPath.endsWith(".html") && urlPath !== "/404.html") {
-      const clean = urlPath.replace(/(index)?\.html$/, "");
-      res.writeHead(308, { Location: clean || "/" });
-      res.end();
-      return;
+  const resolve = (urlPath: string): Asset => {
+    const sitePath = stripBase(urlPath, opts.base);
+    if (sitePath !== null && sitePath.endsWith(".html") && sitePath !== "/404.html") {
+      return { status: 308, body: "", type: "text/plain", headers: { Location: urlPath.replace(/(index)?\.html$/, "") || "/" } };
     }
-    for (const cand of routeCandidates(urlPath)) {
+    if (sitePath === null && urlPath === "/") return { status: 302, body: "", type: "text/plain", headers: { Location: opts.base } };
+    for (const cand of sitePath === null ? [] : routeCandidates(sitePath)) {
       const file = fileIfExists(safeJoin(outDir, cand));
-      if (file && path.basename(file) !== "_headers") {
-        return send(res, 200, fs.readFileSync(file), mimeType(file), headersFor(urlPath));
-      }
+      if (file && path.basename(file) !== "_headers") return { status: 200, body: fs.readFileSync(file), type: html(file), headers: headersFor(urlPath) };
     }
     const notFound = fileIfExists(path.join(outDir, "404.html"));
-    return send(res, 404, notFound ? fs.readFileSync(notFound) : "404 Not Found", notFound ? "text/html; charset=utf-8" : "text/plain", headersFor(urlPath));
+    return { status: 404, body: notFound ? fs.readFileSync(notFound) : "404 Not Found", type: notFound ? "text/html; charset=utf-8" : "text/plain", headers: headersFor(urlPath) };
+  };
+
+  const functions = new FunctionsHost(opts.root);
+  const handle = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
+    const urlPath = decodePath(req.url);
+    if (!urlPath) return send(res, 400, "Bad request", "text/plain");
+    const head = req.method === "HEAD";
+    if (functions.enabled) {
+      const response = await functions.handle(await toRequest(req), async r => assetResponse(resolve(decodePath(new URL(r.url).pathname) ?? "/")));
+      if (response) return sendResponse(res, response, head);
+    }
+    if (req.method !== "GET" && !head) return send(res, 405, "Method not allowed", "text/plain");
+    sendAsset(res, resolve(urlPath), head);
+  };
+
+  const server = http.createServer((req, res) => {
+    handle(req, res).catch(err => {
+      if (err instanceof SinthError) printDiagnostic(err.diagnostic);
+      else log.error((err as Error).stack ?? String(err));
+      if (!res.headersSent) send(res, 500, "Internal error", "text/plain");
+      else res.end();
+    });
   });
 
   const port = await listen(server, opts.port, opts.host);
-  const url = `http://${displayHost(opts.host)}:${port}`;
+  const url = `http://${displayHost(opts.host)}:${port}${opts.base}`;
   log.blank();
   console.log(`  ${c.green("➜")}  ${c.bold("Preview:")} ${c.cyan(url)}`);
-  console.log(`  ${c.gray("Serving " + path.relative(process.cwd(), outDir) + " with production headers")}`);
+  console.log(`  ${c.gray("Serving " + (path.relative(process.cwd(), outDir) || ".") + " with production headers" + (functions.enabled ? " and functions/" : ""))}`);
   log.blank();
   if (opts.open) openBrowser(url);
 }

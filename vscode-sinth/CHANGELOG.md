@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.3.0
+
+- Highlighting for `try`, `catch`, `finally` and `throw`.
+- Completions and hover documentation for the `jsonLd` metadata key and the `router` config option.
+- The documentation link opens sinth.yannosay.com/docs.
+
 ## 5.2.2
 
 - Matches Sinth 5.2: the removed `page` keyword is no longer highlighted or suggested. **New Page** and the empty-file snippet create pages without it.

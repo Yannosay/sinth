@@ -220,6 +220,10 @@ export class Prerenderer {
         }
         return;
       }
+      case "try":
+      case "throw":
+        // Error handling depends on runtime failures, so it is left to the browser.
+        throw new ReturnSignal(UNKNOWN);
       case "return":
         throw new ReturnSignal(s.value ? this.eval(s.value, env, file) : undefined);
       case "break":

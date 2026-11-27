@@ -113,6 +113,10 @@ class Scope {
 
 const T = (base: TypeRef["base"], array = 0): TypeRef => ({ base, array, nullable: false });
 
+const MUTATING_METHODS: ReadonlySet<string> = new Set([
+  "push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin", "set", "delete", "add", "clear",
+]);
+
 function typeName(t: TypeRef): string {
   return t.base + "[]".repeat(t.array) + (t.nullable ? "?" : "");
 }
@@ -162,8 +166,7 @@ interface RenderCtx {
   rootHook?: (roots: string[]) => string;
 }
 
-export class ModuleCompiler {
-  private readonly out: string[] = [];
+class ModuleCompiler {
   private readonly css: string[] = [];
   private uid = 0;
   private interactive = false;
@@ -931,6 +934,24 @@ export class ModuleCompiler {
       }
       case "while":
         return `while (${this.expr(s.test, scope)}) {\n${indent(this.stmts(s.body, new Scope(scope), returnType))}\n}`;
+      case "try": {
+        let code = `try {
+${indent(this.stmts(s.body, new Scope(scope), returnType))}
+}`;
+        if (s.handler) {
+          const inner = new Scope(scope);
+          if (s.param) inner.define(s.param, { kind: "local", js: s.param });
+          code += ` catch${s.param ? ` (${s.param})` : ""} {
+${indent(this.stmts(s.handler, inner, returnType))}
+}`;
+        }
+        if (s.finalizer) code += ` finally {
+${indent(this.stmts(s.finalizer, new Scope(scope), returnType))}
+}`;
+        return code;
+      }
+      case "throw":
+        return `throw ${this.expr(s.value, scope)};`;
       case "return":
         if (s.value && returnType && returnType.base !== "any") {
           if (returnType.base === "void") this.fail("E0380", "This function is declared '-> void' and cannot return a value", s.loc);
@@ -942,6 +963,18 @@ export class ModuleCompiler {
       case "continue":
         return "continue;";
     }
+  }
+
+  /**
+   * Whether writing to `target` can change what the page shows: true for state, parameters, loop
+   * items and local aliases of them, false for JavaScript globals and imported modules.
+   */
+  private isTracked(target: Expr, scope: Scope): boolean {
+    let root = target;
+    while (root.k === "member" || root.k === "index") root = root.object;
+    if (root.k !== "id") return false;
+    const kind = scope.lookup(root.name)?.kind;
+    return kind !== undefined && kind !== "global" && kind !== "import" && kind !== "function" && kind !== "component";
   }
 
   private calleeBinding(callee: Expr, scope: Scope): Binding | undefined {
@@ -1068,6 +1101,7 @@ export class ModuleCompiler {
         const args = b?.fn ? this.genCallArgs(e.args, b.fn, scope, e.loc) : e.args.map(a => (a.spread ? "..." : "") + this.expr(a.value, scope)).join(", ");
         if (!b?.fn && e.args.some(a => a.name)) this.fail("E0316", "Named arguments are only supported for Sinth functions", e.args.find(a => a.name)?.loc);
         const call = `${callee}${e.optional ? "?." : ""}(${args})`;
+        if (e.callee.k === "member" && MUTATING_METHODS.has(e.callee.prop) && this.isTracked(e.callee.object, scope)) return `$$.changed(${call})`;
         if (e.memo) return `$$.memo(${JSON.stringify(this.fileHash + ":" + e.loc.line + ":" + e.loc.col)}, () => ${call}, [${args}])`;
         return call;
       }
@@ -1087,6 +1121,7 @@ export class ModuleCompiler {
         return `(${this.expr(e.test, scope)} ? ${this.expr(e.then, scope)} : ${this.expr(e.else, scope)})`;
       case "assign": {
         const target = this.assignTarget(e.target, scope, e.loc);
+        const tracked = this.isTracked(e.target, scope);
         if (e.target.k === "id") {
           const t = this.resolveId(e.target.name, e.loc, scope).type;
           if (t) {
@@ -1097,10 +1132,14 @@ export class ModuleCompiler {
             }
           }
         }
-        return `${target} ${e.op} ${this.expr(e.value, scope)}`;
+        const assignment = `${target} ${e.op} ${this.expr(e.value, scope)}`;
+        return tracked ? `$$.changed(${assignment})` : assignment;
       }
-      case "update":
-        return e.prefix ? `++${this.assignTarget(e.target, scope, e.loc)}` : `${this.assignTarget(e.target, scope, e.loc)}++`;
+      case "update": {
+        const target = this.assignTarget(e.target, scope, e.loc);
+        const update = e.prefix ? `++${target}` : `${target}++`;
+        return this.isTracked(e.target, scope) ? `$$.changed(${update})` : update;
+      }
       case "array":
         return `[${e.items.map(i => (i.spread ? "..." : "") + this.expr(i.value, scope)).join(", ")}]`;
       case "object":
@@ -1261,6 +1300,8 @@ export function containsAwait(stmts: Stmt[]): boolean {
       case "if": return exprHasAwait(s.test) || containsAwait(s.then) || (!!s.else && containsAwait(s.else));
       case "for": return exprHasAwait(s.iter) || containsAwait(s.body);
       case "while": return exprHasAwait(s.test) || containsAwait(s.body);
+      case "try": return containsAwait(s.body) || containsAwait(s.handler ?? []) || containsAwait(s.finalizer ?? []);
+      case "throw": return exprHasAwait(s.value);
       case "return": return !!s.value && exprHasAwait(s.value);
       default: return false;
     }

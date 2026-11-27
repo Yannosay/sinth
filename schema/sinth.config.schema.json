@@ -20,6 +20,7 @@
         "host": { "type": "string", "default": "127.0.0.1" },
         "previewPort": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 4000 },
         "target": { "type": "array", "items": { "type": "string" }, "description": "esbuild targets" },
+        "router": { "type": "boolean", "default": true, "description": "Navigate between pages without full reloads" },
         "security": {
           "type": "object",
           "additionalProperties": false,
@@ -35,7 +36,7 @@
   "properties": {
     "$schema": { "type": "string" },
     "outDir": {}, "pagesDir": {}, "publicDir": {}, "staticDirs": {}, "libraryPaths": {}, "site": {}, "base": {},
-    "minify": {}, "sourcemap": {}, "port": {}, "host": {}, "previewPort": {}, "target": {}, "security": {},
+    "minify": {}, "sourcemap": {}, "port": {}, "host": {}, "previewPort": {}, "target": {}, "router": {}, "security": {},
     "cloudflare": {
       "type": "object",
       "additionalProperties": false,

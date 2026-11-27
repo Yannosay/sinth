@@ -112,7 +112,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
-        { "name": "keyword.control.flow.sinth", "match": "\\b(if|elif|else|for|in|key|while|return|break|continue|persist|replace)\\b" },
+        { "name": "keyword.control.flow.sinth", "match": "\\b(if|elif|else|for|in|key|while|try|catch|finally|throw|return|break|continue|persist|replace)\\b" },
         { "name": "support.function.modifier.sinth", "match": "\\b(delay|transition|hide)\\b(?=\\s*\\()" },
         { "name": "keyword.operator.logical.sinth", "match": "\\b(and|or|not|typeof|await|new)\\b" },
         { "name": "constant.language.sinth", "match": "\\b(true|false|null|undefined)\\b" },

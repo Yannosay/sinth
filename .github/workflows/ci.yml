@@ -27,6 +27,7 @@ jobs:
       - run: npm run lint
         if: matrix.node == 22
       - run: node scripts/test.js
+      - run: node scripts/check-docs.js
       - name: Smoke test the CLI
         shell: bash
         run: |
@@ -34,6 +35,8 @@ jobs:
           node bin/sinth.js check --root smoke
           node bin/sinth.js build --root smoke
           test -f smoke/dist/index.html
+          node bin/sinth.js build --root smoke
+          test -f dist/browser/sinth.js
 
   vscode-extension:
     runs-on: ubuntu-latest

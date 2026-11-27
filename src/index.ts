@@ -11,3 +11,5 @@ export { Project } from "./project/project";
 export { buildProject, checkProject } from "./project/build";
 export type { BuildOutput } from "./project/build";
 export type * from "./compiler/ast";
+export { compileFiles } from "./browser/compile";
+export type { CompileFilesOptions, CompileFilesResult, CompiledModule } from "./browser/compile";

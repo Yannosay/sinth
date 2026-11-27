@@ -62,6 +62,36 @@ export function send(res: http.ServerResponse, status: number, body: string | Ui
   res.end(body);
 }
 
+export interface Asset {
+  status: number;
+  body: string | Uint8Array;
+  type: string;
+  headers?: Record<string, string>;
+}
+
+/** Maps a request path to a path inside the site when it is hosted under `base` (e.g. "/docs/"). */
+export function stripBase(urlPath: string, base: string): string | null {
+  if (base === "/") return urlPath;
+  if (urlPath === base.slice(0, -1)) return "/";
+  return urlPath.startsWith(base) ? urlPath.slice(base.length - 1) : null;
+}
+
+export function sendAsset(res: http.ServerResponse, asset: Asset, head = false): void {
+  if (head) {
+    res.writeHead(asset.status, { "Content-Type": asset.type, "X-Content-Type-Options": "nosniff", ...asset.headers });
+    res.end();
+    return;
+  }
+  send(res, asset.status, asset.body, asset.type, asset.headers);
+}
+
+export function assetResponse(asset: Asset): Response {
+  return new Response(asset.status === 204 || asset.status === 304 ? null : asset.body, {
+    status: asset.status,
+    headers: { "Content-Type": asset.type, ...asset.headers },
+  });
+}
+
 export function routeCandidates(urlPath: string): string[] {
   const clean = urlPath.replace(/\/+$/, "") || "/";
   if (clean === "/") return ["/index.html"];

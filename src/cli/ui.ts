@@ -18,8 +18,6 @@ export const c = {
   underline: wrap("4", "24"),
 };
 
-export const colorEnabled = enabled;
-
 export function brand(label: string, version: string): string {
   return [c.violet(c.bold("Sinth")), label ? c.bold(label) : "", c.gray("v" + version)].filter(Boolean).join(" ");
 }

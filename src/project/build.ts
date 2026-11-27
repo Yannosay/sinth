@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Diagnostic, SinthError } from "../compiler/diagnostics";
 import { buildHead, escapeHtml, renderDocument } from "../compiler/html";
-import { CompiledPage, fontHref, PageInfo, Project, RUNTIME_PATH } from "./project";
+import { CompiledPage, fontHref, PageInfo, Project, ROUTER_PATH, RUNTIME_PATH } from "./project";
 
 export interface OutputFile {
   path: string;
@@ -42,6 +42,7 @@ function sinthPlugin(project: Project, entries: Map<string, string>, injectCss =
     name: "sinth",
     setup(b) {
       b.onResolve({ filter: /^sinth-runtime$/ }, () => ({ path: RUNTIME_PATH }));
+      b.onResolve({ filter: /^sinth-router$/ }, () => ({ path: ROUTER_PATH }));
       b.onResolve({ filter: /^sinth-entry:/ }, a => ({ path: a.path.slice("sinth-entry:".length), namespace: "sinth-entry" }));
       b.onLoad({ filter: /.*/, namespace: "sinth-entry" }, a => ({ contents: entries.get(a.path) ?? "", loader: "js", resolveDir: project.root }));
       b.onResolve({ filter: /^sinth-css:/ }, a => ({ path: a.path.slice("sinth-css:".length), namespace: "sinth-css" }));
@@ -86,9 +87,14 @@ function findCustomElementFiles(project: Project): string[] {
   return out;
 }
 
-async function buildCustomElements(project: Project): Promise<esbuild.OutputFile[]> {
+/**
+ * Bundles every component declared `as <tag-name>` into a standalone script per tag, plus
+ * `elements/index.js` that registers all of them, for use in any HTML page.
+ */
+export async function buildCustomElements(project: Project): Promise<esbuild.OutputFile[]> {
   const entries = new Map<string, string>();
   const entryPoints: Record<string, string> = {};
+  const all = new Set<string>();
   for (const file of findCustomElementFiles(project)) {
     const parsed = project.getFile(file);
     if (parsed.isPage) continue;
@@ -98,9 +104,14 @@ async function buildCustomElements(project: Project): Promise<esbuild.OutputFile
       const key = "elements/" + c.customTag;
       entries.set(key, `import ${JSON.stringify(file)};`);
       entryPoints[key] = "sinth-entry:" + key;
+      all.add(file);
     }
   }
   if (!entries.size) return [];
+  if (!entries.has("elements/index")) {
+    entries.set("elements/index", [...all].map(f => `import ${JSON.stringify(f)};`).join("\n"));
+    entryPoints["elements/index"] = "sinth-entry:elements/index";
+  }
   try {
     const result = await esbuild.build({
       entryPoints, bundle: true, format: "esm", platform: "browser", target: project.config.target,
@@ -150,16 +161,29 @@ function prepareOutDir(dir: string): void {
     return;
   }
   const entries = fs.readdirSync(dir);
-  if (entries.length && !entries.includes("_sinth")) {
+  if (entries.length && !entries.includes("_sinth") && !builtBySinth(dir, entries)) {
     throw new SinthError("E0801", `Refusing to clear '${dir}': it is not empty and was not created by Sinth`, undefined, "Delete it yourself or set a different \"outDir\" in sinth.config.json");
   }
   for (const e of entries) fs.rmSync(path.join(dir, e), { recursive: true, force: true });
 }
 
+const JUNK_FILES = new Set([".ds_store", "thumbs.db", "desktop.ini", ".git", ".gitkeep", ".svn"]);
+
+/** Pages carry `<meta name="generator" content="Sinth">`, so a fully static build is still recognized. */
+function builtBySinth(dir: string, entries: string[]): boolean {
+  return entries.filter(e => e.endsWith(".html")).slice(0, 5).some(e => {
+    try {
+      return /<meta name="generator" content="Sinth/.test(fs.readFileSync(path.join(dir, e), "utf-8").slice(0, 4096));
+    } catch {
+      return false;
+    }
+  });
+}
+
 function copyDir(src: string, dest: string, files: Map<string, OutputFile>, outDir: string): void {
   if (!fs.existsSync(src)) return;
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") && entry.name !== ".well-known") continue;
+    if (JUNK_FILES.has(entry.name.toLowerCase())) continue;
     const from = path.join(src, entry.name);
     const to = path.join(dest, entry.name);
     if (entry.isDirectory()) copyDir(from, to, files, outDir);
@@ -210,7 +234,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   const cfg = project.config;
   project.invalidate();
   const pages = project.findPages();
-  if (!pages.length) {
+  if (!pages.length && !findCustomElementFiles(project).length) {
     throw new SinthError("E0802", fs.existsSync(cfg.pagesDir) ? `No pages found in ${path.relative(project.root, cfg.pagesDir) || "."}` : `No pages found (no ${path.relative(project.root, cfg.pagesDir) || "pages"}/ folder, and no .sinth file with markup in the project root)`, undefined, fs.existsSync(cfg.pagesDir)
       ? "Every .sinth file in this folder is a page (files starting with '_' are skipped). Add markup to pages/index.sinth, for example: Main { Heading { \"Hello\" } }"
       : `Create ${path.relative(project.root, cfg.pagesDir) || "pages"}/index.sinth with some markup, for example: Main { Heading { "Hello" } }`);
@@ -222,6 +246,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     const key = entryKey(c.page);
     const lines: string[] = [];
     for (const s of c.styleImports) lines.push(`import ${JSON.stringify(s)};`);
+    if (cfg.router) lines.push(`import "sinth-router";`);
     if (c.interactive) {
       lines.push(`import * as page from ${JSON.stringify(c.page.file)};`);
       lines.push(`import { boot } from "sinth-runtime";`);
@@ -233,8 +258,8 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     entryPoints[key] = "sinth-entry:" + key;
   }
 
-  let result: esbuild.BuildResult<{ metafile: true; write: false }>;
-  try {
+  let result: Pick<esbuild.BuildResult<{ metafile: true; write: false }>, "outputFiles" | "metafile" | "warnings"> = { outputFiles: [], metafile: { inputs: {}, outputs: {} }, warnings: [] };
+  if (compiled.length) try {
     result = await esbuild.build({
       entryPoints,
       bundle: true,
@@ -291,27 +316,28 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     styles.push(...c.externalStyles);
     if (cssOut) styles.push(toUrl(cssOut));
     const scripts = c.externalScripts.map(s => ({ src: s.src, module: false, attrs: s.attrs }));
-    if (c.interactive && jsOut) scripts.push({ src: toUrl(jsOut), module: true, attrs: {} });
+    const shipsJs = !!jsOut && (c.interactive || cfg.router);
+    if (shipsJs && jsOut) scripts.push({ src: toUrl(jsOut), module: true, attrs: { "data-sinth-entry": true } });
     if (options.devClient) inlineHead.push(`<script type="module" src="${options.devClient}"></script>`);
-    if (!c.interactive && jsOut) files.delete(path.relative(cfg.outDir, path.resolve(project.root, jsOut)).replace(/\\/g, "/"));
+    if (!shipsJs && jsOut) files.delete(path.relative(cfg.outDir, path.resolve(project.root, jsOut)).replace(/\\/g, "/"));
     for (const inst of c.instances) {
       const head = buildHead(inst.meta, v => project.resolveAsset(v, c.page.file));
       const pageHead = inst.params && c.interactive
         ? [...inlineHead, '<script type="application/json" id="sinth-params">' + JSON.stringify(inst.params).replace(/</g, "\\u003c") + "</script>"]
         : inlineHead;
-      const html = renderDocument(head, inst.prerendered, { styles, scripts, preloads: c.interactive ? preloads : [], inlineHead: pageHead });
+      const html = renderDocument(head, inst.prerendered, { styles, scripts, preloads: shipsJs ? preloads : [], inlineHead: pageHead });
       files.set(inst.page.outFile, { path: path.join(cfg.outDir, inst.page.outFile), contents: Buffer.from(html) });
       pageOutputs.push({
         page: inst.page, html, interactive: c.interactive, bytes: Buffer.byteLength(html),
-        js: c.interactive && jsOut ? toUrl(jsOut) : undefined, css: cssOut ? toUrl(cssOut) : undefined,
+        js: shipsJs && jsOut ? toUrl(jsOut) : undefined, css: cssOut ? toUrl(cssOut) : undefined,
       });
     }
   }
 
+  for (const f of await buildCustomElements(project)) {
+    files.set(path.relative(cfg.outDir, f.path).replace(/\\/g, "/"), { path: f.path, contents: f.contents });
+  }
   if (!project.dev) {
-    for (const f of await buildCustomElements(project)) {
-      files.set(path.relative(cfg.outDir, f.path).replace(/\\/g, "/"), { path: f.path, contents: f.contents });
-    }
     copyDir(cfg.publicDir, cfg.outDir, files, cfg.outDir);
     for (const d of cfg.staticDirs) copyDir(path.resolve(project.root, d), path.join(cfg.outDir, d), files, cfg.outDir);
     if (cfg.security.headers && !files.has("_headers")) {

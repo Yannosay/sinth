@@ -27,7 +27,7 @@ export function templateFiles(template: TemplateName, name: string, version: str
       scripts: { dev: "sinth dev", build: "sinth build", preview: "sinth preview", check: "sinth check", deploy: "sinth deploy" },
       devDependencies: { "@yannosay/sinth": `^${version.replace(/-.*$/, "")}` },
     }, null, 2) + "\n",
-    ".gitignore": "node_modules/\ndist/\n.sinth/\n.wrangler/\n",
+    ".gitignore": "node_modules/\ndist/\n.sinth/\n.wrangler/\n.dev.vars\n.env\n",
     "README.md": `# ${name}\n\nBuilt with [Sinth](https://sinth.yannosay.com).\n\n\`\`\`bash\nnpm install\nnpm run dev      # http://localhost:3000\nnpm run build    # production build in dist/\nnpm run deploy   # deploy to Cloudflare Pages\n\`\`\`\n`,
     "public/robots.txt": "User-agent: *\nAllow: /\n",
   };
@@ -148,7 +148,7 @@ descr = "About this site."
 
 Layout(current: "/about") {
   Heading(level: 1) { "About" }
-  Paragraph { "This page is static, so Sinth ships it without any JavaScript." }
+  Paragraph { "This page is static: it is prerendered at build time and needs no code of its own." }
 }
 `;
   files["pages/404.sinth"] = `import { Layout } from "../components/Layout.sinth"

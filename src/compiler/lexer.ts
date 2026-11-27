@@ -99,6 +99,9 @@ export class Lexer {
       } else if (c === " " || c === "\t" || c === "\r" || c === "﻿") {
         this.advance();
       } else if (c === "-" && this.peekChar(1) === "-") {
+        if (/[\w)\]]/.test(this.src[this.pos - 1] ?? "") && /^--\s*[;)}\n]|^--$/.test(this.src.slice(this.pos, this.pos + 4).replace(/\r/g, ""))) {
+          throw new SinthError("E0001", "'--' starts a comment in Sinth, so it cannot decrement", { ...this.here(), length: 2 }, "Write 'x -= 1' instead of 'x--'");
+        }
         if (this.peekChar(2) === "[") this.skipBlockComment();
         else while (this.pos < this.src.length && this.peekChar() !== "\n") this.advance();
       } else if (c === "/" && this.peekChar(1) === "/") {

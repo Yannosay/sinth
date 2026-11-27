@@ -12,6 +12,7 @@ import { SinthConfig } from "./config";
 
 export const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 export const RUNTIME_PATH = path.join(PACKAGE_ROOT, "dist", "runtime", "index.js");
+export const ROUTER_PATH = path.join(PACKAGE_ROOT, "dist", "runtime", "router.js");
 export const LIB_ROOT = path.join(PACKAGE_ROOT, "lib");
 
 const LEGACY_LIBRARIES: Record<string, string> = { SinthUI: "sinth:ui" };

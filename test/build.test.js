@@ -8,23 +8,32 @@ const { decodePath, safeJoin } = require("../dist/server/static");
 const { loadConfig } = require("../dist/project/config");
 const { buildProject } = require("../dist/project/build");
 
-test("static pages ship without JavaScript and are fully prerendered", async () => {
+test("static pages are fully prerendered and only load the router", async () => {
   const { out, text } = await build({
     "pages/index.sinth": 'title = "Home"\nvar str[] items = ["a", "b"]\nconst num year = 2026\nMain {\n  Heading(level: 1) { "Hi " + year }\n  for item, i in items { Paragraph { (i + 1) + ". " + item } }\n}\n',
   });
   const page = out.pages[0];
   assert.equal(page.interactive, false);
-  assert.equal(page.js, undefined);
   const html = text("index.html");
   assert.match(html, /<h1>Hi 2026<\/h1><p>1\. a<\/p><p>2\. b<\/p>/);
-  assert.doesNotMatch(html, /<script/);
+  assert.match(html, /<script type="module" src="\/_sinth\/index-[A-Z0-9]+\.js" data-sinth-entry><\/script>/);
+  assert.match(html, /<meta name="generator" content="Sinth">/);
+  const bundle = [...out.files.keys()].filter(k => k.endsWith(".js")).map(text).join("\n");
+  assert.match(bundle, /__sinth_router__/);
+  assert.doesNotMatch(bundle, /defineElement|replaceChildren\(frag\)/);
+});
+
+test("router: false ships static pages without JavaScript", async () => {
+  const { out, text } = await build({ "pages/index.sinth": "Main { \"x\" }\n", "sinth.config.json": '{ "router": false }' });
+  assert.equal(out.pages[0].js, undefined);
+  assert.doesNotMatch(text("index.html"), /<script/);
 });
 
 test("interactive pages load a module script and prerender initial state", async () => {
   const { out, text } = await build({ "pages/index.sinth": "var num n = 41\nMain { Button(onClick: n += 1) { \"n=\" + (n + 1) } }\n" });
   assert.equal(out.pages[0].interactive, true);
   const html = text("index.html");
-  assert.match(html, /<script type="module" src="\/_sinth\/index-[A-Z0-9]+\.js"><\/script>/);
+  assert.match(html, /<script type="module" src="\/_sinth\/index-[A-Z0-9]+\.js" data-sinth-entry><\/script>/);
   assert.match(html, /<button type="button">n=42<\/button>/);
 });
 
@@ -201,4 +210,10 @@ test("the removed 'page' keyword is a compile error with a fix", async () => {
   assert.match(err.diagnostic.hint, /Delete this line/);
   const { text } = await build({ "pages/index.sinth": 'var num page = 2\nMain { "p" + page }\n' });
   assert.match(text("index.html"), /p2/);
+});
+
+test("jsonLd metadata emits escaped structured data", async () => {
+  const { text } = await build({ "pages/index.sinth": 'title = "Acme"\njsonLd = { "@context": "https://schema.org", "@type": "Organization", name: "Acme </script>" }\nMain { "x" }\n' });
+  const html = text("index.html");
+  assert.match(html, /<script type="application\/ld\+json">\{"@context":"https:\/\/schema.org","@type":"Organization","name":"Acme \\u003c\/script>"\}<\/script>/);
 });

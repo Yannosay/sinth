@@ -171,3 +171,11 @@ test("script and style blocks are recognized after a line ending in ) or ]", () 
   assert.match(out.js, /function save\(\)/);
   assert.match(out.css, /padding/);
 });
+
+test("try, catch, finally and throw compile with a scoped error variable", () => {
+  const out = compilePage('var str? err\nasync function load() {\n  try {\n    await fetch("/x")\n  } catch (e) {\n    err = e.message\n  } finally {\n    console.log("done")\n  }\n}\nfunction check(num n) {\n  if n < 0 { throw new Error("negative") }\n}\nMain { Button(onClick: load()) { "x" } }\n');
+  assert.match(out.js, /try \{\n\s+\(?await fetch\("\/x"\)\)?;\n\s+\} catch \(e\) \{\n\s+\$\$\.changed\(err = e\.message\);\n\s+\} finally \{/);
+  assert.match(out.js, /throw new Error\("negative"\);/);
+  expectError(() => compilePage("function f() {\n  try { console.log(1) }\n}\nMain { \"x\" }\n"), "E0100");
+  expectError(() => compilePage("function f() {\n  try { console.log(1) } catch { console.log(e) }\n}\nMain { \"x\" }\n"), "E0302");
+});

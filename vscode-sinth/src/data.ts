@@ -112,6 +112,7 @@ export const META_KEYS: Readonly<Record<string, string>> = {
   viewport: "Viewport meta (has a sensible default)",
   base: "<base href>",
   paths: "Dynamic routes only (pages/blog/[slug].sinth): the values to generate, e.g. paths = posts.map((p) => p.slug)",
+  jsonLd: 'Structured data for search engines (schema.org), e.g. jsonLd = { "@context": "https://schema.org", "@type": "Article", headline: title }',
 };
 
 export const DIRECTIVES: Readonly<Record<string, string>> = {

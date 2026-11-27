@@ -33,6 +33,7 @@ let updating = false;
 let rerun = false;
 let scheduled = false;
 let devMode = false;
+let handling = 0;
 
 function createOwner(parent: Owner | null): Owner {
   const owner: Owner = { parent, effects: [], children: [], cleanups: [], disposed: false, paused: false };
@@ -128,6 +129,16 @@ export function schedule(): void {
     scheduled = false;
     update();
   });
+}
+
+/**
+ * Called by compiled code after state is assigned or mutated. Inside event handlers the handler's
+ * own update covers it; anywhere else (timers, callbacks, promise continuations) an update is
+ * scheduled for the next microtask, batched with any other changes.
+ */
+export function changed<T>(value: T): T {
+  if (!handling && !updating) schedule();
+  return value;
 }
 
 function settle(result: unknown): void {
@@ -341,10 +352,13 @@ export function on(node: EventTarget, event: string, handler: (e: Event) => unkn
     if (modifiers.includes("prevent")) e.preventDefault();
     if (modifiers.includes("stop")) e.stopPropagation();
     let result: unknown;
+    handling++;
     try {
       result = handler(e);
     } catch (err) {
       reportError(err);
+    } finally {
+      handling--;
     }
     update();
     settle(result);
@@ -818,7 +832,7 @@ export function mount(target: Element, render: Render): MountedApp {
 }
 
 interface HotGlobal {
-  __sinth_app__?: { dispose(): void };
+  __sinth_app__?: { dispose(keepState?: boolean): void };
   __sinth_hmr_state__?: Record<string, unknown>;
   sinthRender?: () => void;
   sinth?: { update(): void; schedule(): void };
@@ -826,6 +840,7 @@ interface HotGlobal {
 
 export function boot(page: PageModule): void {
   devMode = !!page.dev;
+  routeParams = undefined;
   const g = globalThis as unknown as HotGlobal;
   if (g.__sinth_hmr_state__ && page.restore) {
     page.restore(g.__sinth_hmr_state__);
@@ -836,8 +851,8 @@ export function boot(page: PageModule): void {
   const start = (): void => {
     const app = mount(document.body, page.render);
     g.__sinth_app__ = {
-      dispose: () => {
-        if (page.state) g.__sinth_hmr_state__ = page.state();
+      dispose: (keepState = true) => {
+        if (keepState && page.state) g.__sinth_hmr_state__ = page.state();
         app.dispose();
         rootOwner = createOwner(null);
         current = rootOwner;

@@ -106,3 +106,19 @@ test("script blocks can mutate state and call sinthRender", async () => {
   await new Promise(r => setTimeout(r, 60));
   assert.equal(app.text("#p"), "7");
 });
+
+test("state changed from timers and callbacks updates the page", async () => {
+  const app = await run('var num ticks = 0\nvar str[] log = []\nvar obj user = { name: "a" }\nonMount {\n  setTimeout(() => { ticks += 1 }, 0)\n  setTimeout(() => { log.push("x") }, 0)\n  Promise.resolve().then(() => { user.name = "b" })\n}\nMain { P(id: "t") { "ticks " + ticks } P(id: "l") { log.length } P(id: "u") { user.name } }');
+  await new Promise(r => setTimeout(r, 20));
+  await app.flush();
+  assert.equal(app.text("#t"), "ticks 1");
+  assert.equal(app.text("#l"), "1");
+  assert.equal(app.text("#u"), "b");
+});
+
+test("functions called from timers update the page", async () => {
+  const app = await run('var num n = 0\nfunction tick() {\n  n += 1\n}\nonMount { setTimeout(tick, 0) }\nMain { P(id: "n") { "n " + n } }');
+  await new Promise(r => setTimeout(r, 20));
+  await app.flush();
+  assert.equal(app.text("#n"), "n 1");
+});

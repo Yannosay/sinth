@@ -27,6 +27,7 @@ export interface SinthConfig {
   host: string;
   previewPort: number;
   target: string[];
+  router: boolean;
   security: SecurityConfig;
   cloudflare: CloudflareConfig;
 }
@@ -54,13 +55,14 @@ export const DEFAULT_CONFIG: SinthConfig = {
   host: "127.0.0.1",
   previewPort: 4000,
   target: ["es2020", "chrome90", "firefox90", "safari15", "edge90"],
+  router: true,
   security: { headers: true, csp: true },
   cloudflare: {},
 };
 
 const KNOWN_KEYS = new Set([
   "outDir", "pagesDir", "publicDir", "staticDirs", "libraryPaths", "site", "base", "minify", "sourcemap", "port", "host",
-  "previewPort", "target", "security", "cloudflare", "development", "production", "$schema",
+  "previewPort", "target", "router", "security", "cloudflare", "development", "production", "$schema",
   "sharedRuntime", "inlineJS", "inlineCSS",
 ]);
 
@@ -84,7 +86,7 @@ function validate(raw: Record<string, unknown>, file: string, warnings: string[]
   const strArr = (v: unknown): boolean => Array.isArray(v) && v.every(x => typeof x === "string");
   for (const k of ["outDir", "pagesDir", "publicDir", "site", "base", "host"]) check(k, "a string", str);
   for (const k of ["staticDirs", "libraryPaths", "target"]) check(k, "an array of strings", strArr);
-  for (const k of ["minify", "sourcemap"]) check(k, "true or false", v => typeof v === "boolean");
+  for (const k of ["minify", "sourcemap", "router"]) check(k, "true or false", v => typeof v === "boolean");
   for (const k of ["port", "previewPort"]) check(k, "a port number (1-65535)", v => Number.isInteger(v) && (v as number) > 0 && (v as number) < 65536);
   check("site", "an absolute URL like https://example.com", v => typeof v === "string" && /^https?:\/\/[^\s]+$/.test(v));
 }

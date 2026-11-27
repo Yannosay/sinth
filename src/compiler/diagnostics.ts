@@ -24,10 +24,6 @@ export function registerSource(file: string, source: string): void {
   sourceCache.set(file, source);
 }
 
-export function getSource(file: string): string | undefined {
-  return sourceCache.get(file);
-}
-
 export class SinthError extends Error {
   readonly diagnostic: Diagnostic;
 

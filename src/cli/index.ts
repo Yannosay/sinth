@@ -93,7 +93,7 @@ const commands: Record<string, Command> = {
           c.cyan(p.page.route),
           c.gray(p.page.outFile),
           formatBytes(p.bytes),
-          js ? c.yellow("js " + formatBytes(js.contents.byteLength)) : c.green("no js"),
+          !js ? c.green("no js") : p.interactive ? c.yellow("js " + formatBytes(js.contents.byteLength)) : c.green("router " + formatBytes(js.contents.byteLength)),
           css ? c.magenta("css " + formatBytes(css.contents.byteLength)) : "",
         ]);
       }
@@ -124,6 +124,8 @@ const commands: Record<string, Command> = {
         port: Number(args.flags.port ?? project.config.previewPort),
         host: String(args.flags.host ?? project.config.host),
         open: !!args.flags.open,
+        base: project.config.base,
+        root: project.root,
       });
       return -1;
     },

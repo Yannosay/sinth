@@ -1,7 +1,7 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.2.3",
-  "description": "A reactive language for websites and web apps of any size: type-checked components, file-based and dynamic routing, prerendered pages and one-command deploys.",
+  "version": "5.3.0",
+  "description": "A compiled, type-checked language for websites and web apps: reactive components, file-based routing with instant navigation, prerendered pages, API routes and one-command deploys.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",
   "homepage": "https://sinth.yannosay.com",
@@ -14,20 +14,28 @@
   },
   "keywords": [
     "sinth",
-    "language",
-    "compiler",
+    "programming-language",
     "web-framework",
+    "compiler",
     "reactive",
     "components",
     "ui",
-    "routing",
+    "static-site-generator",
     "ssg",
     "prerendering",
-    "typescript-alternative",
+    "spa",
+    "routing",
+    "full-stack",
+    "api-routes",
+    "web-components",
+    "custom-elements",
+    "hmr",
+    "type-checking",
     "html",
     "css",
-    "web",
-    "cloudflare-pages"
+    "frontend",
+    "cloudflare-pages",
+    "jamstack"
   ],
   "bin": {
     "sinth": "bin/sinth.js"
@@ -38,17 +46,17 @@
     "lib/",
     "schema/",
     "README.md",
-    "DOCS.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json && node scripts/build-browser.js",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.runtime.json --noEmit",
-    "test": "npm run build && node scripts/test.js",
-    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/test.js"
+    "test": "npm run build && node scripts/test.js && node scripts/check-docs.js",
+    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/test.js && node scripts/check-docs.js",
+    "check:docs": "node scripts/check-docs.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

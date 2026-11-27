@@ -40,4 +40,4 @@ or globally with `npm install -g @yannosay/sinth`. New projects created with `np
 
 ## Links
 
-[Documentation](https://github.com/Yannosay/sinth/blob/main/DOCS.md) · [Issues](https://github.com/Yannosay/sinth/issues) · [Discord](https://discord.gg/SUvcrafTQm)
+[Documentation](https://sinth.yannosay.com/docs) · [Issues](https://github.com/Yannosay/sinth/issues) · [Discord](https://discord.gg/SUvcrafTQm)

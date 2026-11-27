@@ -6,7 +6,7 @@ import { analyzeSource, enclosingCall, formatSinth, ParamInfo, SymbolInfo } from
 import { COMMON_ATTRS, DIRECTIVES, ELEMENTS, EVENT_MODIFIERS, EVENTS, KEYWORD_DOCS, META_KEYS, SINTH_UI, TYPES } from "./data";
 
 const SELECTOR: vscode.DocumentSelector = { language: "sinth" };
-const DOCS_URL = "https://github.com/Yannosay/sinth/blob/main/DOCS.md";
+const DOCS_URL = "https://sinth.yannosay.com/docs";
 
 interface IndexedSymbol extends SymbolInfo {
   uri: vscode.Uri;

@@ -34,6 +34,8 @@ export interface HeadData {
   htmlClass?: string;
   metaNames: [string, string][];
   metaProps: [string, string][];
+  /** Structured data, emitted as <script type="application/ld+json">. */
+  jsonLd: string[];
 }
 
 const NAME_MAP: Record<string, string> = {
@@ -50,13 +52,18 @@ export interface MetaValue {
 
 export function buildHead(meta: MetaValue[], resolveAsset: (value: string) => string): HeadData {
   const head: HeadData = {
-    lang: "en", charset: "utf-8", viewport: "width=device-width, initial-scale=1", metaNames: [], metaProps: [],
+    lang: "en", charset: "utf-8", viewport: "width=device-width, initial-scale=1", metaNames: [], metaProps: [], jsonLd: [],
   };
   for (const m of meta) {
     if (!m.known) {
       throw new SinthError("E0700", `Metadata '${m.key}' must be computable at build time`, m.loc, "Use literals, imported JSON, constants and route params. Values that need the browser (fetch, localStorage, user input) can't go in the page head");
     }
     if (m.value === null || m.value === undefined || m.value === false) continue;
+    if (m.key === "jsonLd") {
+      if (typeof m.value !== "object") throw new SinthError("E0701", "Metadata 'jsonLd' must be an object or an array of objects", m.loc);
+      head.jsonLd.push(JSON.stringify(m.value).replace(/</g, "\\u003c"));
+      continue;
+    }
     if (typeof m.value === "object") throw new SinthError("E0701", `Metadata '${m.key}' must be a string, number or boolean`, m.loc);
     const value = String(m.value);
     switch (m.key) {
@@ -88,6 +95,7 @@ export function buildHead(meta: MetaValue[], resolveAsset: (value: string) => st
   if (head.title && !has(head.metaProps, "og:title")) head.metaProps.push(["og:title", head.title]);
   if (description && !has(head.metaProps, "og:description")) head.metaProps.push(["og:description", description]);
   if (!has(head.metaProps, "og:type")) head.metaProps.push(["og:type", "website"]);
+  if (!has(head.metaNames, "generator")) head.metaNames.push(["generator", "Sinth"]);
   if (!has(head.metaNames, "twitter:card")) head.metaNames.push(["twitter:card", has(head.metaProps, "og:image") ? "summary_large_image" : "summary"]);
   return head;
 }
@@ -128,6 +136,7 @@ export function renderDocument(head: HeadData, body: string, assets: DocumentAss
   }
   if (head.appleTouchIcon) lines.push(`<link rel="apple-touch-icon" href="${escapeAttr(head.appleTouchIcon)}">`);
   if (head.manifest) lines.push(`<link rel="manifest" href="${escapeAttr(head.manifest)}">`);
+  for (const data of head.jsonLd) lines.push(`<script type="application/ld+json">${data}</script>`);
   for (const href of assets.preloads) lines.push(`<link rel="modulepreload" href="${escapeAttr(href)}">`);
   for (const href of assets.styles) lines.push(`<link rel="stylesheet" href="${escapeAttr(href)}">`);
   for (const s of assets.scripts) {

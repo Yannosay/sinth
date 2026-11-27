@@ -1,6 +1,6 @@
 export const DEV_CLIENT = String.raw`
 const OVERLAY_ID = "__sinth_overlay";
-const state = { hashes: null, connected: false };
+const state = { hashes: null, connected: false, base: "/" };
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -8,6 +8,7 @@ function escapeHtml(s) {
 
 function currentRoute() {
   let p = location.pathname.replace(/\/index\.html$/, "/").replace(/\.html$/, "");
+  if (state.base !== "/" && p.startsWith(state.base)) p = p.slice(state.base.length - 1);
   if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
   return p || "/";
 }
@@ -98,6 +99,7 @@ function connect() {
       else apply(msg.pages);
     } else if (msg.type === "init") {
       state.hashes = msg.pages;
+      state.base = msg.base || "/";
       if (msg.error) showOverlay(msg.error.title, msg.error.message, "compile");
     }
   };
