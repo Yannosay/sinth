@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.3.2
+
+- **`for … else` empty state.** The `else` content of a loop is removed once the list gets items. Before, it stayed on the page after the first item was added to an empty list.
+- **Reactive page styles.** Expressions in a page's `style` block (for example `background: "hsl(" + hue + ", 80%, 60%)"`) now update when the variables change. Prerendered pages also include their initial values, so the page is styled before its script runs. Component styles were not affected.
+
 ## 5.3.1
 
 - **Runtime exception.** Sinth is now licensed under the AGPL-3.0 with an additional permission ([RUNTIME-EXCEPTION.md](./RUNTIME-EXCEPTION.md)): sites built with Sinth, including the runtime code bundled into them, can be licensed however you like. Sinth itself stays under the AGPL. The exception covers all versions of Sinth.
