@@ -10,7 +10,8 @@ import { Project } from "../project/project";
 import { c, formatMs, log, printDiagnostic } from "../cli/ui";
 import { DEV_CLIENT } from "./client";
 import { FunctionsHost, sendResponse, toRequest } from "./functions";
-import { Asset, assetResponse, decodePath, displayHost, fileIfExists, listen, mimeType, routeCandidates, safeJoin, send, sendAsset, stripBase } from "./static";
+import { matchRedirect } from "../deploy/redirects";
+import { Asset, assetResponse, decodePath, displayHost, fileIfExists, forbiddenHost, hostAllowed, listen, mimeType, routeCandidates, safeJoin, send, sendAsset, stripBase } from "./static";
 
 interface PageHash {
   route: string;
@@ -52,7 +53,7 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
   let lastError: { title: string; message: string } | null = null;
   let hashes: PageHash[] = [];
   let building: Promise<void> | null = null;
-  let pending = false;
+  let pending: string | undefined | null = null;
 
   const broadcast = (msg: unknown): void => {
     const data = `data: ${JSON.stringify(msg)}\n\n`;
@@ -94,14 +95,15 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
 
   const queueRebuild = (file?: string): void => {
     if (building) {
-      pending = true;
+      pending = file;
       return;
     }
     building = rebuild(file).finally(() => {
       building = null;
-      if (pending) {
-        pending = false;
-        queueRebuild(file);
+      if (pending !== null) {
+        const next = pending;
+        pending = null;
+        queueRebuild(next);
       }
     });
   };
@@ -137,8 +139,12 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
 
   const functions = new FunctionsHost(project.root);
   const handle = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
+    if (!hostAllowed(req.headers.host, cfg.allowedHosts === true || [...cfg.allowedHosts, opts.host])) return forbiddenHost(res, req.headers.host);
     const urlPath = decodePath(req.url);
     if (!urlPath) return send(res, 400, "Bad request", "text/plain");
+    const sitePath = stripBase(urlPath, cfg.base);
+    const redirect = sitePath === null ? null : matchRedirect(cfg.redirects, sitePath, (req.url ?? "").match(/\?[^#]*/)?.[0]);
+    if (redirect) return send(res, redirect.status, "", "text/plain", { Location: redirect.location });
     if (urlPath === "/__sinth/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
       res.write(`data: ${JSON.stringify({ type: "init", pages: hashes, error: lastError, base: cfg.base })}\n\n`);
@@ -183,7 +189,8 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
 
   const timers = new Map<string, NodeJS.Timeout>();
   const onChange = (file: string): void => {
-    if (IGNORED.test(path.relative(project.root, file)) || file.startsWith(cfg.outDir) || !WATCHED_EXT.test(file)) return;
+    const isEnv = /^\.env(\..+)?$/.test(path.basename(file)) || path.basename(file) === ".dev.vars";
+    if (IGNORED.test(path.relative(project.root, file)) || file.startsWith(cfg.outDir) || (!WATCHED_EXT.test(file) && !isEnv)) return;
     clearTimeout(timers.get(file));
     timers.set(file, setTimeout(() => {
       timers.delete(file);
@@ -195,6 +202,12 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
       if (file.startsWith(functions.dir + path.sep)) {
         functions.invalidate();
         log.success(`${c.gray(path.relative(project.root, file).replace(/\\/g, "/"))} ${c.dim("reloaded")}`);
+        return;
+      }
+      if (isEnv) {
+        functions.invalidate();
+        log.success(`${c.gray(path.basename(file))} ${c.dim("reloaded")}`);
+        queueRebuild();
         return;
       }
       if (path.basename(file) === "sinth.config.json") {
@@ -240,10 +253,17 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
   process.on("SIGTERM", shutdown);
 }
 
+/**
+ * Opens a URL in the default browser. On Windows this avoids `cmd /c start`, which would interpret
+ * characters such as & and ^ in the URL as shell syntax.
+ */
 export function openBrowser(url: string): void {
+  if (!/^https?:\/\//.test(url)) return;
   import("child_process").then(cp => {
-    const cmd = process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
-    const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-    cp.spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
+    const [cmd, args] = process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]]
+      : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+    const child = cp.spawn(cmd, args, { stdio: "ignore", detached: true });
+    child.on("error", () => log.warn(`Could not open a browser. Open ${url} yourself.`));
+    child.unref();
   }).catch(() => undefined);
 }

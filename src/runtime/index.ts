@@ -25,7 +25,11 @@ export type Slots = Record<string, Render | undefined>;
 export type Component = (parent: ParentNode, props: Props, slots: Slots, fallthrough?: (el: Element) => void) => void;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const BLOCKED_URL = /^\s*(javascript|vbscript|data:(?!image\/(png|gif|jpe?g|webp|avif|svg\+xml)|video\/|audio\/))/i;
+// Browsers ignore control characters and whitespace inside a URL scheme ("java\tscript:"), so they are
+// removed before the check. Keep in sync with isUnsafeUrl() in compiler/html.ts.
+const BLOCKED_URL = /^(javascript:|vbscript:|data:(?!image\/(png|gif|jpe?g|webp|avif|svg\+xml)[;,]|video\/|audio\/))/i;
+// eslint-disable-next-line no-control-regex
+const URL_NOISE = /[\u0000- \u007f]/g;
 
 let rootOwner: Owner = createOwner(null);
 let current: Owner = rootOwner;
@@ -207,7 +211,7 @@ export function text(parent: ParentNode, get: Getter): void {
 }
 
 export function sanitizeUrl(value: string): string {
-  if (BLOCKED_URL.test(value)) {
+  if (BLOCKED_URL.test(value.replace(URL_NOISE, ""))) {
     if (devMode) console.warn(`[sinth] Blocked unsafe URL: ${value.slice(0, 64)}`);
     return "about:blank#blocked";
   }
@@ -428,6 +432,16 @@ export function model(node: HTMLElement, get: Getter, set: (v: unknown) => void,
     synced = v;
     set(v);
   };
+  if (tag === "SELECT" && typeof MutationObserver !== "undefined") {
+    // Options rendered by a loop, or loaded later, can appear after the value was applied: select the
+    // bound value again once an option for it exists.
+    const select = node as HTMLSelectElement;
+    new MutationObserver(() => {
+      if (synced === NONE) return;
+      const str = synced === null || synced === undefined ? "" : String(synced);
+      if (select.value !== str && Array.from(select.options).some(o => o.value === str)) select.value = str;
+    }).observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ["value"] });
+  }
   const evt = tag === "SELECT" || type === "range" || type === "color" || type === "date" || type === "file" ? "change" : "input";
   on(node, evt, () => {
     if (!isNumber) {
@@ -502,7 +516,10 @@ export function when(parent: ParentNode, branches: [Getter | null, Render][], op
       const leaving = Array.from(takeRange(start, end).childNodes);
       for (const n of leaving) {
         start.parentNode?.insertBefore(n, start);
-        if (n instanceof Element && options.transition) n.classList.add(`${options.transition}-leave`);
+        if (n instanceof Element && options.transition) {
+          n.classList.add(`${options.transition}-leave`);
+          n.setAttribute("inert", "");
+        }
       }
       setTimeout(() => {
         for (const n of leaving) n.parentNode?.removeChild(n);

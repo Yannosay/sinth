@@ -54,7 +54,7 @@ Main { Heading(level: 1) { heading } }
 
 The value is written as `<script type="application/ld+json">` in the head and escaped safely. An array adds several items.
 
-## Sitemap and robots.txt
+## Sitemap, robots.txt and llms.txt
 
 Set your public URL:
 
@@ -62,7 +62,9 @@ Set your public URL:
 { "site": "https://acme.dev" }
 ```
 
-The build then writes `sitemap.xml` with every page (404 pages excluded) and a `robots.txt` that points to it. A `robots.txt` in `public/` replaces the generated one. To keep a page out of search results, set `robots = "noindex"` on it.
+The build then writes `sitemap.xml` with every page (404 pages excluded) and a `robots.txt` that points to it. A `robots.txt` in `public/` replaces the generated one.
+
+It also writes an [`llms.txt`](https://llmstxt.org): the home page's title and description, then every page with its title, URL and description. AI assistants and answer engines use it to understand and cite a site. Write good `descr` metadata and this file is useful without any extra work; an `llms.txt` in `public/` replaces the generated one. To keep a page out of search results, set `robots = "noindex"` on it.
 
 ## Dynamic pages
 

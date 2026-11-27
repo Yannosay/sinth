@@ -24,6 +24,12 @@
         <code>{{ installCommand }}</code>
         <span class="hero__install-hint">{{ copied ? 'copied' : 'copy' }}</span>
       </button>
+      <dl class="hero__facts">
+        <div v-for="fact in facts" :key="fact.label" class="hero__fact">
+          <dt>{{ fact.value }}</dt>
+          <dd>{{ fact.label }}</dd>
+        </div>
+      </dl>
     </section>
 
     <section class="demo" aria-labelledby="demo-heading">
@@ -47,6 +53,25 @@
       </div>
     </section>
 
+    <section class="stack" aria-labelledby="stack-heading">
+      <div class="stack__container">
+        <h2 id="stack-heading" class="section-heading">One tool instead of a stack</h2>
+        <p class="section-body stack__intro">
+          A typical site combines a UI framework, a meta-framework, a router, a component kit, an SSG step and per-host
+          config files. In Sinth these are part of the language and the CLI, checked together and versioned together.
+        </p>
+        <dl class="stack__list">
+          <div v-for="row in stack" :key="row.need" class="stack__row">
+            <dt>{{ row.need }}</dt>
+            <dd>
+              <code v-if="row.code">{{ row.code }}</code>
+              {{ row.how }}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
     <section class="features" aria-labelledby="features-heading">
       <div class="features__container">
         <h2 id="features-heading" class="section-heading">Everything a website needs, in the box</h2>
@@ -62,13 +87,47 @@
 
     <section class="agents" aria-labelledby="agents-heading">
       <div class="agents__container">
-        <h2 id="agents-heading" class="section-heading">Teach your AI agent Sinth</h2>
+        <h2 id="agents-heading" class="section-heading">Built for working with AI agents</h2>
         <p class="section-body">
-          Paste this into Claude Code, Codex, Cursor or any coding agent. It installs the Sinth skill: the syntax, the
-          pitfalls, a check-after-every-change workflow and how to deploy.
+          A Sinth page is one short file with its markup, state and styles, so an agent reads less and changes less.
+          The compiler checks every edit and returns machine-readable fixes, and the Sinth skill teaches the agent to
+          build with <code>sinth:ui</code> instead of piling up custom code.
         </p>
-        <AgentPrompt class="agents__prompt" />
-        <NuxtLink to="/docs/tooling/ai-agents" class="text-link">How the skill works →</NuxtLink>
+        <AgentLogos class="agents__logos" />
+        <div class="agents__install">
+          <p class="agents__step">In a Sinth project</p>
+          <button type="button" class="hero__install agents__command" :aria-label="`Copy: ${skillCommand}`" @click="copySkill">
+            <code>{{ skillCommand }}</code>
+            <span class="hero__install-hint">{{ skillCopied ? 'copied' : 'copy' }}</span>
+          </button>
+          <p class="agents__step">Or ask your agent</p>
+          <AgentPrompt class="agents__prompt" />
+        </div>
+        <NuxtLink to="/docs/tooling/ai-agents" class="text-link">What the skill changes →</NuxtLink>
+      </div>
+    </section>
+
+    <section class="ide-section" aria-labelledby="ide-heading">
+      <div class="ide-section__container">
+        <div class="ide-section__text">
+          <h2 id="ide-heading" class="section-heading">Sinth IDE</h2>
+          <p class="section-body">
+            A desktop editor made for Sinth. Open a folder and press Run: it finds the project's compiler, starts the dev
+            server in its own terminal and opens your browser. Errors from <code>sinth check</code> appear inline on every
+            save, and completions know every element, <code>sinth:ui</code> component and attribute.
+          </p>
+          <ul class="ide-section__points">
+            <li>Run, Build, Preview, Check and Deploy from the toolbar or the command palette</li>
+            <li>Installs Sinth compilers with verified checksums, no setup needed</li>
+            <li>Signed automatic updates for Windows, macOS and Linux</li>
+          </ul>
+          <div class="ide-section__cta">
+            <UiButton href="https://github.com/Yannosay/sinth-ide/releases/latest" variant="filled">Download Sinth IDE</UiButton>
+            <UiButton href="/docs/tooling/editors" :external="false" variant="ghost">VS Code extension</UiButton>
+          </div>
+          <p class="ide-section__note">Free and open source. Early development: feedback is welcome on GitHub.</p>
+        </div>
+        <IdeShowcase class="ide-section__shot" />
       </div>
     </section>
 
@@ -93,19 +152,47 @@ import { ref } from 'vue'
 import UiButton from '~/components/ui/Button.vue'
 import SinthPlayground from '~/components/playground/SinthPlayground.vue'
 import AgentPrompt from '~/components/AgentPrompt.vue'
+import AgentLogos from '~/components/AgentLogos.vue'
+import IdeShowcase from '~/components/IdeShowcase.vue'
 
 const installCommand = 'npx @yannosay/sinth create my-site'
+const skillCommand = 'npx sinth skill'
 const copied = ref(false)
+const skillCopied = ref(false)
 
-async function copyInstall(): Promise<void> {
+async function copyText(text: string, flag: typeof copied): Promise<void> {
   try {
-    await navigator.clipboard.writeText(installCommand)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 1800)
+    await navigator.clipboard.writeText(text)
+    flag.value = true
+    setTimeout(() => { flag.value = false }, 1800)
   } catch {
-    copied.value = false
+    flag.value = false
   }
 }
+
+const copyInstall = (): Promise<void> => copyText(installCommand, copied)
+const copySkill = (): Promise<void> => copyText(skillCommand, skillCopied)
+
+/** Measured on the counter example and the default build; see the README and the sinth:ui docs. */
+const facts = [
+  { value: '3.5 kB', label: 'JavaScript for an interactive page, runtime and router included' },
+  { value: '2 kB', label: 'for static pages, which still prerender and navigate instantly' },
+  { value: '28', label: 'accessible UI components built in' },
+  { value: '1 command', label: 'to deploy to Cloudflare, Vercel, Netlify or GitHub Pages' }
+]
+
+const stack = [
+  { need: 'Components and reactivity', code: '.sinth', how: 'files with markup, state, functions and scoped styles' },
+  { need: 'Type checking', code: 'sinth check', how: 'names, types, arguments and component parameters across the project' },
+  { need: 'Routing and prerendering', code: 'pages/', how: 'every file is a prerendered page; links navigate without reloads' },
+  { need: 'UI kit', code: 'sinth:ui', how: 'forms, modals, tabs, tables, toasts and more, keyboard accessible' },
+  { need: 'API routes', code: 'functions/', how: 'standard Fetch API handlers, local and on Cloudflare' },
+  { need: 'Config and secrets', code: 'sinth:env', how: 'public variables checked at compile time; secrets stay on the server' },
+  { need: 'Redirects and headers', code: 'sinth.config.json', how: 'written once, translated for every host' },
+  { need: 'SEO and AI discovery', code: 'title = …', how: 'meta tags, sitemap, robots.txt, JSON-LD and llms.txt from page metadata' },
+  { need: 'Security', how: 'escaped output, URL sanitizing, CSP without inline scripts and security headers by default' },
+  { need: 'Deploys', code: 'sinth deploy', how: 'Cloudflare Pages or Workers, Vercel, Netlify; GitHub Pages and any static host' }
+]
 
 const demoCode = `var str name = "world"
 var num count = 0
@@ -126,13 +213,13 @@ style {
 const features = [
   { title: 'Reactive by design', body: 'Assign to a variable and exactly the affected parts of the page update. Arrays and objects can be changed in place.', href: '/docs/language/variables', link: 'Variables and state' },
   { title: 'Checked before it runs', body: 'Unknown names, wrong types, missing arguments and missing component props are compile errors with a code frame and a hint.', href: '/docs/reference/errors', link: 'Error reference' },
-  { title: 'Prerendered pages', body: 'Every page is rendered to HTML at build time. Content shows without waiting for JavaScript, and search engines see the full page.', href: '/docs/production/performance', link: 'Rendering and performance' },
-  { title: 'Instant navigation', body: 'Links are prefetched and swapped in place without full reloads, while every page stays a real HTML file.', href: '/docs/getting-started/pages-and-routing', link: 'Pages and routing' },
+  { title: 'Prerendered pages', body: 'Every page is HTML at build time, so content shows before any JavaScript runs. Links are prefetched and swapped in place without reloads.', href: '/docs/production/performance', link: 'Rendering and performance' },
   { title: 'Full stack', body: 'API routes in functions/ use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages or Workers unchanged.', href: '/docs/full-stack/functions', link: 'Server functions' },
-  { title: 'Components everywhere', body: 'Scoped styles, slots, two-way bindings and a built-in UI library. Export any component as a web component for other sites.', href: '/docs/components/components', link: 'Components' },
+  { title: 'A real component library', body: '28 sinth:ui components: forms, modals with focus trapping, tabs, sortable tables, toasts, menus. Themed with a few CSS variables, dark mode included.', href: '/docs/components/sinth-ui', link: 'sinth:ui' },
+  { title: 'Components everywhere', body: 'Scoped styles, slots and two-way bindings. Export any component as a web component and use it in plain HTML sites.', href: '/docs/components/custom-elements', link: 'Custom elements' },
   { title: 'Hot reload that keeps state', body: 'Save a file and the page updates without losing form input or variables. Errors appear in an overlay with the exact location.', href: '/docs/tooling/dev-server', link: 'Dev server' },
-  { title: 'Secure defaults', body: 'No eval, escaped output, no inline event handlers, and a Content Security Policy without inline scripts plus security headers out of the box.', href: '/docs/production/security', link: 'Security' },
-  { title: 'One-command deploys', body: 'sinth deploy ships to Cloudflare Pages or Workers, Vercel and Netlify. GitHub Pages and any static host work too.', href: '/docs/production/deploy', link: 'Deploying' }
+  { title: 'Secure defaults', body: 'No eval, escaped output, sanitized URLs, a CSP without inline scripts and security headers. The dev server blocks DNS rebinding.', href: '/docs/production/security', link: 'Security' },
+  { title: 'Production config, once', body: 'Environment variables checked at compile time, plus redirects and headers that work the same locally and on every host.', href: '/docs/full-stack/environment', link: 'Environment variables' },
 ]
 
 const siteUrl = String(useRuntimeConfig().public.siteUrl)
@@ -431,4 +518,70 @@ useHead({
     color: inherit;
   }
 }
+
+.hero__facts {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1.5rem;
+  width: min(56rem, 100%);
+  margin-top: 3rem;
+
+  dt { font-size: 1.35rem; font-weight: 600; color: var(--fg); }
+  dd { margin: 0.25rem 0 0; font-size: 0.8rem; line-height: 1.5; color: var(--fg-muted); }
+}
+
+.stack, .ide-section {
+  border-top: 1px solid var(--line-soft);
+  padding: clamp(4rem, 8vw, 6rem) 1.5rem;
+}
+
+.stack__container { @include page.container; }
+.stack__intro { max-width: 60ch; }
+
+.stack__list {
+  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 0 2.5rem;
+}
+
+.stack__row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 0.9rem;
+
+  dt { font-weight: 600; color: var(--fg); }
+  dd { margin: 0; color: var(--fg-muted); }
+  code { color: var(--accent-bright); margin-right: 0.35rem; }
+}
+
+.agents__logos { margin-top: 2rem; }
+.agents__install { margin-top: 2rem; }
+.agents__step { margin-top: 1.25rem; font-size: 0.8rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.agents__command { margin-top: 0.5rem; }
+
+.ide-section__container {
+  @include page.container;
+  display: grid;
+  gap: 3rem;
+  align-items: center;
+
+  @media (min-width: 1100px) { grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); }
+}
+
+.ide-section__points {
+  margin: 1.25rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--fg-muted);
+}
+
+.ide-section__cta { margin-top: 1.75rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.ide-section__note { margin-top: 1rem; font-size: 0.8rem; color: var(--fg-dim); }
+.ide-section__shot { min-width: 0; }
 </style>

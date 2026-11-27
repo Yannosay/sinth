@@ -130,7 +130,8 @@ function add(obj product) { items.push(product) }
 ```sinth
 import { Card } from "../components/Card.sinth"
 import Card from "/components/Card.sinth"     -- "/" = the source folder (project root or app/)
-import { Button, Modal } from "sinth:ui"       -- built-in component library
+import { Button, Modal } from "sinth:ui"       -- built-in component library (see ui.md)
+import { PUBLIC_API_URL } from "sinth:env"     -- PUBLIC_ variables from .env, inlined at build
 import confetti from "canvas-confetti"         -- npm packages are bundled
 import data from "./data.json"                 -- inlined at build time
 import "./styles/reset.css"

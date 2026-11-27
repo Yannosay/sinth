@@ -9,6 +9,7 @@ import { MetaValue } from "../compiler/html";
 import { parseSinth } from "../compiler/parser";
 import { ScssCompiler } from "../compiler/style";
 import { SinthConfig, staticDirPath } from "./config";
+import { PUBLIC_PREFIX, publicEnv } from "./env";
 
 export const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 export const RUNTIME_PATH = path.join(PACKAGE_ROOT, "dist", "runtime", "index.js");
@@ -223,6 +224,17 @@ export class Project {
       }
       source = mapped;
       decl = { ...decl, kind: "sinth", source, sideEffect: true };
+    }
+    if (source === "sinth:env") {
+      const env = publicEnv(this.root, this.dev ? "development" : "production");
+      for (const s of decl.named) {
+        if (s.name in env) continue;
+        const near = suggest(s.name, Object.keys(env));
+        throw new SinthError("E0607", `Environment variable '${s.name}' is not set`, s.loc, near ? `Did you mean '${near}'?`
+          : !s.name.startsWith(PUBLIC_PREFIX) ? `Only variables starting with ${PUBLIC_PREFIX} are available in pages, so secrets never reach the browser. Rename it to ${PUBLIC_PREFIX}${s.name}`
+          : `Add ${s.name}=... to .env (or .env.production for builds), or set it in the environment of the build`);
+      }
+      return { decl: { ...decl, kind: "json" }, kind: "json", specifier: "sinth:env", json: env };
     }
     if (source.startsWith("sinth:")) {
       const name = source.slice(6);

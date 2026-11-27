@@ -115,6 +115,28 @@ export function listen(server: http.Server, port: number, host: string, attempts
   });
 }
 
+/**
+ * Guards the local servers against DNS rebinding: a page on another site cannot reach them through a
+ * domain it controls. IP addresses, localhost and *.localhost are always allowed; other names (a
+ * tunnel, a custom dev domain) need "allowedHosts" in sinth.config.json, or `true` to allow any.
+ */
+export function hostAllowed(hostHeader: string | undefined, allowed: string[] | true): boolean {
+  if (allowed === true || !hostHeader) return true;
+  const host = hostHeader.replace(/:\d+$/, "").replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || /^[\d.]+$/.test(host) || host.includes(":")) return true;
+  return allowed.some(a => {
+    const name = a.toLowerCase();
+    return name.startsWith(".") ? host === name.slice(1) || host.endsWith(name) : host === name;
+  });
+}
+
+export function forbiddenHost(res: http.ServerResponse, host: string | undefined): void {
+  send(res, 403, `Blocked request for host "${host}". Add it to "allowedHosts" in sinth.config.json to allow it.`, "text/plain; charset=utf-8");
+}
+
+/** Largest request body the local servers accept (functions/ requests). */
+export const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
 export function displayHost(host: string): string {
   return host === "127.0.0.1" || host === "::1" || host === "0.0.0.0" || host === "::" ? "localhost" : host;
 }

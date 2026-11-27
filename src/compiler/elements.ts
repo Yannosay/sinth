@@ -1,3 +1,4 @@
+import type { ElementNode, Expr } from "./ast";
 export interface ElementInfo {
   tag: string;
   className?: string;
@@ -85,4 +86,14 @@ export function attrNameToHtml(name: string): string {
     playsInline: "playsinline", referrerPolicy: "referrerpolicy", fetchPriority: "fetchpriority", accessKey: "accesskey",
   };
   return map[name] ?? name;
+}
+
+/**
+ * A capitalized name written as a child, like `P { API_URL }`, parses as an element. When it is not
+ * an element but a value in scope (a constant, an import from sinth:env, ...), it is text instead.
+ */
+export function bareValueRef(node: ElementNode, isValue: (name: string) => boolean): Expr | null {
+  if (node.attrs.length || node.children.length || node.slots.length || node.hasBody || node.name.includes(".")) return null;
+  if (ELEMENTS[node.name] || SPECIAL_ELEMENTS.has(node.name) || !isValue(node.name)) return null;
+  return { k: "id", name: node.name, loc: node.loc };
 }

@@ -16,6 +16,8 @@ my-site/
 ├─ components/         reusable components (any folder name works)
 ├─ public/             copied to the output root as-is (robots.txt, favicon.ico, ...)
 ├─ assets/             copied to dist/assets/
+├─ functions/          server routes (optional, see Server functions)
+├─ .env                environment variables (optional, see Environment variables)
 ├─ sinth.config.json   optional configuration
 └─ package.json
 ```

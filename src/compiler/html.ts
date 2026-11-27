@@ -9,6 +9,14 @@ export function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const UNSAFE_URL = /^(javascript:|vbscript:|data:(?!image\/(png|gif|jpe?g|webp|avif|svg\+xml)[;,]|video\/|audio\/))/i;
+
+/** True for URLs that run script when followed (javascript:, vbscript:, data:text/html, ...). Mirrors the runtime check. */
+export function isUnsafeUrl(value: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return UNSAFE_URL.test(value.replace(/[\u0000- \u007f]/g, ""));
+}
+
 export function hashString(s: string): string {
   let h1 = 0x811c9dc5;
   let h2 = 0x01000193;

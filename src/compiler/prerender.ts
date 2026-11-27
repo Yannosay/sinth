@@ -1,6 +1,6 @@
 import { Attr, ComponentDecl, ElementNode, Expr, FunctionDecl, MetaEntry, Node, SinthFile, Stmt, VarDecl } from "./ast";
-import { attrNameToHtml, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, VOID_TAGS } from "./elements";
-import { escapeAttr, escapeHtml, hashString } from "./html";
+import { attrNameToHtml, bareValueRef, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, URL_ATTRS, VOID_TAGS } from "./elements";
+import { escapeAttr, escapeHtml, hashString, isUnsafeUrl } from "./html";
 import { tokenize } from "./lexer";
 import { Parser } from "./parser";
 import { compileStyle } from "./style";
@@ -460,8 +460,10 @@ export class Prerenderer {
         }
         return escapeHtml(toText(v));
       }
-      case "element":
-        return this.renderElement(node, scope);
+      case "element": {
+        const value = bareValueRef(node, n => !this.components(scope.file).has(n) && !!scope.env.find(n));
+        return value ? this.renderNode({ k: "text", expr: value, loc: node.loc }, scope) : this.renderElement(node, scope);
+      }
       case "if": {
         for (const br of node.branches) {
           const t = br.test ? this.eval(br.test, scope.env, scope.file) : true;
@@ -598,7 +600,7 @@ export class Prerenderer {
       const name = attrNameToHtml(a.name);
       if (/^on/i.test(name)) continue;
       const str = v === true ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-      attrs.set(name, /^(href|src|action|formaction|poster)$/.test(name) && /^\s*(javascript|vbscript):/i.test(str) ? "about:blank#blocked" : str);
+      attrs.set(name, URL_ATTRS.has(name) && isUnsafeUrl(str) ? "about:blank#blocked" : str);
     }
     const cls = classes.filter(Boolean).join(" ");
     if (cls) attrs.set("class", cls);

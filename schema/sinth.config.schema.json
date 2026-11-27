@@ -30,6 +30,32 @@
             "headers": { "type": "boolean", "default": true, "description": "Write a _headers file" },
             "csp": { "type": ["boolean", "string"], "default": true, "description": "true (generated), false, or a custom Content-Security-Policy" }
           }
+        },
+        "redirects": {
+          "type": "object",
+          "description": "Redirects applied by sinth dev, sinth preview and every platform. Keys are paths (with :params or a * splat), values a target or { to, status }",
+          "propertyNames": { "pattern": "^/" },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["to"],
+                "additionalProperties": false,
+                "properties": { "to": { "type": "string" }, "status": { "enum": [301, 302, 303, 307, 308], "default": 301 } }
+              }
+            ]
+          }
+        },
+        "headers": {
+          "type": "object",
+          "description": "Extra response headers by path pattern (* matches anything), e.g. { \"/api/*\": { \"Cache-Control\": \"no-store\" } }",
+          "propertyNames": { "pattern": "^/" },
+          "additionalProperties": { "type": "object", "additionalProperties": { "type": "string" } }
+        },
+        "allowedHosts": {
+          "description": "Host names the dev and preview servers answer to besides localhost and IP addresses (a leading dot allows subdomains), or true for any",
+          "oneOf": [{ "type": "boolean", "const": true }, { "type": "array", "items": { "type": "string" } }]
         }
       }
     }
@@ -39,6 +65,7 @@
     "$schema": { "type": "string" },
     "platform": {}, "srcDir": {}, "outDir": {}, "pagesDir": {}, "publicDir": {}, "staticDirs": {}, "libraryPaths": {}, "site": {}, "base": {},
     "minify": {}, "sourcemap": {}, "port": {}, "host": {}, "previewPort": {}, "target": {}, "router": {}, "security": {},
+    "redirects": {}, "headers": {}, "allowedHosts": {},
     "cloudflare": {
       "type": "object",
       "additionalProperties": false,

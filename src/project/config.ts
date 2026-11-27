@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { SinthError } from "../compiler/diagnostics";
+import { HeaderRules, Redirect, REDIRECT_STATUSES } from "../deploy/redirects";
 
 export interface CloudflareConfig {
   projectName?: string;
@@ -37,9 +38,15 @@ export interface SinthConfig {
   router: boolean;
   security: SecurityConfig;
   cloudflare: CloudflareConfig;
+  /** Normalized from the config's object form (`{ "/old": "/new" }`). */
+  redirects: Redirect[];
+  headers: HeaderRules;
+  /** Extra host names the dev and preview servers answer to (DNS rebinding protection), or true for any. */
+  allowedHosts: string[] | true;
 }
 
-type Partialish = Partial<Omit<SinthConfig, "security" | "cloudflare">> & {
+type Partialish = Partial<Omit<SinthConfig, "security" | "cloudflare" | "redirects">> & {
+  redirects?: Record<string, string | { to: string; status?: number }>;
   security?: Partial<SecurityConfig>;
   cloudflare?: CloudflareConfig;
   development?: Partialish;
@@ -67,11 +74,14 @@ export const DEFAULT_CONFIG: SinthConfig = {
   router: true,
   security: { headers: true, csp: true },
   cloudflare: {},
+  redirects: [],
+  headers: {},
+  allowedHosts: [],
 };
 
 const KNOWN_KEYS = new Set([
   "platform", "srcDir", "outDir", "pagesDir", "publicDir", "staticDirs", "libraryPaths", "site", "base", "minify", "sourcemap", "port", "host",
-  "previewPort", "target", "router", "security", "cloudflare", "development", "production", "$schema",
+  "previewPort", "target", "router", "security", "cloudflare", "development", "production", "$schema", "redirects", "headers", "allowedHosts",
   "sharedRuntime", "inlineJS", "inlineCSS",
 ]);
 
@@ -99,6 +109,16 @@ function validate(raw: Record<string, unknown>, file: string, warnings: string[]
   for (const k of ["port", "previewPort"]) check(k, "a port number (1-65535)", v => Number.isInteger(v) && (v as number) > 0 && (v as number) < 65536);
   check("platform", `one of ${PLATFORMS.map(p => `"${p}"`).join(", ")}`, v => PLATFORMS.includes(v as Platform));
   check("site", "an absolute URL like https://example.com", v => typeof v === "string" && /^https?:\/\/[^\s]+$/.test(v));
+  const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+  check("redirects", 'an object like { "/old": "/new" } (status 301, 302, 303, 307 or 308)', v => isObj(v) && Object.entries(v).every(([from, to]) =>
+    from.startsWith("/") && (typeof to === "string" || (isObj(to) && typeof to.to === "string" && (to.status === undefined || REDIRECT_STATUSES.includes(to.status as number))))));
+  check("allowedHosts", "an array of host names or true", v => v === true || (Array.isArray(v) && v.every(x => typeof x === "string")));
+  check("headers", 'an object like { "/api/*": { "Cache-Control": "no-store" } }', v => isObj(v) && Object.entries(v).every(([p, h]) =>
+    p.startsWith("/") && isObj(h) && Object.entries(h).every(([k, x]) => /^[A-Za-z0-9-]+$/.test(k) && typeof x === "string" && !/[\r\n]/.test(x))));
+}
+
+function normalizeRedirects(raw: Partialish["redirects"]): Redirect[] {
+  return Object.entries(raw ?? {}).map(([from, to]) => (typeof to === "string" ? { from, to, status: 301 } : { from, to: to.to, status: to.status ?? 301 }));
 }
 
 export function loadConfig(root: string, mode: "development" | "production"): LoadedConfig {
@@ -127,6 +147,8 @@ export function loadConfig(root: string, mode: "development" | "production"): Lo
     ...stripNested(envOverrides),
     security: { ...DEFAULT_CONFIG.security, ...(raw.security ?? {}), ...(envOverrides.security ?? {}) },
     cloudflare: { ...(raw.cloudflare ?? {}) },
+    redirects: normalizeRedirects({ ...(raw.redirects ?? {}), ...(envOverrides.redirects ?? {}) }),
+    headers: { ...(raw.headers ?? {}), ...(envOverrides.headers ?? {}) },
   };
   if (mode === "production" && raw.minify === undefined && envOverrides.minify === undefined) merged.minify = true;
   if (mode === "development" && raw.sourcemap === undefined && envOverrides.sourcemap === undefined) merged.sourcemap = true;
@@ -179,7 +201,7 @@ export function staticDirPath(config: SinthConfig, dir: string): string {
 function stripNested(raw: Partialish): Partial<SinthConfig> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) {
-    if (k === "development" || k === "production" || k === "security" || k === "cloudflare" || k === "$schema" || LEGACY_KEYS.has(k)) continue;
+    if (k === "development" || k === "production" || k === "security" || k === "cloudflare" || k === "redirects" || k === "headers" || k === "$schema" || LEGACY_KEYS.has(k)) continue;
     if (v !== undefined) out[k] = v;
   }
   return out as Partial<SinthConfig>;

@@ -193,6 +193,12 @@
           "title": "Server functions",
           "order": 2,
           "description": "API routes and server code in functions/, from development to Cloudflare Pages."
+        },
+        {
+          "slug": "environment",
+          "title": "Environment variables",
+          "order": 3,
+          "description": "Public build-time variables for pages and secrets for server functions."
         }
       ]
     },

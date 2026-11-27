@@ -27,7 +27,7 @@ export function templateFiles(template: TemplateName, name: string, version: str
       scripts: { dev: "sinth dev", build: "sinth build", preview: "sinth preview", check: "sinth check", deploy: "sinth deploy" },
       devDependencies: { "@yannosay/sinth": `^${version.replace(/-.*$/, "")}` },
     }, null, 2) + "\n",
-    ".gitignore": "node_modules/\ndist/\n.sinth/\n.wrangler/\n.dev.vars\n.env\n",
+    ".gitignore": "node_modules/\ndist/\n.sinth/\n.wrangler/\n.vercel/\n.dev.vars\n.env\n.env.local\n.env.*.local\n",
     "README.md": `# ${name}\n\nBuilt with [Sinth](https://sinth.yannosay.com).\n\n\`\`\`bash\nnpm install\nnpm run dev      # http://localhost:3000\nnpm run build    # production build in dist/\nnpm run deploy   # deploy to Cloudflare Pages\n\`\`\`\n`,
     "public/robots.txt": "User-agent: *\nAllow: /\n",
   };

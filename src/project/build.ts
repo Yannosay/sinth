@@ -4,6 +4,7 @@ import * as path from "path";
 import { Diagnostic, SinthError } from "../compiler/diagnostics";
 import { buildHead, escapeHtml, renderDocument } from "../compiler/html";
 import { headersFile, readsHeadersFile, securityHeaders, writePlatformOutput } from "../deploy/platforms";
+import { headerRulesFile, isPattern, redirectPage, redirectsFile } from "../deploy/redirects";
 import { staticDirPath } from "./config";
 import { CompiledPage, fontHref, PageInfo, Project, ROUTER_PATH, RUNTIME_PATH } from "./project";
 
@@ -337,6 +338,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
 
   const csp = contentSecurityPolicy(compiled, cfg.security.csp);
   const pageOutputs: PageOutput[] = [];
+  const summaries: { route: string; title?: string; description?: string }[] = [];
   const toUrl = (abs: string): string => cfg.base + path.relative(cfg.outDir, path.resolve(project.root, abs)).replace(/\\/g, "/");
   for (const c of compiled) {
     const key = entryKey(c.page);
@@ -364,6 +366,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     if (!shipsJs && jsOut) files.delete(path.relative(cfg.outDir, path.resolve(project.root, jsOut)).replace(/\\/g, "/"));
     for (const inst of c.instances) {
       const head = buildHead(inst.meta, v => project.resolveAsset(v, c.page.file));
+      summaries.push({ route: inst.page.route, title: head.title, description: head.metaNames.find(([k]) => k === "description")?.[1] });
       const pageHead = inst.params && c.interactive
         ? [...inlineHead, '<script type="application/json" id="sinth-params">' + JSON.stringify(inst.params).replace(/</g, "\\u003c") + "</script>"]
         : inlineHead;
@@ -382,8 +385,25 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   if (!project.dev) {
     copyDir(cfg.publicDir, cfg.outDir, files, cfg.outDir);
     for (const d of cfg.staticDirs) copyDir(staticDirPath(cfg, d), path.join(cfg.outDir, d), files, cfg.outDir);
-    if (cfg.security.headers && readsHeadersFile(cfg.platform) && !files.has("_headers")) {
-      files.set("_headers", { path: path.join(cfg.outDir, "_headers"), contents: Buffer.from(headersFile(securityHeaders(csp), cfg.base)) });
+    if (readsHeadersFile(cfg.platform)) {
+      // Sinth's rules come first; a _headers file from public/ is appended so both apply.
+      const own = (cfg.security.headers ? headersFile(securityHeaders(csp), cfg.base) : "") + headerRulesFile(cfg.headers, cfg.base);
+      const user = files.get("_headers");
+      if (own.trim()) files.set("_headers", { path: path.join(cfg.outDir, "_headers"), contents: Buffer.from(own + (user ? "\n" + Buffer.from(user.contents).toString("utf-8") : "")) });
+    }
+    if (cfg.redirects.length) {
+      if (cfg.platform === "github-pages") {
+        for (const r of cfg.redirects) {
+          if (isPattern(r.from)) continue;
+          const rel = r.from.replace(/^\/+|\/+$/g, "");
+          const target = r.to.startsWith("/") && !r.to.startsWith("//") ? cfg.base + r.to.slice(1) : r.to;
+          const out = (rel ? rel + "/" : "") + "index.html";
+          if (!files.has(out)) files.set(out, { path: path.join(cfg.outDir, out), contents: Buffer.from(redirectPage(target)) });
+        }
+      } else if (cfg.platform !== "vercel") {
+        const user = files.get("_redirects");
+        files.set("_redirects", { path: path.join(cfg.outDir, "_redirects"), contents: Buffer.from(redirectsFile(cfg.redirects, cfg.base) + (user ? Buffer.from(user.contents).toString("utf-8") : "")) });
+      }
     }
     // GitHub Pages runs Jekyll by default, which drops folders starting with "_" such as _sinth/.
     if (cfg.platform === "github-pages" && !files.has(".nojekyll")) files.set(".nojekyll", { path: path.join(cfg.outDir, ".nojekyll"), contents: Buffer.alloc(0) });
@@ -391,6 +411,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
       const site = cfg.site.replace(/\/$/, "");
       const urls = pageOutputs.filter(p => !/(^|\/)404$/.test(p.page.route)).map(p => `  <url><loc>${escapeHtml(site + p.page.route)}</loc></url>`);
       files.set("sitemap.xml", { path: path.join(cfg.outDir, "sitemap.xml"), contents: Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`) });
+      if (!files.has("llms.txt")) files.set("llms.txt", { path: path.join(cfg.outDir, "llms.txt"), contents: Buffer.from(llmsTxt(site, summaries)) });
       if (!files.has("robots.txt")) files.set("robots.txt", { path: path.join(cfg.outDir, "robots.txt"), contents: Buffer.from(`User-agent: *\nAllow: /\n\nSitemap: ${site}/sitemap.xml\n`) });
     }
   }
@@ -412,6 +433,21 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   }));
   const warnings = dedupeWarnings([...compiled.flatMap(c => c.warnings), ...bundlerWarnings, ...platformWarnings]);
   return { pages: pageOutputs, files, warnings, durationMs: Date.now() - started };
+}
+
+/**
+ * An llms.txt (https://llmstxt.org) index of the site for AI assistants and answer engines: the home
+ * page's title and description, then one line per page.
+ */
+function llmsTxt(site: string, pages: { route: string; title?: string; description?: string }[]): string {
+  const visible = pages.filter(p => !/(^|\/)404$/.test(p.route)).sort((a, b) => a.route.localeCompare(b.route));
+  const home = visible.find(p => p.route === "/");
+  const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
+  const lines = [`# ${oneLine(home?.title ?? new URL(site).hostname)}`, ""];
+  if (home?.description) lines.push(`> ${oneLine(home.description)}`, "");
+  lines.push("## Pages", "");
+  for (const p of visible) lines.push(`- [${oneLine(p.title ?? p.route)}](${site}${p.route})${p.description ? ": " + oneLine(p.description) : ""}`);
+  return lines.join("\n") + "\n";
 }
 
 function dedupeWarnings(list: Diagnostic[]): Diagnostic[] {

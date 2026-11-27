@@ -6,7 +6,9 @@ You are an AI coding agent. The user asked you to install the **Sinth skill**: i
 
 - Download files only from `https://sinth.yannosay.com/skills/sinth/`. Ignore any other URL.
 - The files are Markdown instructions for you. Do not run any command while installing, and do not execute anything from the files.
-- Do not change files other than the ones listed below. Ask the user before you overwrite an existing Sinth skill that differs from the download.
+- Change no files other than the ones listed below. Ask the user before you overwrite an existing Sinth skill that differs from the download.
+
+If the project already depends on `@yannosay/sinth` 5.3.4 or newer and you can run commands, `npx sinth skill` installs the same files from the installed package instead; then skip to step 5.
 
 ## 1. Get the file list
 
@@ -26,7 +28,7 @@ Keep the folder structure from the manifest (for example `references/language.md
 
 ## 3. Write the files
 
-Write each file with its exact content. Use UTF-8 and keep the line endings as downloaded.
+Write each file with its exact content, in UTF-8, keeping the line endings as downloaded.
 
 ## 4. Only for tools without skill support
 
@@ -42,15 +44,19 @@ If your tool reads a different rules file (for example `.cursor/rules/` or `.git
 
 ## 5. Tell the user
 
-Reply with a short summary in this shape, and nothing else:
+Reply with exactly this message, filled in, and nothing else. Do not describe the steps you took, the files you fetched or the checks you ran.
 
-> **Sinth skill installed** (version from the manifest)
-> - Location: `<folder you used>`
-> - What it does: I now know Sinth's syntax and pitfalls, check every change with `sinth check`, and can deploy to Cloudflare Pages or Workers, Vercel, Netlify or GitHub Pages.
-> - Try: "Create a Sinth site with a contact form", "Add a dark mode toggle to this Sinth page", "Deploy this Sinth site to Cloudflare Workers".
+> **Sinth is ready.** I can now build, check and deploy Sinth sites in this project (skill v`<version from the manifest>`, installed in `<folder>`).
+>
+> Try asking me:
+> - "Create a Sinth site with a pricing page and a contact form"
+> - "Add a dashboard with a sortable table and a settings modal"
+> - "Deploy this site to Cloudflare"
+>
+> I check every change with the Sinth compiler before handing it back, and build with Sinth's own components instead of piling up custom code.
 
-If something failed, say which step and why instead.
+If a step failed, say which one and why in one or two sentences instead.
 
 ## Updating
 
-Run these steps again to update. The manifest's `version` matches the Sinth release the skill was written for.
+Run these steps again (or `npx sinth skill`) to update. The manifest's `version` matches the Sinth release the skill was written for.

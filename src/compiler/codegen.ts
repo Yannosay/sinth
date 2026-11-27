@@ -3,7 +3,7 @@ import {
   TypeRef, VarDecl,
 } from "./ast";
 import { DiagnosticBag, levenshtein, Loc, SinthError, suggest } from "./diagnostics";
-import { attrNameToHtml, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, SPECIAL_ELEMENTS, VOID_TAGS } from "./elements";
+import { attrNameToHtml, bareValueRef, BOOLEAN_ATTRS, ELEMENTS, INLINE_STYLE_PROPS, SPECIAL_ELEMENTS, VOID_TAGS } from "./elements";
 import { JS_GLOBALS, RUNTIME_GLOBALS } from "./globals";
 import { isStatementExpr, Parser } from "./parser";
 import { tokenize } from "./lexer";
@@ -532,8 +532,10 @@ class ModuleCompiler {
     switch (node.k) {
       case "text":
         return this.genText(node.expr, parent, ctx);
-      case "element":
-        return this.genElement(node, parent, ctx, roots);
+      case "element": {
+        const value = bareValueRef(node, n => { const b = ctx.scope.lookup(n); return !!b && b.kind !== "component"; });
+        return value ? this.genText(value, parent, ctx) : this.genElement(node, parent, ctx, roots);
+      }
       case "if":
         return this.genIf(node, parent, ctx, !!roots);
       case "for":

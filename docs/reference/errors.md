@@ -32,6 +32,7 @@ description: Every error and warning code.
 | E0402 | SCSS compile error |
 | E0500, E0501 | Script block syntax error / `import` inside a component script |
 | E0600–E0609 | Import errors (file not found, unknown export, circular import, ...) |
+| E0607 | Environment variable imported from `sinth:env` is not set, or does not start with `PUBLIC_` |
 | E0700 | Metadata value can't be computed at build time |
 | E0701 | Metadata value is an object or array |
 | E0710 | Dynamic route without `paths` |
@@ -43,12 +44,14 @@ description: Every error and warning code.
 | E0801 | Output folder not created by Sinth |
 | E0802 | No pages or custom elements found |
 | E0803 | A file in `functions/` failed to build |
+| E0804 | Request body sent to `functions/` in `sinth dev` or `sinth preview` is larger than 64 MB |
 | E0899 | Internal compiler error (please report it) |
-| E0900–E0903 | Invalid configuration (including an unknown `platform` or a missing `srcDir`) |
+| E0900–E0903 | Invalid configuration (including an unknown `platform`, a missing `srcDir`, or malformed `redirects`, `headers` or `allowedHosts`) |
 | E1000 | No build to preview |
 | E1100–E1106 | Deployment errors (E1106: the platform has no `sinth deploy` upload, e.g. GitHub Pages) |
 | E1200–E1202 | Invalid command-line options |
 | E1300–E1305 | `new`/`create` errors |
+| E1310 | The Sinth skill is missing from the installed package (`sinth skill`) |
 | W0101 | Markup outside a component in a module file |
 | W0201 | `int` is deprecated |
 | W0301 | Unescaped dynamic HTML |
@@ -58,3 +61,4 @@ description: Every error and warning code.
 | W0401 | `null` assigned to a non-nullable variable |
 | W0800 | Bundler warning |
 | W0810 | `functions/` exists but the `platform` cannot run server functions |
+| W0811 | Redirect patterns or custom headers on a platform that cannot apply them (GitHub Pages) |

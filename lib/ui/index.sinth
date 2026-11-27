@@ -1,14 +1,43 @@
 -- sinth:ui: the official Sinth component library.
--- Usage: import { Button, Card } from "sinth:ui"
--- Theme it by overriding the --ui-* custom properties on :root.
+-- Usage: import { Button, Card, toast } from "sinth:ui"
+-- Theme it by overriding the --ui-* custom properties on :root. Every component is keyboard
+-- accessible and follows the WAI-ARIA patterns for its role.
 
-component Button(str variant = "primary", str size = "md", str? href, bool disabled = false, str type = "button", bool block = false) {
+-- Shared state: toasts are shown by the Toaster component, from anywhere that calls toast().
+var obj[] toasts = []
+var num toastSeq = 0
+
+-- Shows a notification. tone: info, success, warning or danger. duration in ms (0 keeps it open).
+function toast(str message, str tone = "info", num duration = 4000) {
+  toastSeq += 1
+  const id = toastSeq
+  toasts.push({ id: id, message: message, tone: tone })
+  if duration > 0 {
+    setTimeout(() => dismissToast(id), duration)
+  }
+}
+
+function dismissToast(num id) {
+  const i = toasts.findIndex((t) => t.id == id)
+  if i != -1 {
+    toasts.splice(i, 1)
+  }
+}
+
+function uiId(str prefix) -> str {
+  return "ui-" + prefix + "-" + Math.random().toString(36).slice(2, 8)
+}
+
+component Button(str variant = "primary", str size = "md", str? href, bool disabled = false, str type = "button", bool block = false, bool loading = false) {
   if href {
-    Link(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--" + size, block ? "ui-btn--block" : ""], href: href, ariaDisabled: disabled ? "true" : null) {
+    Link(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--" + size, block ? "ui-btn--block" : ""], href: disabled ? null : href, ariaDisabled: disabled ? "true" : null) {
       $slot
     }
   } else {
-    Button(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--" + size, block ? "ui-btn--block" : ""], type: type, disabled: disabled) {
+    Button(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--" + size, block ? "ui-btn--block" : ""], type: type, disabled: disabled or loading, ariaBusy: loading ? "true" : null) {
+      if loading {
+        Span(class: "ui-spinner ui-spinner--inline", ariaHidden: "true")
+      }
       $slot
     }
   }
@@ -72,7 +101,8 @@ component VStack(str gap = "1rem", str align = "stretch") {
   }
 }
 
-component Field(str label, bind value, str type = "text", str placeholder = "", str? hint, str? error, bool required = false, str? name) {
+component Field(str label, bind value, str type = "text", str placeholder = "", str? hint, str? error, bool required = false, bool disabled = false, str? name, str? autocomplete) {
+  const str id = uiId("field")
   Label(class: ["ui-field", error ? "ui-field--invalid" : ""]) {
     Span(class: "ui-field__label") {
       label
@@ -81,21 +111,47 @@ component Field(str label, bind value, str type = "text", str placeholder = "", 
       }
     }
     if type == "textarea" {
-      Textarea(class: "ui-field__control", model: value, placeholder: placeholder, required: required, name: name, ariaInvalid: error ? "true" : null)
+      Textarea(class: "ui-field__control", model: value, placeholder: placeholder, required: required, disabled: disabled, name: name, ariaInvalid: error ? "true" : null, ariaDescribedby: error or hint ? id : null)
     } else {
-      Input(class: "ui-field__control", type: type, model: value, placeholder: placeholder, required: required, name: name, ariaInvalid: error ? "true" : null)
+      Input(class: "ui-field__control", type: type, model: value, placeholder: placeholder, required: required, disabled: disabled, name: name, autocomplete: autocomplete, ariaInvalid: error ? "true" : null, ariaDescribedby: error or hint ? id : null)
     }
     if error {
-      Span(class: "ui-field__error") { error }
+      Span(class: "ui-field__error", id: id) { error }
     } else if hint {
-      Span(class: "ui-field__hint") { hint }
+      Span(class: "ui-field__hint", id: id) { hint }
     }
   }
 }
 
-component Toggle(bind checked, str? label) {
-  Label(class: "ui-toggle") {
-    Input(type: "checkbox", role: "switch", class: "ui-toggle__input", model: checked)
+-- options: strings, or objects with value and label.
+component Select(str label, bind value, any[] options, str? placeholder, str? hint, str? error, bool required = false, bool disabled = false, str? name) {
+  const str id = uiId("select")
+  Label(class: ["ui-field", error ? "ui-field--invalid" : ""]) {
+    Span(class: "ui-field__label") {
+      label
+      if required {
+        Span(class: "ui-field__required", ariaHidden: "true") { " *" }
+      }
+    }
+    Select(class: "ui-field__control", model: value, required: required, disabled: disabled, name: name, ariaInvalid: error ? "true" : null, ariaDescribedby: error or hint ? id : null) {
+      if placeholder {
+        Option(value: "", disabled: true) { placeholder }
+      }
+      for opt in options {
+        Option(value: typeof opt == "object" ? opt.value : opt) { typeof opt == "object" ? opt.label : opt }
+      }
+    }
+    if error {
+      Span(class: "ui-field__error", id: id) { error }
+    } else if hint {
+      Span(class: "ui-field__hint", id: id) { hint }
+    }
+  }
+}
+
+component Toggle(bind checked, str? label, bool disabled = false) {
+  Label(class: ["ui-toggle", disabled ? "ui-toggle--disabled" : ""]) {
+    Input(type: "checkbox", role: "switch", class: "ui-toggle__input", model: checked, disabled: disabled)
     Span(class: "ui-toggle__track", ariaHidden: "true") {
       Span(class: "ui-toggle__thumb")
     }
@@ -105,23 +161,64 @@ component Toggle(bind checked, str? label) {
   }
 }
 
-component Modal(bind open, str? title, str width = "32rem") {
+-- A modal dialog: traps focus while open, restores it on close, locks page scrolling and closes
+-- with Escape or a backdrop click (dismissible: false keeps it open until the code closes it).
+component Modal(bind open, str? title, str width = "32rem", bool dismissible = true) {
   var obj dialog = null
+  var obj opener = null
+  const str titleId = uiId("modal")
 
-  watch open {
-    if open {
+  function lock(bool on) {
+    if on {
+      opener = document.activeElement
+      document.documentElement.style.overflow = "hidden"
       setTimeout(() => dialog?.focus(), 0)
+    } else {
+      document.documentElement.style.overflow = ""
+      if opener and opener.isConnected {
+        opener.focus()
+      }
+      opener = null
     }
   }
 
+  function trapFocus(obj e) {
+    const items = Array.from(dialog.querySelectorAll("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"))
+    if items.length == 0 {
+      e.preventDefault()
+      return
+    }
+    const first = items[0]
+    const last = items[items.length - 1]
+    if e.shiftKey and (document.activeElement == first or document.activeElement == dialog) {
+      e.preventDefault()
+      last.focus()
+    } else if not e.shiftKey and document.activeElement == last {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
+  function close() {
+    if dismissible {
+      open = false
+    }
+  }
+
+  watch open { lock(open) }
+  onMount { if open { lock(true) } }
+  onDestroy { if open { document.documentElement.style.overflow = "" } }
+
   if open transition("ui-fade") {
-    Div(class: "ui-modal", onClick.self: open = false, onKeyDown.esc: open = false) {
-      Div(class: "ui-modal__dialog", ref: dialog, role: "dialog", ariaModal: "true", ariaLabel: title, tabindex: "-1", style: { maxWidth: width }) {
+    Div(class: "ui-modal", onClick.self: close(), onKeyDown.esc: close(), onKeyDown.tab: trapFocus(e)) {
+      Div(class: "ui-modal__dialog", ref: dialog, role: "dialog", ariaModal: "true", ariaLabelledby: title ? titleId : null, tabindex: "-1", style: { maxWidth: width }) {
         Header(class: "ui-modal__header") {
           if title {
-            Heading(level: 2, class: "ui-modal__title") { title }
+            Heading(level: 2, class: "ui-modal__title", id: titleId) { title }
           }
-          Button(class: "ui-modal__close", ariaLabel: "Close", onClick: open = false) { "×" }
+          if dismissible {
+            Button(class: "ui-modal__close", ariaLabel: "Close", onClick: open = false) { "×" }
+          }
         }
         Div(class: "ui-modal__body") {
           $slot
@@ -132,11 +229,233 @@ component Modal(bind open, str? title, str width = "32rem") {
   }
 }
 
+-- tabs: the tab labels. Put one Div per tab in the slot; only the selected one is shown.
+-- Arrow keys, Home and End move between tabs (WAI-ARIA tabs pattern).
+component Tabs(str[] tabs, bind selected = 0, str? label) {
+  var obj list = null
+  const str id = uiId("tabs")
+
+  function pick(num i) {
+    selected = (i + tabs.length) % tabs.length
+    setTimeout(() => list?.querySelectorAll("[role=tab]")[selected]?.focus(), 0)
+  }
+
+  Div(class: "ui-tabs") {
+    Div(class: "ui-tabs__list", role: "tablist", ariaLabel: label, ref: list,
+        onKeyDown.right: pick(selected + 1), onKeyDown.left: pick(selected - 1),
+        onKeyDown.home: pick(0), onKeyDown.end: pick(tabs.length - 1)) {
+      for tab, i in tabs {
+        Button(class: "ui-tabs__tab", role: "tab", id: id + "-tab-" + i, ariaSelected: selected == i ? "true" : "false",
+               ariaControls: id + "-panel", tabindex: selected == i ? "0" : "-1", onClick: selected = i) { tab }
+      }
+    }
+    Div(class: "ui-tabs__panel", role: "tabpanel", id: id + "-panel", ariaLabelledby: id + "-tab-" + selected, tabindex: "0", dataSelected: selected) {
+      $slot
+    }
+  }
+}
+
+-- A disclosure built on <details>: works without JavaScript and with find-in-page.
+component Accordion(str title, bool open = false) {
+  Details(class: "ui-accordion", open: open) {
+    Summary(class: "ui-accordion__summary") { title }
+    Div(class: "ui-accordion__body") {
+      $slot
+    }
+  }
+}
+
+component Tooltip(str text, str placement = "top") {
+  const str id = uiId("tip")
+  Span(class: ["ui-tooltip", "ui-tooltip--" + placement], ariaDescribedby: id) {
+    $slot
+    Span(class: "ui-tooltip__bubble", role: "tooltip", id: id) { text }
+  }
+}
+
+-- columns: objects with key and label (optional: align "end" for numbers).
+-- rows: objects; set sortable to sort by clicking a header.
+component Table(obj[] columns, obj[] rows, str? caption, bool sortable = false, str empty = "No data", bool striped = true) {
+  var str sortKey = ""
+  var num sortDir = 1
+  computed obj[] sorted = sortKey == "" ? rows : rows.slice().sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir)
+
+  function sortBy(str key) {
+    if sortKey == key {
+      sortDir = -sortDir
+    } else {
+      sortKey = key
+      sortDir = 1
+    }
+  }
+
+  Div(class: "ui-table__wrap", tabindex: "0", role: "region", ariaLabel: caption) {
+    Table(class: ["ui-table", striped ? "ui-table--striped" : ""]) {
+      if caption {
+        Caption(class: "ui-table__caption") { caption }
+      }
+      Thead {
+        Tr {
+          for col in columns {
+            Th(scope: "col", class: col.align == "end" ? "ui-table__num" : "", ariaSort: sortKey == col.key ? (sortDir == 1 ? "ascending" : "descending") : null) {
+              if sortable {
+                Button(class: "ui-table__sort", onClick: sortBy(col.key)) {
+                  col.label
+                  Span(class: "ui-table__arrow", ariaHidden: "true") { sortKey == col.key ? (sortDir == 1 ? " ▲" : " ▼") : "" }
+                }
+              } else {
+                col.label
+              }
+            }
+          }
+        }
+      }
+      Tbody {
+        for row in sorted {
+          Tr {
+            for col in columns {
+              Td(class: col.align == "end" ? "ui-table__num" : "") { row[col.key] }
+            }
+          }
+        } else {
+          Tr {
+            Td(class: "ui-table__empty", colspan: columns.length) { empty }
+          }
+        }
+      }
+    }
+  }
+}
+
+-- page is 1-based. Shows first, last and the pages around the current one.
+component Pagination(bind page, num total, str label = "Pagination") {
+  computed num[] pages = range(1, total + 1).filter((p) => p == 1 or p == total or Math.abs(p - page) <= 1)
+
+  Nav(class: "ui-pagination", ariaLabel: label) {
+    Button(class: "ui-pagination__item", disabled: page <= 1, ariaLabel: "Previous page", onClick: page -= 1) { "‹" }
+    for p, i in pages {
+      if i > 0 and p - pages[i - 1] > 1 {
+        Span(class: "ui-pagination__gap", ariaHidden: "true") { "…" }
+      }
+      Button(class: "ui-pagination__item", ariaCurrent: p == page ? "page" : null, onClick: page = p) { p }
+    }
+    Button(class: "ui-pagination__item", disabled: page >= total, ariaLabel: "Next page", onClick: page += 1) { "›" }
+  }
+}
+
+-- items: objects with label and an optional href (the last item is the current page).
+component Breadcrumbs(obj[] items) {
+  Nav(class: "ui-breadcrumbs", ariaLabel: "Breadcrumb") {
+    Ol {
+      for item, i in items {
+        Li {
+          if item.href and i < items.length - 1 {
+            Link(href: item.href) { item.label }
+          } else {
+            Span(ariaCurrent: i == items.length - 1 ? "page" : null) { item.label }
+          }
+        }
+      }
+    }
+  }
+}
+
+-- value from 0 to max; leave it out for an indeterminate bar.
+component ProgressBar(num? value, num max = 100, str label = "Progress") {
+  Div(class: ["ui-progress", value == null ? "ui-progress--indeterminate" : ""], role: "progressbar", ariaLabel: label,
+      ariaValuemin: "0", ariaValuemax: max, ariaValuenow: value) {
+    Div(class: "ui-progress__bar", style: { width: value == null ? "40%" : Math.min(100, Math.max(0, value / max * 100)) + "%" })
+  }
+}
+
+component Skeleton(str width = "100%", str height = "1rem", str radius = "var(--ui-radius)") {
+  Span(class: "ui-skeleton", ariaHidden: "true", style: { width: width, height: height, borderRadius: radius })
+}
+
+component EmptyState(str title, str? description) {
+  Div(class: "ui-empty") {
+    Strong(class: "ui-empty__title") { title }
+    if description {
+      Paragraph(class: "ui-empty__description") { description }
+    }
+    $slot
+  }
+}
+
+-- A dropdown menu: the slot holds the items (Button or Link elements). Closes on Escape,
+-- outside clicks and after an item is chosen.
+component Dropdown(str label, str variant = "secondary", str align = "start") {
+  var bool open = false
+  var obj root = null
+
+  function toggle() {
+    open = not open
+    if open {
+      setTimeout(() => root?.querySelector(".ui-dropdown__menu a, .ui-dropdown__menu button")?.focus(), 0)
+    }
+  }
+
+  function move(obj e, num dir) {
+    const items = Array.from(root.querySelectorAll(".ui-dropdown__menu a, .ui-dropdown__menu button"))
+    if items.length == 0 {
+      return
+    }
+    e.preventDefault()
+    const i = items.indexOf(document.activeElement)
+    items[(i + dir + items.length) % items.length].focus()
+  }
+
+  function closeAndFocus() {
+    open = false
+    root?.querySelector(".ui-dropdown__trigger")?.focus()
+  }
+
+  onMount {
+    const away = (e) => {
+      if open and root and not root.contains(e.target) {
+        open = false
+      }
+    }
+    document.addEventListener("click", away)
+    return () => document.removeEventListener("click", away)
+  }
+
+  Div(class: "ui-dropdown", ref: root, onKeyDown.esc: closeAndFocus(), onKeyDown.down: move(e, 1), onKeyDown.up: move(e, -1)) {
+    Button(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--md", "ui-dropdown__trigger"], ariaHaspopup: "menu", ariaExpanded: open ? "true" : "false", onClick: toggle()) {
+      label
+      Span(class: "ui-dropdown__caret", ariaHidden: "true") { "▾" }
+    }
+    if open {
+      Div(class: ["ui-dropdown__menu", "ui-dropdown__menu--" + align], role: "menu", onClick: open = false) {
+        $slot
+      }
+    }
+  }
+}
+
+-- Renders the notifications created with toast(). Place it once, for example at the end of a layout.
+component Toaster(str position = "bottom-end") {
+  Div(class: ["ui-toaster", "ui-toaster--" + position], role: "region", ariaLabel: "Notifications", ariaLive: "polite") {
+    for t in toasts key t.id {
+      Div(class: ["ui-toast", "ui-toast--" + t.tone], role: t.tone == "danger" ? "alert" : "status") {
+        Span(class: "ui-toast__message") { t.message }
+        Button(class: "ui-toast__close", ariaLabel: "Dismiss", onClick: dismissToast(t.id)) { "×" }
+      }
+    }
+  }
+}
+
+component Kbd() {
+  Kbd(class: "ui-kbd") {
+    $slot
+  }
+}
+
 component Avatar(str name, str? src, str size = "2.5rem") {
   if src {
     Img(class: "ui-avatar", src: src, alt: name, style: { width: size, height: size })
   } else {
-    Span(class: "ui-avatar ui-avatar--initials", title: name, style: { width: size, height: size }) {
+    Span(class: "ui-avatar ui-avatar--initials", role: "img", ariaLabel: name, title: name, style: { width: size, height: size }) {
       name.split(" ").map((part) => part.slice(0, 1)).join("").slice(0, 2).toUpperCase()
     }
   }
@@ -203,6 +522,10 @@ style global {
       --ui-accent: "#c084fc"
       --ui-accent-hover: "#d8b4fe"
       --ui-accent-text: "#0a0a0b"
+      --ui-success: "#4ade80"
+      --ui-warning: "#fbbf24"
+      --ui-danger: "#f87171"
+      --ui-info: "#60a5fa"
       --ui-shadow: "0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35)"
     }
   }
@@ -234,6 +557,7 @@ style global {
     transition: "background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.05s"
     &:active { transform: "translateY(1px)" }
     &:disabled, &[aria-disabled="true"] { opacity: "0.5"; cursor: "not-allowed"; pointerEvents: "none" }
+    &[aria-busy="true"] { opacity: "0.8"; cursor: "progress" }
   }
   .ui-btn--sm { padding: "0.375rem 0.75rem"; fontSize: "0.875rem" }
   .ui-btn--md { padding: "0.625rem 1.125rem"; fontSize: "0.95rem" }
@@ -312,6 +636,7 @@ style global {
     background: "var(--ui-bg)"
     transition: "border-color 0.15s, box-shadow 0.15s"
     &:focus { outline: "none"; borderColor: "var(--ui-accent)"; boxShadow: "0 0 0 3px color-mix(in srgb, var(--ui-accent) 25%, transparent)" }
+    &:disabled { opacity: "0.6"; cursor: "not-allowed" }
   }
   textarea.ui-field__control { minHeight: "6rem"; resize: "vertical" }
   .ui-field--invalid .ui-field__control { borderColor: "var(--ui-danger)" }
@@ -319,6 +644,7 @@ style global {
   .ui-field__error { color: "var(--ui-danger)"; fontSize: "0.85rem" }
 
   .ui-toggle { display: "inline-flex"; alignItems: "center"; gap: "0.6rem"; cursor: "pointer"; position: "relative" }
+  .ui-toggle--disabled { opacity: "0.55"; cursor: "not-allowed" }
   .ui-toggle__input { position: "absolute"; opacity: "0"; width: "1px"; height: "1px" }
   .ui-toggle__track {
     width: "2.5rem"
@@ -368,10 +694,11 @@ style global {
     gap: "1rem"
     maxHeight: "90vh"
     overflow: "auto"
+    &:focus { outline: "none" }
   }
   .ui-modal__header { display: "flex"; alignItems: "center"; justifyContent: "space-between"; gap: "1rem" }
   .ui-modal__title { margin: "0"; fontSize: "1.2rem" }
-  .ui-modal__close {
+  .ui-modal__close, .ui-toast__close {
     border: "0"
     background: "transparent"
     color: "var(--ui-muted)"
@@ -381,9 +708,189 @@ style global {
     padding: "0.25rem 0.5rem"
     borderRadius: "var(--ui-radius)"
     marginLeft: "auto"
-    &:hover { background: "var(--ui-surface)"; color: "var(--ui-text)" }
+    &:hover { background: "var(--ui-surface-2)"; color: "var(--ui-text)" }
   }
   .ui-fade-enter, .ui-fade-leave { opacity: "0" }
+
+  .ui-tabs__list { display: "flex"; gap: "0.25rem"; borderBottom: "1px solid var(--ui-border)"; overflowX: "auto" }
+  .ui-tabs__tab {
+    font: "inherit"
+    fontWeight: "500"
+    color: "var(--ui-muted)"
+    background: "transparent"
+    border: "0"
+    borderBottom: "2px solid transparent"
+    padding: "0.6rem 0.9rem"
+    marginBottom: "-1px"
+    cursor: "pointer"
+    whiteSpace: "nowrap"
+    &:hover { color: "var(--ui-text)" }
+    &[aria-selected="true"] { color: "var(--ui-text)"; borderBottomColor: "var(--ui-accent)" }
+  }
+  .ui-tabs__panel { paddingTop: "1rem" }
+  .ui-tabs__panel > * { display: "none" }
+  .ui-tabs__panel[data-selected="0"] > :nth-child(1) { display: "block" }
+  .ui-tabs__panel[data-selected="1"] > :nth-child(2) { display: "block" }
+  .ui-tabs__panel[data-selected="2"] > :nth-child(3) { display: "block" }
+  .ui-tabs__panel[data-selected="3"] > :nth-child(4) { display: "block" }
+  .ui-tabs__panel[data-selected="4"] > :nth-child(5) { display: "block" }
+  .ui-tabs__panel[data-selected="5"] > :nth-child(6) { display: "block" }
+  .ui-tabs__panel[data-selected="6"] > :nth-child(7) { display: "block" }
+  .ui-tabs__panel[data-selected="7"] > :nth-child(8) { display: "block" }
+
+  .ui-accordion { borderBottom: "1px solid var(--ui-border)" }
+  .ui-accordion__summary {
+    cursor: "pointer"
+    padding: "0.85rem 0"
+    fontWeight: "600"
+    listStyle: "none"
+    display: "flex"
+    justifyContent: "space-between"
+    &::-webkit-details-marker { display: "none" }
+    &::after { content: "'+'"; color: "var(--ui-muted)"; fontWeight: "400" }
+  }
+  .ui-accordion[open] > .ui-accordion__summary::after { content: "'−'" }
+  .ui-accordion__body { paddingBottom: "1rem" }
+
+  .ui-tooltip { position: "relative"; display: "inline-flex" }
+  .ui-tooltip__bubble {
+    position: "absolute"
+    left: "50%"
+    bottom: "calc(100% + 6px)"
+    transform: "translateX(-50%)"
+    background: "var(--ui-text)"
+    color: "var(--ui-bg)"
+    fontSize: "0.8rem"
+    lineHeight: "1.3"
+    padding: "0.35rem 0.55rem"
+    borderRadius: "6px"
+    whiteSpace: "nowrap"
+    pointerEvents: "none"
+    opacity: "0"
+    visibility: "hidden"
+    transition: "opacity 0.12s"
+    zIndex: "50"
+  }
+  .ui-tooltip--bottom .ui-tooltip__bubble { bottom: "auto"; top: "calc(100% + 6px)" }
+  .ui-tooltip:hover .ui-tooltip__bubble, .ui-tooltip:focus-within .ui-tooltip__bubble { opacity: "1"; visibility: "visible" }
+
+  .ui-table__wrap { overflowX: "auto"; border: "1px solid var(--ui-border)"; borderRadius: "var(--ui-radius)" }
+  .ui-table { width: "100%"; borderCollapse: "collapse"; fontSize: "0.92rem" }
+  .ui-table th, .ui-table td { padding: "0.6rem 0.85rem"; textAlign: "start"; borderBottom: "1px solid var(--ui-border)" }
+  .ui-table th { background: "var(--ui-surface)"; fontWeight: "600"; whiteSpace: "nowrap" }
+  .ui-table tbody tr:last-child td { borderBottom: "0" }
+  .ui-table--striped tbody tr:nth-child(even) td { background: "color-mix(in srgb, var(--ui-surface) 60%, transparent)" }
+  .ui-table__num { textAlign: "end"; fontVariantNumeric: "tabular-nums" }
+  .ui-table th.ui-table__num { textAlign: "end" }
+  .ui-table__caption { captionSide: "top"; textAlign: "start"; padding: "0.6rem 0.85rem"; fontWeight: "600" }
+  .ui-table__sort { font: "inherit"; color: "inherit"; background: "none"; border: "0"; padding: "0"; cursor: "pointer" }
+  .ui-table__arrow { color: "var(--ui-muted)"; fontSize: "0.75em" }
+  .ui-table__empty { textAlign: "center"; color: "var(--ui-muted)"; padding: "1.5rem" }
+
+  .ui-pagination { display: "flex"; alignItems: "center"; gap: "0.25rem"; flexWrap: "wrap" }
+  .ui-pagination__item {
+    font: "inherit"
+    minWidth: "2.25rem"
+    height: "2.25rem"
+    padding: "0 0.5rem"
+    borderRadius: "var(--ui-radius)"
+    border: "1px solid var(--ui-border)"
+    background: "var(--ui-bg)"
+    color: "var(--ui-text)"
+    cursor: "pointer"
+    &:hover { background: "var(--ui-surface)" }
+    &:disabled { opacity: "0.45"; cursor: "not-allowed" }
+    &[aria-current="page"] { background: "var(--ui-accent)"; borderColor: "var(--ui-accent)"; color: "var(--ui-accent-text)" }
+  }
+  .ui-pagination__gap { color: "var(--ui-muted)"; padding: "0 0.25rem" }
+
+  .ui-breadcrumbs ol { display: "flex"; flexWrap: "wrap"; gap: "0.4rem"; listStyle: "none"; margin: "0"; padding: "0"; fontSize: "0.9rem" }
+  .ui-breadcrumbs li { display: "flex"; gap: "0.4rem"; color: "var(--ui-muted)" }
+  .ui-breadcrumbs li + li::before { content: "'/'"; color: "var(--ui-border)" }
+  .ui-breadcrumbs a { color: "var(--ui-muted)"; textDecoration: "none" }
+  .ui-breadcrumbs a:hover { color: "var(--ui-text)" }
+  .ui-breadcrumbs [aria-current] { color: "var(--ui-text)"; fontWeight: "500" }
+
+  .ui-progress { height: "0.5rem"; background: "var(--ui-surface-2)"; borderRadius: "999px"; overflow: "hidden" }
+  .ui-progress__bar { height: "100%"; background: "var(--ui-accent)"; borderRadius: "inherit"; transition: "width 0.2s" }
+  .ui-progress--indeterminate .ui-progress__bar { animation: "ui-indeterminate 1.2s ease-in-out infinite" }
+  @keyframes ui-indeterminate { from { transform: "translateX(-100%)" } to { transform: "translateX(250%)" } }
+
+  .ui-skeleton {
+    display: "block"
+    background: "linear-gradient(90deg, var(--ui-surface-2) 25%, var(--ui-surface) 50%, var(--ui-surface-2) 75%)"
+    backgroundSize: "200% 100%"
+    animation: "ui-shimmer 1.4s linear infinite"
+  }
+  @keyframes ui-shimmer { from { backgroundPosition: "200% 0" } to { backgroundPosition: "-200% 0" } }
+
+  .ui-empty { display: "flex"; flexDirection: "column"; alignItems: "center"; gap: "0.5rem"; textAlign: "center"; padding: "2.5rem 1rem"; border: "1px dashed var(--ui-border)"; borderRadius: "var(--ui-radius-lg)" }
+  .ui-empty__title { fontSize: "1.05rem" }
+  .ui-empty__description { margin: "0"; color: "var(--ui-muted)"; maxWidth: "36rem" }
+
+  .ui-dropdown { position: "relative"; display: "inline-block" }
+  .ui-dropdown__caret { fontSize: "0.8em"; opacity: "0.7" }
+  .ui-dropdown__menu {
+    position: "absolute"
+    top: "calc(100% + 4px)"
+    left: "0"
+    minWidth: "12rem"
+    zIndex: "60"
+    display: "flex"
+    flexDirection: "column"
+    padding: "0.3rem"
+    background: "var(--ui-bg)"
+    border: "1px solid var(--ui-border)"
+    borderRadius: "var(--ui-radius)"
+    boxShadow: "var(--ui-shadow)"
+  }
+  .ui-dropdown__menu--end { left: "auto"; right: "0" }
+  .ui-dropdown__menu > a, .ui-dropdown__menu > button {
+    font: "inherit"
+    textAlign: "start"
+    color: "var(--ui-text)"
+    background: "none"
+    border: "0"
+    borderRadius: "6px"
+    padding: "0.45rem 0.65rem"
+    textDecoration: "none"
+    cursor: "pointer"
+    &:hover, &:focus-visible { background: "var(--ui-surface)"; outline: "none" }
+  }
+
+  .ui-toaster { position: "fixed"; zIndex: "1100"; display: "flex"; flexDirection: "column"; gap: "0.5rem"; padding: "1rem"; maxWidth: "min(26rem, 100vw)"; pointerEvents: "none" }
+  .ui-toaster--bottom-end { right: "0"; bottom: "0" }
+  .ui-toaster--bottom-start { left: "0"; bottom: "0" }
+  .ui-toaster--top-end { right: "0"; top: "0" }
+  .ui-toaster--top-start { left: "0"; top: "0" }
+  .ui-toast {
+    pointerEvents: "auto"
+    display: "flex"
+    alignItems: "center"
+    gap: "0.75rem"
+    padding: "0.7rem 0.6rem 0.7rem 1rem"
+    background: "var(--ui-bg)"
+    border: "1px solid var(--ui-border)"
+    borderLeft: "4px solid var(--ui-info)"
+    borderRadius: "var(--ui-radius)"
+    boxShadow: "var(--ui-shadow)"
+    animation: "ui-toast-in 0.18s ease-out"
+  }
+  .ui-toast--success { borderLeftColor: "var(--ui-success)" }
+  .ui-toast--warning { borderLeftColor: "var(--ui-warning)" }
+  .ui-toast--danger { borderLeftColor: "var(--ui-danger)" }
+  .ui-toast__close { fontSize: "1.2rem" }
+  @keyframes ui-toast-in { from { opacity: "0"; transform: "translateY(6px)" } }
+
+  .ui-kbd {
+    fontFamily: "var(--ui-mono)"
+    fontSize: "0.8em"
+    padding: "0.1rem 0.4rem"
+    border: "1px solid var(--ui-border)"
+    borderBottomWidth: "2px"
+    borderRadius: "5px"
+    background: "var(--ui-surface)"
+  }
 
   .ui-avatar { borderRadius: "50%"; objectFit: "cover"; flexShrink: "0" }
   .ui-avatar--initials {
@@ -403,10 +910,12 @@ style global {
     borderTopColor: "var(--ui-accent)"
     animation: "ui-spin 0.7s linear infinite"
   }
+  .ui-spinner--inline { width: "1em"; height: "1em"; borderColor: "currentColor"; borderTopColor: "transparent" }
   @keyframes ui-spin { to { transform: "rotate(360deg)" } }
   reducedMotion {
     .ui-spinner { animationDuration: "2s" }
-    .ui-btn, .ui-card--interactive, .ui-modal { transition: "none" }
+    .ui-skeleton, .ui-progress--indeterminate .ui-progress__bar, .ui-toast { animation: "none" }
+    .ui-btn, .ui-card--interactive, .ui-modal, .ui-progress__bar { transition: "none" }
   }
 
   .ui-navbar {

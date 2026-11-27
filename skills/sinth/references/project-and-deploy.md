@@ -21,13 +21,14 @@ Without a `pages/` folder, every `.sinth` file with markup in the source folder 
 
 ```
 npx sinth dev                 dev server with hot reload (http://localhost:3000)
-npx sinth check [--json]      type-check everything, no output files
+npx sinth check [--json]      type-check everything, no output files (--max-warnings 0 for CI)
 npx sinth build [--platform name]
 npx sinth preview             serve the production build locally
 npx sinth deploy [--platform name] [--preview] [--create] [--project name]
 npx sinth new page blog/first-post
 npx sinth new component ProductCard
 npx sinth info
+npx sinth skill               refresh this skill from the installed Sinth version
 ```
 
 ## sinth.config.json
@@ -39,6 +40,17 @@ npx sinth info
   "cloudflare": { "projectName": "my-site" }
 }
 ```
+
+Redirects and headers work the same in `sinth dev`, `sinth preview` and on every platform:
+
+```json
+{
+  "redirects": { "/old": "/new", "/blog/:slug": "/posts/:slug", "/docs/*": { "to": "https://docs.example.com/:splat", "status": 302 } },
+  "headers": { "/api/*": { "Access-Control-Allow-Origin": "*" } }
+}
+```
+
+The dev and preview servers answer only to localhost and IP addresses; tunnels need `"allowedHosts": [".ngrok.app"]`.
 
 Other options: `srcDir`, `outDir` (default `dist`), `pagesDir`, `publicDir`, `staticDirs`, `base`, `minify`, `router`, `security.headers`, `security.csp`. Full list: https://sinth.yannosay.com/docs/tooling/configuration
 
@@ -68,4 +80,8 @@ export const onRequestGet = ({ request, env }) => {
 };
 ```
 
-`[id].ts` gives `params.id`, `[[path]].ts` catches the rest as an array, `_middleware.ts` runs before routes below its folder and calls `next()`. Secrets for local development go in `.dev.vars`. Functions run in `sinth dev` and `sinth preview` too.
+`[id].ts` gives `params.id`, `[[path]].ts` catches the rest as an array, `_middleware.ts` runs before routes below its folder and calls `next()`. Functions run in `sinth dev` and `sinth preview` too.
+
+## Environment variables
+
+`.env`, `.env.local`, `.env.development` / `.env.production` (and `.env.<mode>.local`), with the process environment winning. Pages import only `PUBLIC_` variables: `import { PUBLIC_API_URL } from "sinth:env"` (inlined at build time; a missing or non-public name is error E0607). Functions get every variable, secrets included, on `context.env`; `.dev.vars` wins locally. Never put secrets in `PUBLIC_` variables or commit `.env.local`/`.dev.vars`.

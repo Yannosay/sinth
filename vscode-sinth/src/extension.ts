@@ -131,6 +131,9 @@ const completionProvider: vscode.CompletionItemProvider = {
       const lib = new vscode.CompletionItem("sinth:ui", K.Module);
       lib.detail = "Built-in component library";
       items.push(lib);
+      const env = new vscode.CompletionItem("sinth:env", K.Module);
+      env.detail = "PUBLIC_ environment variables from .env";
+      items.push(env);
       for (const comp of index.components()) {
         if (comp.uri.toString() === doc.uri.toString()) continue;
         const rel = relativeImport(doc.uri, comp.uri);

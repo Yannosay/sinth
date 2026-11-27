@@ -8,6 +8,7 @@ import type { Project } from "../project/project";
 import { FUNCTIONS_DIR, scanFunctions } from "../server/functions";
 import { routePatterns } from "../server/functions-router";
 import { defaultProjectName } from "./cloudflare";
+import { isPattern, vercelHeaderRoutes, vercelRedirectRoutes } from "./redirects";
 
 /** Wrangler compatibility date for generated Worker configs. */
 const COMPATIBILITY_DATE = "2025-09-01";
@@ -62,6 +63,11 @@ export async function writePlatformOutput(project: Project, files: Map<string, O
       hint: "Server functions run on Cloudflare: set \"platform\" to \"cloudflare\" or \"cloudflare-workers\" in sinth.config.json",
     });
   }
+  if (cfg.platform === "github-pages") {
+    const patterns = cfg.redirects.filter(r => isPattern(r.from)).map(r => r.from);
+    if (patterns.length) warnings.push({ severity: "warning", code: "W0811", message: `GitHub Pages cannot redirect patterns: ${patterns.join(", ")}`, hint: "Exact paths become redirect pages; patterns with :params or * need a host with server-side redirects" });
+    if (Object.keys(cfg.headers).length) warnings.push({ severity: "warning", code: "W0811", message: "GitHub Pages ignores the \"headers\" option", hint: "Custom response headers need Cloudflare, Netlify or Vercel" });
+  }
   if (!write) return warnings;
   if (cfg.platform === "vercel") writeVercelOutput(project, files, headers);
   if (cfg.platform === "cloudflare-workers") await writeWorker(project, routes);
@@ -91,6 +97,7 @@ function writeVercelOutput(project: Project, files: Map<string, OutputFile>, hea
     { src: `^${escapedBase}_sinth/(.*)$`, headers: { "Cache-Control": IMMUTABLE }, continue: true },
   ];
   if (Object.keys(headers).length) routes.push({ src: "^/(.*)$", headers, continue: true });
+  routes.push(...vercelHeaderRoutes(cfg.headers, cfg.base), ...vercelRedirectRoutes(cfg.redirects, cfg.base));
   routes.push({ handle: "filesystem" });
   if (files.has("404.html")) routes.push({ src: "^/(.*)$", status: 404, dest: `${cfg.base}404.html` });
   const config = { version: 3, routes, overrides };

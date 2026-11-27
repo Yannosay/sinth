@@ -11,6 +11,7 @@ import { startPreview } from "../server/preview";
 import { FlagSpec, parseArgs, ParsedArgs } from "./args";
 import { componentTemplate, pageTemplate, TemplateName, TEMPLATES, templateFiles } from "./templates";
 import { brand, c, formatBytes, formatMs, log, printDiagnostic, table } from "./ui";
+import { installSkill } from "./skill";
 import { startUpdateCheck } from "./update-check";
 
 const VERSION = (JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")) as { version: string }).version;
@@ -132,6 +133,8 @@ const commands: Record<string, Command> = {
         open: !!args.flags.open,
         base: project.config.base,
         root: project.root,
+        redirects: project.config.redirects,
+        allowedHosts: project.config.allowedHosts,
       });
       return -1;
     },
@@ -167,15 +170,20 @@ const commands: Record<string, Command> = {
   },
   check: {
     summary: "Type-check every page without writing output",
-    usage: "sinth check [--json]",
-    flags: { ...ROOT_FLAG, json: { type: "boolean", description: "Print diagnostics as JSON (for editors)" } },
+    usage: "sinth check [--json] [--max-warnings n]",
+    flags: {
+      ...ROOT_FLAG,
+      json: { type: "boolean", description: "Print diagnostics as JSON (for editors and AI agents)" },
+      "max-warnings": { type: "number", description: "Fail when there are more warnings than this (use 0 in CI)" },
+    },
     async run(args) {
+      const maxWarnings = args.flags["max-warnings"] === undefined ? Infinity : Number(args.flags["max-warnings"]);
       if (args.flags.json) {
         const root = projectRoot(args);
         const { config } = loadConfig(root, "production");
         const result = checkProject(new Project(root, config, false));
         process.stdout.write(JSON.stringify({ version: 1, errors: result.errors.map(e => e.diagnostic), warnings: result.warnings }) + "\n");
-        return result.errors.length ? 1 : 0;
+        return result.errors.length || result.warnings.length > maxWarnings ? 1 : 0;
       }
       console.log(`\n  ${brand("check", VERSION)}\n`);
       const project = openProject(args, "production");
@@ -187,7 +195,29 @@ const commands: Record<string, Command> = {
         log.error(`${result.errors.length} error(s) in ${result.pages.length} page(s)`);
         return 1;
       }
+      if (result.warnings.length > maxWarnings) {
+        log.error(`${result.warnings.length} warning(s), more than the allowed ${maxWarnings}`);
+        return 1;
+      }
       log.success(`${result.pages.length} page(s) checked, no errors${result.warnings.length ? `, ${result.warnings.length} warning(s)` : ""} ${c.gray(formatMs(Date.now() - started))}`);
+      return 0;
+    },
+  },
+  skill: {
+    summary: "Teach your AI coding agent Sinth (installs the Sinth skill)",
+    usage: "sinth skill [--claude | --agents] [--global]",
+    flags: {
+      ...ROOT_FLAG,
+      claude: { type: "boolean", description: "Install for Claude Code (.claude/skills/sinth)" },
+      agents: { type: "boolean", description: "Install for other agents (.agents/skills/sinth and AGENTS.md)" },
+      global: { type: "boolean", description: "Install for all projects (~/.claude/skills/sinth)" },
+    },
+    async run(args) {
+      console.log(`\n  ${brand("skill", VERSION)}\n`);
+      const result = installSkill(projectRoot(args), {
+        claude: !!args.flags.claude, agents: !!args.flags.agents, global: !!args.flags.global,
+      }, VERSION);
+      for (const line of result) console.log(line);
       return 0;
     },
   },
@@ -346,6 +376,7 @@ async function createProject(args: ParsedArgs): Promise<number> {
   if (path.relative(process.cwd(), dir)) console.log(`    cd ${path.relative(process.cwd(), dir)}`);
   console.log("    npm install");
   console.log(`    ${c.cyan("npm run dev")}\n`);
+  console.log(`  ${c.gray("Building with an AI agent? Run")} npx sinth skill ${c.gray("to teach it Sinth.")}\n`);
   return 0;
 }
 

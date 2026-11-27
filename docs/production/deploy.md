@@ -144,6 +144,10 @@ GitHub Pages does not support custom headers, so the security headers are not se
 
 Run `sinth build` with `"platform": "static"` and upload `dist/` to any web server or object storage. Configure the server to serve `about.html` for `/about` (most do), to use `404.html` for missing pages and, if you want them, the headers from the [security page](security.md).
 
+## Redirects and headers
+
+Declare redirects and extra response headers once in `sinth.config.json` and the build writes them in each host's format (`_redirects` and `_headers` on Cloudflare and Netlify, routes in the Vercel output, redirect pages on GitHub Pages). `sinth dev` and `sinth preview` apply them too. See [Redirects](../tooling/configuration.md#redirects).
+
 ## Continuous deployment
 
 Example GitHub Actions workflow for Cloudflare:

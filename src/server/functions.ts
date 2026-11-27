@@ -5,6 +5,8 @@ import * as http from "http";
 import * as path from "path";
 import { SinthError } from "../compiler/diagnostics";
 import { log } from "../cli/ui";
+import { loadEnv, parseEnvFile } from "../project/env";
+import { MAX_BODY_BYTES } from "./static";
 import { compareRoutes, dispatch, FunctionModule, isFunctionFile, LoadedRoute, routeDef, RouteDef } from "./functions-router";
 
 /**
@@ -40,18 +42,9 @@ export function scanFunctions(dir: string): (RouteDef & { file: string })[] {
   return routes.sort(compareRoutes);
 }
 
-function readDevVars(root: string): Record<string, string> {
-  const vars: Record<string, string> = {};
-  for (const name of [".dev.vars", ".env"]) {
-    const file = path.join(root, name);
-    if (!fs.existsSync(file)) continue;
-    for (const line of fs.readFileSync(file, "utf-8").split(/\r?\n/)) {
-      const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-      if (!m || m[1] in vars) continue;
-      vars[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
-    }
-  }
-  return vars;
+/** Server-side variables: `.dev.vars` (Wrangler's file) wins over the .env files. */
+function readDevVars(root: string, mode: "development" | "production"): Record<string, string> {
+  return { ...loadEnv(root, mode), ...parseEnvFile(path.join(root, ".dev.vars")) };
 }
 
 export class FunctionsHost {
@@ -61,7 +54,7 @@ export class FunctionsHost {
   readonly dir: string;
   private readonly cacheDir: string;
 
-  constructor(private readonly root: string) {
+  constructor(private readonly root: string, private readonly mode: "development" | "production" = "development") {
     this.dir = path.join(root, FUNCTIONS_DIR);
     this.cacheDir = path.join(root, ".sinth", "functions");
     if (!globalThis.crypto) (globalThis as { crypto?: unknown }).crypto = crypto.webcrypto;
@@ -130,7 +123,7 @@ export class FunctionsHost {
       const mod = this.modules.get(r.file);
       return mod ? [{ ...r, module: mod }] : [];
     });
-    const env: Record<string, unknown> = { ...readDevVars(this.root), ASSETS: { fetch: (input: Request | string, init?: RequestInit) => assets(new Request(input, init)) } };
+    const env: Record<string, unknown> = { ...readDevVars(this.root, this.mode), ASSETS: { fetch: (input: Request | string, init?: RequestInit) => assets(new Request(input, init)) } };
     return dispatch(loaded, request, {
       env,
       assets,
@@ -149,7 +142,12 @@ export async function toRequest(req: http.IncomingMessage): Promise<Request> {
   let body: Buffer | undefined;
   if (req.method !== "GET" && req.method !== "HEAD") {
     const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
+    let size = 0;
+    for await (const chunk of req) {
+      size += (chunk as Buffer).byteLength;
+      if (size > MAX_BODY_BYTES) throw new SinthError("E0804", `Request body is larger than ${MAX_BODY_BYTES / 1024 / 1024} MB`);
+      chunks.push(chunk as Buffer);
+    }
     body = Buffer.concat(chunks);
   }
   return new Request(`http://${req.headers.host ?? "localhost"}${req.url ?? "/"}`, { method: req.method, headers, body });
