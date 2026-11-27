@@ -206,6 +206,7 @@ style {
     padding: "2rem"
     display: "grid"
     gap: "0.75rem"
+    alignContent: "start"
     minHeight: "100vh"
     boxSizing: "border-box"
   }

@@ -66,7 +66,11 @@ export class Prerenderer {
 
   renderPage(file: SinthFile, params?: Record<string, string>): string {
     const env = this.moduleEnv(file, params);
-    return this.renderNodes(file.body, { env: new Env(env), file });
+    const body = this.renderNodes(file.body, { env: new Env(env), file });
+    // Initial values of reactive page styles, so the page looks right before the script takes over.
+    const names = new Set(file.vars.map(v => v.name));
+    const vars = this.evalStyleVars(file.styles, names, `--sv-${hashString(file.path + "page").slice(0, 5)}-`, file, env);
+    return vars ? `<style>:root{${escapeStyleText(vars)}}</style>${body}` : body;
   }
 
   /** Evaluates metadata in the page's module scope. Values that need the browser come back as `undefined` with `known: false`. */
@@ -653,10 +657,12 @@ export class Prerenderer {
 
   private styleVars(decl: ComponentDecl, file: SinthFile, env: Env): string {
     const names = new Set([...decl.params.map(p => p.name), ...decl.vars.map(v => v.name)]);
+    return this.evalStyleVars(decl.styles.filter(st => !st.global), names, `--sv-${hashString(file.path + decl.name).slice(0, 5)}-`, file, env);
+  }
+
+  private evalStyleVars(styles: SinthFile["styles"], names: Set<string>, varPrefix: string, file: SinthFile, env: Env): string {
     const parts: string[] = [];
-    for (const s of decl.styles) {
-      if (s.global) continue;
-      const varPrefix = `--sv-${hashString(file.path + decl.name).slice(0, 5)}-`;
+    for (const s of styles) {
       try {
         const res = compileStyle(s.raw, s.lang === "scss" ? "css" : s.lang, { reactiveNames: names, varPrefix, loc: s.loc, sinthSyntax: s.lang === "sinth" });
         for (const e of res.expressions) {
@@ -670,6 +676,10 @@ export class Prerenderer {
     }
     return parts.join("; ");
   }
+}
+
+function escapeStyleText(css: string): string {
+  return css.replace(/<\//gi, "<\\/");
 }
 
 function defaultValue(v: VarDecl): Value {

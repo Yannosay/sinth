@@ -299,6 +299,15 @@ onBeforeUnmount(() => {
   }
 }
 
+// Embeds have a fixed height, so the stacked panes share it instead of overflowing (and clipping the preview).
+.playground--compact .playground__panes {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+
+  @media (min-width: 900px) {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+
 .playground__pane {
   min-height: 0;
   min-width: 0;

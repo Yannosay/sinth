@@ -122,3 +122,24 @@ test("functions called from timers update the page", async () => {
   await app.flush();
   assert.equal(app.text("#n"), "n 1");
 });
+
+test("for/else removes the empty branch once items are added and shows it again when emptied", async () => {
+  const app = await run('var str[] items = []\nMain {\n  Ul(id: "l") { for it, i in items { Li(class: "row") { it } } else { Li(id: "empty") { "Nothing" } } }\n  Button(id: "add", onClick: items.push("x")) { "a" }\n  Button(id: "clear", onClick: items = []) { "c" }\n}');
+  assert.equal(app.text("#empty"), "Nothing");
+  app.$("#add").click();
+  assert.equal(app.$("#empty"), null);
+  assert.equal(app.doc.querySelectorAll("#l li").length, 1);
+  app.$("#add").click();
+  assert.equal(app.doc.querySelectorAll("#l li").length, 2);
+  app.$("#clear").click();
+  assert.equal(app.text("#empty"), "Nothing");
+  assert.equal(app.doc.querySelectorAll("#l li").length, 1);
+});
+
+test("reactive values in page styles update CSS variables on the document", async () => {
+  const app = await run('var num r = 4\nMain { Div(class: "box") { "b" } Button(id: "b", onClick: r = 9) { "r" } }\nstyle { .box { borderRadius: r + "px" } }');
+  const vars = () => Array.from({ length: app.doc.documentElement.style.length }, (_, i) => app.doc.documentElement.style.item(i)).filter(n => n.startsWith("--sv-")).map(n => app.doc.documentElement.style.getPropertyValue(n));
+  assert.deepEqual(vars(), ["4px"]);
+  app.$("#b").click();
+  assert.deepEqual(vars(), ["9px"]);
+});

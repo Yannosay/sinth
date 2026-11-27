@@ -223,9 +223,15 @@ class ModuleCompiler {
       body.push(this.genComponent(c));
       this.componentInfo[c.name] = { interactive: this.interactive, uses: [...this.uses] };
     }
-    this.interactive = false;
+    // Page styles are compiled before render() so their reactive values (pageCssVars) get wired up there.
+    let moduleBase = base;
+    for (const s of file.styles) {
+      this.interactive = false;
+      this.addStyle(s, undefined, this.moduleScope, file.isPage ? "page" : "module");
+      if (this.interactive) moduleBase = true;
+    }
+    this.interactive = this.pageCssVars.length > 0 && file.isPage;
     this.uses = new Set();
-
 
     const stateVars = file.vars.filter(v => v.kind === "var");
     if (file.vars.length) {
@@ -262,12 +268,6 @@ class ModuleCompiler {
     }
 
     const pageInfo: InteractivityInfo | undefined = file.isPage ? { interactive: this.interactive, uses: [...this.uses] } : undefined;
-    let moduleBase = base;
-    for (const s of file.styles) {
-      this.interactive = false;
-      this.addStyle(s, undefined, this.moduleScope, file.isPage ? "page" : "module");
-      if (this.interactive) moduleBase = true;
-    }
     if (file.components.some(c => c.customTag)) moduleBase = true;
     if (this.css.length) this.importLines.push(`import ${JSON.stringify("sinth-css:" + this.file.path)};`);
     const js = [...this.importLines, "", ...body].join("\n") + "\n";

@@ -217,3 +217,8 @@ test("jsonLd metadata emits escaped structured data", async () => {
   const html = text("index.html");
   assert.match(html, /<script type="application\/ld\+json">\{"@context":"https:\/\/schema.org","@type":"Organization","name":"Acme \\u003c\/script>"\}<\/script>/);
 });
+
+test("prerendered pages carry the initial values of reactive page styles", async () => {
+  const { text } = await build({ "pages/index.sinth": 'var num hue = 120\nMain { Div(class: "box") { "b" } }\nstyle { .box { background: "hsl(" + hue + ", 50%, 50%)" } }' });
+  assert.match(text("index.html"), /<style>:root\{--sv-[\w]+-0: hsl\(120, 50%, 50%\)\}<\/style>/);
+});

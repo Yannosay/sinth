@@ -575,7 +575,7 @@ export function each(
   const [start, end] = makeRange(parent, "for");
   const owner = current;
   let rows = new Map<unknown, Row>();
-  let emptyOwner: Owner | null = null;
+  let empty$: { owner: Owner; start: Comment; end: Comment } | null = null;
 
   effect(() => {
     let entries = iterate(list());
@@ -636,27 +636,24 @@ export function each(
       }
     }
     if (empty) {
-      if (order.length === 0 && !emptyOwner) {
-        emptyOwner = createOwner(owner);
+      if (order.length === 0 && !empty$) {
+        const emptyOwner = createOwner(owner);
         const frag = renderInto(emptyOwner, empty);
+        const emptyStart = document.createComment("");
+        const emptyEnd = document.createComment("");
+        frag.insertBefore(emptyStart, frag.firstChild);
+        frag.appendChild(emptyEnd);
         end.parentNode?.insertBefore(frag, end);
-      } else if (order.length > 0 && emptyOwner) {
-        disposeOwner(emptyOwner);
-        emptyOwner = null;
-        let n = start.nextSibling;
-        while (n && n !== end && !rowsHasStart(rows, n)) {
-          const following = n.nextSibling;
-          n.parentNode?.removeChild(n);
-          n = following;
-        }
+        empty$ = { owner: emptyOwner, start: emptyStart, end: emptyEnd };
+      } else if (order.length > 0 && empty$) {
+        disposeOwner(empty$.owner);
+        clearRange(empty$.start, empty$.end);
+        empty$.start.remove();
+        empty$.end.remove();
+        empty$ = null;
       }
     }
   });
-}
-
-function rowsHasStart(rows: Map<unknown, Row>, node: Node): boolean {
-  for (const row of rows.values()) if (row.start === node) return true;
-  return false;
 }
 
 export function html(parent: ParentNode, get: Getter<unknown>): void {
