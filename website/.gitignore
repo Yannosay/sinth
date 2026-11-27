@@ -1,0 +1,15 @@
+.output
+.data
+.nuxt
+.nitro
+.cache
+.wrangler
+dist
+node_modules
+logs
+*.log
+.DS_Store
+.idea
+.env
+.env.*
+!.env.example

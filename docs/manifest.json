@@ -1,0 +1,299 @@
+{
+  "sections": [
+    {
+      "slug": "getting-started",
+      "title": "Getting started",
+      "order": 1,
+      "pages": [
+        {
+          "slug": "introduction",
+          "title": "Introduction",
+          "order": 1,
+          "description": "What Sinth is, what it is good at and how it works."
+        },
+        {
+          "slug": "installation",
+          "title": "Installation",
+          "order": 2,
+          "description": "Install Sinth, create a project and run the dev server."
+        },
+        {
+          "slug": "tutorial",
+          "title": "Tutorial",
+          "order": 3,
+          "description": "Build a small todo app and learn the core of Sinth along the way."
+        },
+        {
+          "slug": "project-structure",
+          "title": "Project structure",
+          "order": 4,
+          "description": "Folders, file-based routing and where files go."
+        },
+        {
+          "slug": "pages-and-routing",
+          "title": "Pages and routing",
+          "order": 5,
+          "description": "Pages, modules, dynamic routes and client-side navigation."
+        }
+      ]
+    },
+    {
+      "slug": "language",
+      "title": "Language",
+      "order": 2,
+      "pages": [
+        {
+          "slug": "markup",
+          "title": "Markup",
+          "order": 1,
+          "description": "Elements, text and nesting."
+        },
+        {
+          "slug": "variables",
+          "title": "Variables and types",
+          "order": 2,
+          "description": "State, constants, computed values and types."
+        },
+        {
+          "slug": "expressions",
+          "title": "Expressions",
+          "order": 3,
+          "description": "Operators, strings, collections and function calls."
+        },
+        {
+          "slug": "attributes",
+          "title": "Attributes",
+          "order": 4,
+          "description": "Attributes, classes, styles and directives."
+        },
+        {
+          "slug": "events",
+          "title": "Events",
+          "order": 5,
+          "description": "Event handlers and modifiers."
+        },
+        {
+          "slug": "forms",
+          "title": "Binding forms",
+          "order": 6,
+          "description": "Two-way binding for inputs, checkboxes and selects."
+        },
+        {
+          "slug": "conditionals",
+          "title": "Conditionals",
+          "order": 7,
+          "description": "if, else and rendering options."
+        },
+        {
+          "slug": "loops",
+          "title": "Loops",
+          "order": 8,
+          "description": "for loops, keys, filters and empty states."
+        },
+        {
+          "slug": "functions",
+          "title": "Functions",
+          "order": 9,
+          "description": "Typed functions, defaults, named arguments and UI functions."
+        },
+        {
+          "slug": "metadata",
+          "title": "Page metadata",
+          "order": 10,
+          "description": "Titles, descriptions, social cards and other head tags."
+        },
+        {
+          "slug": "built-in-elements",
+          "title": "Built-in elements",
+          "order": 11,
+          "description": "Every built-in element and the HTML it produces."
+        },
+        {
+          "slug": "comments",
+          "title": "Comments",
+          "order": 12,
+          "description": "Line and block comments."
+        }
+      ]
+    },
+    {
+      "slug": "components",
+      "title": "Components & styling",
+      "order": 3,
+      "pages": [
+        {
+          "slug": "components",
+          "title": "Components",
+          "order": 1,
+          "description": "Reusable components with parameters and local state."
+        },
+        {
+          "slug": "slots",
+          "title": "Slots",
+          "order": 2,
+          "description": "Passing content into components."
+        },
+        {
+          "slug": "styling",
+          "title": "Styling",
+          "order": 3,
+          "description": "Scoped styles, nesting, media queries and reactive values."
+        },
+        {
+          "slug": "lifecycle",
+          "title": "Lifecycle and watchers",
+          "order": 4,
+          "description": "onMount, onDestroy and watch."
+        },
+        {
+          "slug": "stores",
+          "title": "Shared state (stores)",
+          "order": 5,
+          "description": "State shared between pages and components."
+        },
+        {
+          "slug": "imports",
+          "title": "Imports",
+          "order": 6,
+          "description": "Importing Sinth files, npm packages, CSS, JSON and fonts."
+        },
+        {
+          "slug": "scripts",
+          "title": "Script blocks",
+          "order": 7,
+          "description": "JavaScript blocks inside Sinth files."
+        },
+        {
+          "slug": "sinth-ui",
+          "title": "The sinth:ui library",
+          "order": 8,
+          "description": "The built-in component library."
+        },
+        {
+          "slug": "custom-elements",
+          "title": "Custom elements",
+          "order": 9,
+          "description": "Use Sinth components in any HTML page as web components."
+        }
+      ]
+    },
+    {
+      "slug": "full-stack",
+      "title": "Full stack",
+      "order": 4,
+      "pages": [
+        {
+          "slug": "data-fetching",
+          "title": "Fetching data",
+          "order": 1,
+          "description": "Load data at build time, in the browser, or from your own API."
+        },
+        {
+          "slug": "functions",
+          "title": "Server functions",
+          "order": 2,
+          "description": "API routes and server code in functions/, from development to Cloudflare Pages."
+        }
+      ]
+    },
+    {
+      "slug": "production",
+      "title": "Production",
+      "order": 5,
+      "pages": [
+        {
+          "slug": "build",
+          "title": "Building and output",
+          "order": 1,
+          "description": "Production builds and the output folder."
+        },
+        {
+          "slug": "deploy",
+          "title": "Deploying",
+          "order": 2,
+          "description": "Cloudflare Pages, Netlify, Vercel and any static host."
+        },
+        {
+          "slug": "seo",
+          "title": "SEO and social sharing",
+          "order": 3,
+          "description": "Prerendered HTML, metadata, structured data, sitemaps and link previews."
+        },
+        {
+          "slug": "performance",
+          "title": "Rendering and performance",
+          "order": 4,
+          "description": "How Sinth renders pages and keeps them fast."
+        },
+        {
+          "slug": "security",
+          "title": "Security",
+          "order": 5,
+          "description": "Escaping, CSP and security headers."
+        }
+      ]
+    },
+    {
+      "slug": "tooling",
+      "title": "Tooling",
+      "order": 6,
+      "pages": [
+        {
+          "slug": "cli",
+          "title": "The CLI",
+          "order": 1,
+          "description": "Every sinth command and option."
+        },
+        {
+          "slug": "configuration",
+          "title": "Configuration",
+          "order": 2,
+          "description": "All sinth.config.json options."
+        },
+        {
+          "slug": "dev-server",
+          "title": "Dev server",
+          "order": 3,
+          "description": "Hot reload, error overlay and functions in development."
+        },
+        {
+          "slug": "editors",
+          "title": "Editor support",
+          "order": 4,
+          "description": "VS Code extension, Sinth IDE, the online playground and other editors."
+        },
+        {
+          "slug": "api",
+          "title": "Programmatic API",
+          "order": 5,
+          "description": "Using the compiler from JavaScript."
+        }
+      ]
+    },
+    {
+      "slug": "reference",
+      "title": "Reference",
+      "order": 7,
+      "pages": [
+        {
+          "slug": "errors",
+          "title": "Error reference",
+          "order": 1,
+          "description": "Every error and warning code."
+        },
+        {
+          "slug": "migration",
+          "title": "Migrating from Sinth 4",
+          "order": 2,
+          "description": "Upgrading from Sinth 4."
+        },
+        {
+          "slug": "faq",
+          "title": "FAQ",
+          "order": 3,
+          "description": "Frequently asked questions."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+@mixin page {
+  padding: clamp(3rem, 6vw, 5rem) 2rem clamp(4rem, 8vw, 6rem);
+
+  @media (max-width: 640px) {
+    padding: 3rem 1.4rem 3.5rem;
+  }
+}
+
+@mixin container {
+  max-width: 76rem;
+  margin: 0 auto;
+}
+
+@mixin container-narrow {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+@mixin grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1.25rem;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@mixin card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1.4rem;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  height: 100%;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+@mixin card-interactive {
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: var(--line-strong);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@mixin card-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-bottom: 0.75rem;
+}
+
+@mixin card-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  margin-bottom: 0.6rem;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+@mixin card-body {
+  font-size: 0.88rem;
+  font-weight: 400;
+  color: var(--fg-muted);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}

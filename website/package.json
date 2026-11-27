@@ -1,0 +1,41 @@
+{
+  "name": "sinth-website",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "npm --prefix .. run build && nuxt build",
+    "preview": "nuxt preview",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name sinth --branch main",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.2",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-javascript": "^6.2.3",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.44.2",
+    "@lezer/highlight": "^1.2.1",
+    "codemirror": "^6.0.1",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.4",
+    "marked-highlight": "^2.2.4",
+    "nuxt": "^4.4.6",
+    "vue": "^3.5.34",
+    "vue-router": "^5.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "sass": "^1.102.0",
+    "typescript": "^5.7.2",
+    "vue-tsc": "^3.1.3",
+    "wrangler": "^4.94.0"
+  },
+  "description": "The Sinth website, documentation and playground (sinth.yannosay.com)"
+}

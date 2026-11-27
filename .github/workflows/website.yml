@@ -1,0 +1,37 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "website/**", "src/**", "lib/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            website/package-lock.json
+      - run: npm ci
+      - working-directory: website
+        run: npm ci && npm run build
+      - name: Deploy to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: website
+        run: npx wrangler pages deploy dist --project-name sinth --branch main --commit-dirty=true
