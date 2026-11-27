@@ -14,7 +14,7 @@
       <h1 class="hero__title">The compiled language for fast, reactive websites.</h1>
       <p class="hero__tagline">
         Write pages and components in one readable syntax. Sinth type-checks your project and ships prerendered HTML,
-        scoped CSS and a few kilobytes of JavaScript, with routing, API routes and deployment built in.
+        scoped CSS and the JavaScript each page needs, with routing, API routes and deployment built in.
       </p>
       <div class="hero__cta">
         <UiButton href="/docs/getting-started/introduction" :external="false" variant="filled">Get started</UiButton>
@@ -113,12 +113,12 @@ style {
 const features = [
   { title: 'Reactive by design', body: 'Assign to a variable and exactly the affected parts of the page update. Arrays and objects can be changed in place.', href: '/docs/language/variables', link: 'Variables and state' },
   { title: 'Checked before it runs', body: 'Unknown names, wrong types, missing arguments and missing component props are compile errors with a code frame and a hint.', href: '/docs/reference/errors', link: 'Error reference' },
-  { title: 'Prerendered pages', body: 'Every page is rendered to HTML at build time. Content shows instantly, search engines see everything, and static pages ship no framework code.', href: '/docs/production/performance', link: 'Rendering and performance' },
+  { title: 'Prerendered pages', body: 'Every page is rendered to HTML at build time. Content shows without waiting for JavaScript, and search engines see the full page.', href: '/docs/production/performance', link: 'Rendering and performance' },
   { title: 'Instant navigation', body: 'Links are prefetched and swapped in place without full reloads, while every page stays a real HTML file.', href: '/docs/getting-started/pages-and-routing', link: 'Pages and routing' },
   { title: 'Full stack', body: 'API routes in functions/ use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages unchanged.', href: '/docs/full-stack/functions', link: 'Server functions' },
   { title: 'Components everywhere', body: 'Scoped styles, slots, two-way bindings and a built-in UI library. Export any component as a web component for other sites.', href: '/docs/components/components', link: 'Components' },
   { title: 'Hot reload that keeps state', body: 'Save a file and the page updates without losing form input or variables. Errors appear in an overlay with the exact location.', href: '/docs/tooling/dev-server', link: 'Dev server' },
-  { title: 'Secure defaults', body: 'No eval, escaped output, no inline handlers, a strict Content Security Policy and security headers out of the box.', href: '/docs/production/security', link: 'Security' },
+  { title: 'Secure defaults', body: 'No eval, escaped output, no inline event handlers, and a Content Security Policy without inline scripts plus security headers out of the box.', href: '/docs/production/security', link: 'Security' },
   { title: 'One-command deploys', body: 'sinth deploy ships to Cloudflare Pages. The output is static files, so any host works too.', href: '/docs/production/deploy', link: 'Deploying' }
 ]
 

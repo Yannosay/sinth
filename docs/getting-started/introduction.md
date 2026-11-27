@@ -40,7 +40,7 @@ style {
 
 ## When to use Sinth
 
-Sinth fits marketing sites, documentation, blogs, dashboards, internal tools and multi-page apps of any size. It is a good choice when you want fast pages and a small amount of code without assembling a framework, a router, a bundler and a CSS solution yourself.
+Sinth fits marketing sites, documentation, blogs, dashboards, internal tools and multi-page apps of any size. It is a good choice when you want prerendered pages and reactive UI without assembling a framework, a router, a bundler and a CSS solution yourself.
 
 ## Next steps
 

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@yannosay/sinth?color=a855f7&label=npm&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![downloads](https://img.shields.io/npm/dt/@yannosay/sinth?color=c084fc&label=downloads&style=for-the-badge)](https://www.npmjs.com/package/@yannosay/sinth) [![CI](https://img.shields.io/github/actions/workflow/status/Yannosay/sinth/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Yannosay/sinth/actions) [![license](https://img.shields.io/npm/l/@yannosay/sinth?color=a78bfa&style=for-the-badge)](./LICENSE)
 
-**Sinth is a compiled, type-checked language for websites and web apps.** Write pages and components in one readable syntax; the compiler checks the whole project and produces prerendered HTML, scoped CSS and a small amount of JavaScript. Routing, instant navigation, API routes, a component library and deployment are built in.
+Sinth is a language for building websites. A `.sinth` file holds a page's markup, state, functions and styles. The compiler checks the project, prerenders every page to HTML and bundles the interactive parts into plain JavaScript.
 
 ```sinth
 title = "Counter"
@@ -15,7 +15,9 @@ Main {
 }
 ```
 
-**[Try it in the playground](https://sinth.yannosay.com/playground)** · **[Documentation](https://sinth.yannosay.com/docs)** · **[Tutorial](https://sinth.yannosay.com/docs/getting-started/tutorial)**
+This page builds to a 0.5 kB HTML file and 3.5 kB of gzipped JavaScript (runtime and router included).
+
+[Playground](https://sinth.yannosay.com/playground) · [Documentation](https://sinth.yannosay.com/docs) · [Tutorial](https://sinth.yannosay.com/docs/getting-started/tutorial)
 
 ## Get started
 
@@ -28,17 +30,15 @@ npm run dev
 
 Requires Node.js 18.17 or newer.
 
-## Why Sinth
+## Features
 
-- **One file, everything in it.** Markup, state, functions and scoped styles live together, without boilerplate, hooks or a virtual DOM.
-- **Reactive by design.** Assign to a variable and exactly the affected parts of the page update. Arrays and objects can be changed in place.
-- **Errors before the browser sees them.** Unknown names, wrong types, missing arguments and missing component props are compile errors with a code frame and a "did you mean" hint.
-- **Fast pages by default.** Every page is prerendered to HTML at build time. Interactive parts run on a ~5 kB runtime with fine-grained updates; static pages ship no framework code.
-- **Instant navigation.** Links between pages are prefetched and swapped in place, without full reloads, while every page stays a real, indexable HTML file.
-- **Full stack.** API routes in `functions/` use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages Functions unchanged.
-- **Scales to large sites.** File-based and dynamic routes (`pages/blog/[slug].sinth`), layouts, shared stores, code splitting and hashed assets.
-- **Works with everything else.** npm packages, TypeScript files, CSS and SCSS, JSON, Google Fonts, and components exported as standard web components for any HTML page.
-- **Secure by default.** No `eval`, escaped output, no inline handlers, a strict Content Security Policy and security headers.
+- **Reactive state.** Assigning to a `var`, or changing an array or object in place, updates the parts of the page that use it.
+- **Compile-time checks.** Unknown names, wrong argument counts, missing component parameters and type mismatches the compiler can detect are errors with a code frame and a suggestion.
+- **Prerendered pages.** Every page is rendered to HTML at build time. Interactive pages then load their code: the runtime is 5.4 kB gzipped at most and only the parts a page uses are bundled.
+- **Routing.** Files in `pages/` are routes, `pages/blog/[slug].sinth` generates one page per item, and links between pages load without a full reload (2 kB gzipped; `"router": false` turns it off).
+- **API routes.** Files in `functions/` handle requests with the standard Fetch API in `sinth dev` and `sinth preview`, and deploy to Cloudflare Pages Functions.
+- **Components.** Parameters, two-way bindings, slots and scoped styles, plus a built-in component library (`sinth:ui`). Components can be exported as web components for use on other sites.
+- **Tooling.** Hot reload that keeps state, npm packages, TypeScript and SCSS imports, security headers and a Content Security Policy without inline scripts, and `sinth deploy` for Cloudflare Pages. The output is static files, so other hosts work too.
 
 ## A component
 
@@ -57,7 +57,7 @@ component TodoList(str title = "Todos") {
     draft = ""
   }
 
-  Section(class: "todos") {
+  Section {
     Heading(level: 2) { title + " (" + left + " left)" }
     Form(onSubmit.prevent: add()) {
       Field(label: "New todo", value: draft)
@@ -81,45 +81,27 @@ component TodoList(str title = "Todos") {
 }
 ```
 
-## An API route
-
-```ts
-// functions/api/hello.ts
-export const onRequestGet = () => Response.json({ message: "Hello from the server" });
-```
-
-```sinth
-var str message = ""
-onMount { message = (await (await fetch("/api/hello")).json()).message }
-Main { Paragraph { message } }
-```
-
 ## Commands
 
 | Command | |
 |---|---|
 | `sinth create [name]` | Scaffold a project |
-| `sinth dev` | Dev server with hot reload that keeps state, and an error overlay |
+| `sinth dev` | Dev server with hot reload |
 | `sinth build` | Production build in `dist/` |
 | `sinth preview` | Serve the build and `functions/` locally |
 | `sinth deploy` | Deploy to Cloudflare Pages |
-| `sinth check` | Type-check without building (`--json` for tools) |
+| `sinth check` | Check the project without building (`--json` for tools) |
 | `sinth new page/component` | Add files |
 
-## Tools
+## Editors
 
-- [VS Code extension](https://github.com/Yannosay/sinth/releases/latest): download `sinth-vscode-*.vsix` from the latest release and run **Extensions: Install from VSIX**
-- [Sinth IDE](https://github.com/Yannosay/sinth-ide/releases/latest): a desktop editor for Sinth (Windows, macOS, Linux)
-- [Playground](https://sinth.yannosay.com/playground): the real compiler, in your browser
+- VS Code: download `sinth-vscode-*.vsix` from the [latest release](https://github.com/Yannosay/sinth/releases/latest) and run **Extensions: Install from VSIX**.
+- [Sinth IDE](https://github.com/Yannosay/sinth-ide/releases/latest): a desktop editor for Sinth (Windows, macOS, Linux). Early development.
 
-## Documentation
+## Links
 
-The documentation lives in [docs/](./docs) and is published at [sinth.yannosay.com/docs](https://sinth.yannosay.com/docs). See also the [changelog](./CHANGELOG.md).
-
-## Community
-
-Questions and ideas: [Discord](https://discord.gg/SUvcrafTQm) · Bugs: [GitHub issues](https://github.com/Yannosay/sinth/issues) · Security reports: [SECURITY.md](./SECURITY.md) · Contributing: [CONTRIBUTING.md](./CONTRIBUTING.md)
+Documentation source: [docs/](./docs) · [Changelog](./CHANGELOG.md) · [Discord](https://discord.gg/SUvcrafTQm) · [Issues](https://github.com/Yannosay/sinth/issues) · [Security](./SECURITY.md) · [Contributing](./CONTRIBUTING.md)
 
 ## License
 
-[AGPL-3.0](./LICENSE). Everything you build with Sinth (the generated HTML, CSS and JavaScript) is yours, free of any license obligations.
+[AGPL-3.0](./LICENSE).
