@@ -38,17 +38,18 @@ With an `ogImage`, `twitter:card` defaults to `summary_large_image`. Relative im
 `jsonLd` adds [schema.org](https://schema.org) structured data, which search engines use for rich results:
 
 ```sinth
-title = "Getting started with Sinth"
+const str heading = "Getting started with Sinth"
+title = heading
 
 jsonLd = {
   "@context": "https://schema.org"
   "@type": "Article"
-  headline: title
+  headline: heading
   author: { "@type": "Person", name: "Ada Lovelace" }
   datePublished: "2026-11-27"
 }
 
-Main { Heading(level: 1) { title } }
+Main { Heading(level: 1) { heading } }
 ```
 
 The value is written as `<script type="application/ld+json">` in the head and escaped safely. An array adds several items.

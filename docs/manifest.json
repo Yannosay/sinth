@@ -267,6 +267,12 @@
           "title": "Programmatic API",
           "order": 5,
           "description": "Using the compiler from JavaScript."
+        },
+        {
+          "slug": "ai-agents",
+          "title": "AI agents",
+          "order": 6,
+          "description": "Install the Sinth skill in Claude Code, Codex, Cursor and other coding agents."
         }
       ]
     },

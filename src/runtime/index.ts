@@ -411,24 +411,34 @@ export function model(node: HTMLElement, get: Getter, set: (v: unknown) => void,
     return;
   }
   const isNumber = numeric || type === "number" || type === "range";
+  // The value last written to or read from the field. The field is only overwritten when the bound
+  // value changes from it, so typing (an empty number field, "1." on the way to "1.5") is not undone.
+  const NONE = {};
+  let synced: unknown = NONE;
   effect(() => {
     const v = get();
+    if (Object.is(v, synced)) return;
+    synced = v;
     const str = v === null || v === undefined ? "" : String(v);
     if (input.value !== str && !(isNumber && Number(input.value) === v && input.value !== "")) {
       input.value = str;
     }
   });
+  const write = (v: unknown): void => {
+    synced = v;
+    set(v);
+  };
   const evt = tag === "SELECT" || type === "range" || type === "color" || type === "date" || type === "file" ? "change" : "input";
   on(node, evt, () => {
     if (!isNumber) {
-      set(input.value);
+      write(input.value);
       return;
     }
     if (input.value === "") return;
     const n = Number(input.value);
-    if (!Number.isNaN(n)) set(n);
+    if (!Number.isNaN(n)) write(n);
   });
-  if (evt === "change" && type === "range") on(node, "input", () => set(Number(input.value)));
+  if (evt === "change" && type === "range") on(node, "input", () => write(Number(input.value)));
 }
 
 export function ref(node: Element, set: (el: Element | null) => void): void {
@@ -686,10 +696,14 @@ export function slot(parent: ParentNode, slots: Slots, name: string, fallback?: 
 }
 
 export function onMount(fn: () => unknown): void {
+  // The callback runs after the current render, when `current` is no longer this component's
+  // owner, so the owner is captured now. A returned cleanup runs when the component is removed.
+  const owner = current;
   queueMicrotask(() => {
+    if (owner.disposed) return;
     try {
-      const cleanup = fn();
-      if (typeof cleanup === "function") current.cleanups.push(cleanup as Cleanup);
+      const cleanup = withOwner(owner, fn);
+      if (typeof cleanup === "function") owner.cleanups.push(cleanup as Cleanup);
       settle(cleanup);
     } catch (err) {
       reportError(err);
@@ -762,6 +776,8 @@ export function persist(key: string, get: Getter): void {
 }
 
 const memoCache = new Map<string, Map<string, unknown>>();
+/** Results kept per memoized function; the oldest are dropped beyond this. */
+const MEMO_LIMIT = 500;
 
 export function memo<T>(site: string, fn: () => T, args: unknown[]): T {
   let cache = memoCache.get(site);
@@ -777,6 +793,7 @@ export function memo<T>(site: string, fn: () => T, args: unknown[]): T {
   }
   if (cache.has(key)) return cache.get(key) as T;
   const value = fn();
+  if (cache.size >= MEMO_LIMIT) cache.delete(cache.keys().next().value as string);
   cache.set(key, value);
   return value;
 }
@@ -785,6 +802,7 @@ export function range(a: number, b?: number, step = 1): number[] {
   const startN = b === undefined ? 0 : a;
   const endN = b === undefined ? a : b;
   if (step === 0) throw new Error("range() step cannot be 0");
+  if (!Number.isFinite(startN) || !Number.isFinite(endN) || !Number.isFinite(step)) throw new Error("range() needs finite numbers");
   const out: number[] = [];
   if (step > 0) for (let i = startN; i < endN; i += step) out.push(i);
   else for (let i = startN; i > endN; i += step) out.push(i);

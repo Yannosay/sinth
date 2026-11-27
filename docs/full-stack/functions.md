@@ -1,11 +1,11 @@
 ---
 title: Server functions
-description: API routes and server code in functions/, from development to Cloudflare Pages.
+description: API routes and server code in functions/, from development to Cloudflare Pages or Workers.
 ---
 
 # Server functions
 
-Files in `functions/` are server routes. They run in `sinth dev` and `sinth preview`, and deploy to [Cloudflare Pages Functions](https://developers.cloudflare.com/pages/functions/) with `sinth deploy`, unchanged. They use the standard Fetch API (`Request`, `Response`, `URL`, `Headers`), so there is nothing Sinth-specific to learn.
+Files in `functions/` are server routes. They run in `sinth dev` and `sinth preview`, and deploy with `sinth deploy`, unchanged, to [Cloudflare Pages Functions](https://developers.cloudflare.com/pages/functions/) or, with `"platform": "cloudflare-workers"`, to a Cloudflare Worker that Sinth bundles for you. They use the standard Fetch API (`Request`, `Response`, `URL`, `Headers`), so there is nothing Sinth-specific to learn.
 
 ```
 my-site/
@@ -129,6 +129,6 @@ export const onRequestGet: PagesFunction<Env> = ({ env }) => new Response(env.AP
 
 - `sinth dev` bundles functions with esbuild on the first request and reloads them when a file changes. Errors are shown in the terminal and in the response.
 - `sinth preview` serves the production build together with `functions/`.
-- `sinth deploy` uploads `dist/`, and Wrangler compiles `functions/` into Pages Functions.
+- `sinth deploy` uploads `dist/`. On Cloudflare Pages, Wrangler compiles `functions/` into Pages Functions; on Cloudflare Workers, `sinth build` bundles them into `.sinth/deploy/worker.js`, which only runs for URLs a function can answer.
 
-Functions need a host that runs them. Cloudflare Pages runs them as they are. On purely static hosts (GitHub Pages, S3, nginx), deploy the API separately and call it by its URL.
+Functions need a host that runs them: Cloudflare Pages and Cloudflare Workers run them as they are. On Vercel, Netlify and purely static hosts (GitHub Pages, S3, nginx), the build warns (W0810); deploy the API separately and call it by its URL.

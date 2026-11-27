@@ -7,6 +7,8 @@
     "options": {
       "type": "object",
       "properties": {
+        "platform": { "enum": ["cloudflare", "cloudflare-workers", "vercel", "netlify", "github-pages", "static"], "description": "Where the site is hosted: decides the host-specific build output and how sinth deploy uploads", "default": "cloudflare" },
+        "srcDir": { "type": "string", "description": "Folder holding pages, components, libraries and assets. Defaults to app/ when that folder exists and the root has no pages/ folder or .sinth files, otherwise the project root" },
         "outDir": { "type": "string", "description": "Build output folder", "default": "dist" },
         "pagesDir": { "type": "string", "description": "Folder containing pages", "default": "pages" },
         "publicDir": { "type": "string", "description": "Copied to the output root", "default": "public" },
@@ -35,7 +37,7 @@
   "allOf": [{ "$ref": "#/definitions/options" }],
   "properties": {
     "$schema": { "type": "string" },
-    "outDir": {}, "pagesDir": {}, "publicDir": {}, "staticDirs": {}, "libraryPaths": {}, "site": {}, "base": {},
+    "platform": {}, "srcDir": {}, "outDir": {}, "pagesDir": {}, "publicDir": {}, "staticDirs": {}, "libraryPaths": {}, "site": {}, "base": {},
     "minify": {}, "sourcemap": {}, "port": {}, "host": {}, "previewPort": {}, "target": {}, "router": {}, "security": {},
     "cloudflare": {
       "type": "object",

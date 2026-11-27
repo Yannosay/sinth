@@ -29,7 +29,7 @@ style {
 - **Compile-time checks.** Unknown names, wrong argument counts, type mismatches and missing component parameters are errors with a code frame and a "did you mean" hint, before anything reaches the browser.
 - **Prerendered pages.** Every page is rendered to HTML at build time, so it shows instantly and is fully indexable. Interactive parts are made live by a small runtime.
 - **Instant navigation.** Links between pages load without a full page reload, while every page stays a real HTML file.
-- **Full stack when you need it.** API routes in `functions/` run in the dev server and deploy to Cloudflare Pages Functions unchanged.
+- **Full stack when you need it.** API routes in `functions/` run in the dev server and deploy to Cloudflare Pages or Workers unchanged.
 - **Works with the web platform.** npm packages, TypeScript files, CSS and SCSS, JSON, Google Fonts and standard web components.
 
 ## How it works

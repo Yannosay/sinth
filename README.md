@@ -36,9 +36,9 @@ Requires Node.js 18.17 or newer.
 - **Compile-time checks.** Unknown names, wrong argument counts, missing component parameters and type mismatches the compiler can detect are errors with a code frame and a suggestion.
 - **Prerendered pages.** Every page is rendered to HTML at build time. Interactive pages then load their code: the runtime is 5.4 kB gzipped at most and only the parts a page uses are bundled.
 - **Routing.** Files in `pages/` are routes, `pages/blog/[slug].sinth` generates one page per item, and links between pages load without a full reload (2 kB gzipped; `"router": false` turns it off).
-- **API routes.** Files in `functions/` handle requests with the standard Fetch API in `sinth dev` and `sinth preview`, and deploy to Cloudflare Pages Functions.
+- **API routes.** Files in `functions/` handle requests with the standard Fetch API in `sinth dev` and `sinth preview`, and deploy to Cloudflare Pages or Workers.
 - **Components.** Parameters, two-way bindings, slots and scoped styles, plus a built-in component library (`sinth:ui`). Components can be exported as web components for use on other sites.
-- **Tooling.** Hot reload that keeps state, npm packages, TypeScript and SCSS imports, security headers and a Content Security Policy without inline scripts, and `sinth deploy` for Cloudflare Pages. The output is static files, so other hosts work too.
+- **Tooling.** Hot reload that keeps state, npm packages, TypeScript and SCSS imports, security headers and a Content Security Policy without inline scripts, and `sinth deploy` for Cloudflare Pages or Workers, Vercel and Netlify. GitHub Pages and any static host work too. Sources can live in the project root or in an `app/` folder.
 
 ## A component
 
@@ -89,7 +89,7 @@ component TodoList(str title = "Todos") {
 | `sinth dev` | Dev server with hot reload |
 | `sinth build` | Production build in `dist/` |
 | `sinth preview` | Serve the build and `functions/` locally |
-| `sinth deploy` | Deploy to Cloudflare Pages |
+| `sinth deploy` | Deploy (Cloudflare Pages or Workers, Vercel, Netlify) |
 | `sinth check` | Check the project without building (`--json` for tools) |
 | `sinth new page/component` | Add files |
 
@@ -97,6 +97,16 @@ component TodoList(str title = "Todos") {
 
 - VS Code: download `sinth-vscode-*.vsix` from the [latest release](https://github.com/Yannosay/sinth/releases/latest) and run **Extensions: Install from VSIX**.
 - [Sinth IDE](https://github.com/Yannosay/sinth-ide/releases/latest): a desktop editor for Sinth (Windows, macOS, Linux). Early development.
+
+## AI agents
+
+Paste this into Claude Code, Codex, Cursor or another coding agent to teach it Sinth:
+
+```text
+Install the Sinth skill: fetch https://sinth.yannosay.com/agents.md and follow its instructions exactly.
+```
+
+The skill is also in this package under [`skills/sinth/`](./skills/sinth). See [AI agents](https://sinth.yannosay.com/docs/tooling/ai-agents).
 
 ## Links
 

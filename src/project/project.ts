@@ -8,7 +8,7 @@ import { evaluatePaths, prerenderPage, PrerenderHost } from "../compiler/prerend
 import { MetaValue } from "../compiler/html";
 import { parseSinth } from "../compiler/parser";
 import { ScssCompiler } from "../compiler/style";
-import { SinthConfig } from "./config";
+import { SinthConfig, staticDirPath } from "./config";
 
 export const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 export const RUNTIME_PATH = path.join(PACKAGE_ROOT, "dist", "runtime", "index.js");
@@ -82,13 +82,14 @@ export class Project {
   }
 
   /**
-   * A file is a page when it lives in the pages folder (or, without one, in the project root),
+   * A file is a page when it lives in the pages folder (or, without one, in the source folder: the
+   * project root or app/),
    * is not hidden behind a leading underscore, and is not a pure component module.
    */
   private isPageFile(abs: string, parsed: SinthFile): boolean {
     const pagesDir = this.config.pagesDir;
     const hasPagesDir = fs.existsSync(pagesDir);
-    const base = hasPagesDir ? pagesDir : this.root;
+    const base = hasPagesDir ? pagesDir : this.config.srcDir;
     const rel = relativeInside(base, abs);
     if (!rel) return false;
     const parts = rel.split(/[\\/]/);
@@ -109,7 +110,7 @@ export class Project {
         const sass = load("sass") as { compileString(src: string, opts: { loadPaths: string[]; style: string }): { css: string } };
         this.scssCompiler = (src: string, file: string): string => {
           try {
-            return sass.compileString(src, { loadPaths: [path.dirname(file), this.root], style: "expanded" }).css;
+            return sass.compileString(src, { loadPaths: [path.dirname(file), this.config.srcDir, this.root], style: "expanded" }).css;
           } catch (err) {
             throw new SinthError("E0402", `SCSS error: ${(err as Error).message.split("\n")[0]}`, { file, line: 1, col: 1 });
           }
@@ -125,14 +126,14 @@ export class Project {
 
   findPages(): PageInfo[] {
     const pagesDir = this.config.pagesDir;
-    const base = fs.existsSync(pagesDir) ? pagesDir : this.root;
+    const base = fs.existsSync(pagesDir) ? pagesDir : this.config.srcDir;
     const out: PageInfo[] = [];
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith(".") || full === this.config.outDir) continue;
-          if (base === this.root && ROOT_MODULE_DIRS.has(entry.name)) continue;
+          if (base === this.config.srcDir && ROOT_MODULE_DIRS.has(entry.name)) continue;
           walk(full);
         } else if (entry.name.endsWith(".sinth") && !entry.name.startsWith("_")) {
           if (!this.getFile(full).isPage) continue;
@@ -145,7 +146,7 @@ export class Project {
   }
 
   private pagesBase(): string {
-    return fs.existsSync(this.config.pagesDir) ? this.config.pagesDir : this.root;
+    return fs.existsSync(this.config.pagesDir) ? this.config.pagesDir : this.config.srcDir;
   }
 
   pageInfo(file: string, base = this.pagesBase()): PageInfo {
@@ -235,7 +236,7 @@ export class Project {
     const isRelative = source.startsWith("./") || source.startsWith("../");
     const isRootAbs = source.startsWith("/") && !source.startsWith("//");
     const isUrl = /^(https?:)?\/\//.test(source);
-    const localBase = isRootAbs ? path.join(this.root, source) : path.resolve(path.dirname(from), source);
+    const localBase = isRootAbs ? this.rootPath(source) : path.resolve(path.dirname(from), source);
 
     switch (decl.kind) {
       case "style": {
@@ -443,15 +444,27 @@ export class Project {
     return visit(path.resolve(pageFile));
   }
 
+  /**
+   * `/components/Card.sinth` in an import means the source folder (the root or app/). Files that
+   * only exist in the project root (for example styles next to app/) still resolve.
+   */
+  private rootPath(source: string): string {
+    const inSrc = path.join(this.config.srcDir, source);
+    if (this.config.srcDir === path.resolve(this.root)) return inSrc;
+    const inRoot = path.join(this.root, source);
+    const exists = (p: string): boolean => fs.existsSync(p) || (fs.existsSync(path.dirname(p)) && fs.readdirSync(path.dirname(p)).some(f => f.startsWith(path.basename(p) + ".")));
+    return !exists(inSrc) && exists(inRoot) ? inRoot : inSrc;
+  }
+
   resolveAsset(value: string, fromFile: string): string {
     if (/^([a-z]+:|\/\/|#|data:)/i.test(value) || value.startsWith("/")) return value;
-    const candidates = [path.resolve(path.dirname(fromFile), value), path.resolve(this.root, value)];
+    const candidates = [path.resolve(path.dirname(fromFile), value), path.resolve(this.config.srcDir, value), path.resolve(this.root, value)];
     for (const c of candidates) {
       if (!fs.existsSync(c)) continue;
       if (c.startsWith(this.config.publicDir + path.sep)) return this.config.base + path.relative(this.config.publicDir, c).replace(/\\/g, "/");
       for (const d of this.config.staticDirs) {
-        const dir = path.resolve(this.root, d);
-        if (c.startsWith(dir + path.sep)) return this.config.base + path.relative(this.root, c).replace(/\\/g, "/");
+        const dir = staticDirPath(this.config, d);
+        if (c.startsWith(dir + path.sep)) return this.config.base + d + "/" + path.relative(dir, c).replace(/\\/g, "/");
       }
     }
     return this.config.base + value.replace(/^\.\//, "");

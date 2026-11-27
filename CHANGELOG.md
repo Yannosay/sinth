@@ -1,5 +1,40 @@
 # Changelog
 
+## 5.3.3
+
+### Hosting
+
+- **`platform` option** (`sinth.config.json`, or `--platform` on `sinth build` and `sinth deploy`): `cloudflare` (default), `cloudflare-workers`, `vercel`, `netlify`, `github-pages` or `static`. The build writes what the host needs and `sinth deploy` uploads to it.
+- **Cloudflare Workers.** The site is served with Workers Static Assets. Routes in `functions/` are bundled into a Worker that keeps the Pages Functions conventions (`onRequestGet`, `[id]`, `[[path]]`, `_middleware`, `next()`, `env.ASSETS`) and only runs for URLs a function can answer. `sinth deploy` runs `wrangler deploy`, `--preview` uploads a preview version, and your own `wrangler.jsonc` is used when present (for KV, D1, R2 and other bindings).
+- **Vercel.** The build writes `.vercel/output/` (Build Output API) with clean URLs, the security headers and the 404 page; `sinth deploy` runs `vercel deploy --prebuilt`.
+- **Netlify** (`netlify deploy`) and **GitHub Pages** (adds `.nojekyll`, without which GitHub drops the `_sinth/` folder).
+- A `functions/` folder on a platform that cannot run it produces warning W0810.
+
+### Project layout
+
+- **Optional `app/` folder**, like Nuxt: when `app/` exists and the root has no `pages/` folder or `.sinth` files, pages, components, libraries and assets are read from `app/`. `public/` and `functions/` stay in the root (`app/public/` also works). The new `srcDir` option sets the folder explicitly. Imports starting with `/` resolve inside it. `sinth new`, `sinth info` and the VS Code extension follow it.
+
+### AI agents
+
+- **The Sinth skill** teaches coding agents (Claude Code, Codex, Cursor, Copilot, ...) the syntax, common mistakes and a check-after-every-change workflow. Install it by pasting this prompt into your agent: `Install the Sinth skill: fetch https://sinth.yannosay.com/agents.md and follow its instructions exactly.` The skill also ships in the npm package under `skills/sinth/`.
+
+### Fixes
+
+- **Cleanups returned from `onMount`** now run when the component is removed. Before, they were attached to the wrong owner, so intervals and listeners started in a component's `onMount` kept running after it disappeared.
+- **`Select` with `model`** shows the bound value on the first render. Before, it showed the first option until the user changed it, because the value was set before the options existed.
+- **Number fields bound with `model`** can be cleared while typing. Before, the old number came back as soon as the field was empty. Text inputs no longer have their value rewritten while the user types.
+- **Build output no longer contains absolute paths** of the build machine. Unminified CSS and JS had comments like `/* sinth-css:C:\Users\...\pages\index.sinth */`; module names are now relative to the project.
+- **Client navigation** follows server redirects (the address bar shows the final URL), and a malformed `#hash` no longer stops the next page from starting.
+- `range()` with an infinite bound throws instead of hanging, and memoized calls (`$fn(x)`) keep at most 500 results per function.
+- **Clearer errors:** event handlers that are literals (`onClick: 1`) report E0352 instead of "handlers cannot be strings", likely typos in event names (`onClik`) get a suggestion (W0302), and children of void elements such as `Input { "x" }` in static markup are reported (W0331) instead of being dropped silently.
+- `functions/`: a malformed URL escape falls through to the static site instead of failing the request.
+
+### Documentation and website
+
+- New pages: [AI agents](https://sinth.yannosay.com/docs/tooling/ai-agents), and a rewritten [Deploying](https://sinth.yannosay.com/docs/production/deploy) covering every platform. Project structure, configuration, CLI and server functions pages describe `app/`, `srcDir` and `platform`.
+- The SEO example for `jsonLd` used the `title` metadata as a variable, which does not compile; it now uses a constant.
+- The home page has a copyable agent prompt; `llms.txt` points agents to the skill.
+
 ## 5.3.2
 
 - **`for … else` empty state.** The `else` content of a loop is removed once the list gets items. Before, it stayed on the page after the first item was added to an empty list.

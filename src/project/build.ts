@@ -3,6 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { Diagnostic, SinthError } from "../compiler/diagnostics";
 import { buildHead, escapeHtml, renderDocument } from "../compiler/html";
+import { headersFile, readsHeadersFile, securityHeaders, writePlatformOutput } from "../deploy/platforms";
+import { staticDirPath } from "./config";
 import { CompiledPage, fontHref, PageInfo, Project, ROUTER_PATH, RUNTIME_PATH } from "./project";
 
 export interface OutputFile {
@@ -37,25 +39,62 @@ const ASSET_LOADERS: Record<string, esbuild.Loader> = {
   ".webm": "file", ".mp3": "file", ".wav": "file", ".txt": "text",
 };
 
+/**
+ * A short id for a virtual CSS module. esbuild prints module paths in comments in unminified
+ * output, so ids never contain absolute paths of the build machine.
+ */
+function cssModuleId(project: Project, file: string): string {
+  const rel = path.relative(project.root, file);
+  if (!rel.startsWith("..") && !path.isAbsolute(rel)) return rel.split(path.sep).join("/");
+  const parts = file.split(/[\\/]/);
+  const nm = parts.lastIndexOf("node_modules");
+  return nm !== -1 ? parts.slice(nm).join("/") : "external/" + parts.slice(-2).join("/");
+}
+
 function sinthPlugin(project: Project, entries: Map<string, string>, injectCss = false): esbuild.Plugin {
+  const cssFiles = new Map<string, string>();
   return {
     name: "sinth",
     setup(b) {
-      b.onResolve({ filter: /^sinth-runtime$/ }, () => ({ path: RUNTIME_PATH }));
-      b.onResolve({ filter: /^sinth-router$/ }, () => ({ path: ROUTER_PATH }));
+      b.onResolve({ filter: /^sinth-(runtime|router)$/ }, a => ({ path: a.path, namespace: "sinth-builtin" }));
+      b.onLoad({ filter: /.*/, namespace: "sinth-builtin" }, a => {
+        const file = a.path === "sinth-router" ? ROUTER_PATH : RUNTIME_PATH;
+        return { contents: fs.readFileSync(file, "utf-8"), loader: "js", resolveDir: path.dirname(file) };
+      });
       b.onResolve({ filter: /^sinth-entry:/ }, a => ({ path: a.path.slice("sinth-entry:".length), namespace: "sinth-entry" }));
       b.onLoad({ filter: /.*/, namespace: "sinth-entry" }, a => ({ contents: entries.get(a.path) ?? "", loader: "js", resolveDir: project.root }));
-      b.onResolve({ filter: /^sinth-css:/ }, a => ({ path: a.path.slice("sinth-css:".length), namespace: "sinth-css" }));
-      b.onLoad({ filter: /.*/, namespace: "sinth-css" }, a => (injectCss
-        ? { contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-" + a.path.length.toString(36) + "-" + path.basename(a.path))}, ${JSON.stringify(project.compile(a.path).css)});`, loader: "js", resolveDir: path.dirname(a.path) }
-        : { contents: project.compile(a.path).css, loader: "css", resolveDir: path.dirname(a.path) }));
+      b.onResolve({ filter: /^sinth-css:/ }, a => {
+        const file = a.path.slice("sinth-css:".length);
+        const id = cssModuleId(project, file);
+        cssFiles.set(id, file);
+        return { path: id, namespace: "sinth-css" };
+      });
+      b.onLoad({ filter: /.*/, namespace: "sinth-css" }, a => {
+        const file = cssFiles.get(a.path) ?? path.resolve(project.root, a.path);
+        return injectCss
+          ? { contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-css-" + a.path.replace(/[^\w-]+/g, "-"))}, ${JSON.stringify(project.compile(file).css)});`, loader: "js", resolveDir: path.dirname(file) }
+          : { contents: project.compile(file).css, loader: "css", resolveDir: path.dirname(file) };
+      });
       if (injectCss) {
         b.onLoad({ filter: /\.css$/ }, a => ({
           contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-css-" + path.basename(a.path))}, ${JSON.stringify(fs.readFileSync(a.path, "utf-8"))});`,
           loader: "js",
         }));
       }
-      b.onLoad({ filter: /\.sinth$/ }, a => ({ contents: project.compile(a.path).js, loader: "js", resolveDir: path.dirname(a.path) }));
+      b.onLoad({ filter: /\.sinth$/, namespace: "file" }, a => ({ contents: project.compile(a.path).js, loader: "js", resolveDir: path.dirname(a.path) }));
+      // .sinth files outside the project (built-in libraries, linked packages) get a short id too.
+      b.onResolve({ filter: /\.sinth$/ }, a => {
+        if (a.namespace !== "file" && a.namespace !== "sinth-entry" && a.namespace !== "sinth-module") return undefined;
+        const file = path.isAbsolute(a.path) ? a.path : path.resolve(a.resolveDir, a.path);
+        const id = cssModuleId(project, file);
+        if (!id.startsWith("node_modules/") && !id.startsWith("external/")) return undefined;
+        cssFiles.set(id, file);
+        return { path: id, namespace: "sinth-module" };
+      });
+      b.onLoad({ filter: /.*/, namespace: "sinth-module" }, a => {
+        const file = cssFiles.get(a.path) as string;
+        return { contents: project.compile(file).js, loader: "js", resolveDir: path.dirname(file) };
+      });
       b.onLoad({ filter: /\.s[ac]ss$/ }, a => {
         const scss = project.scss();
         if (!scss) return { errors: [{ text: `Cannot compile ${path.basename(a.path)}: install 'sass' (npm install -D sass)` }] };
@@ -235,9 +274,12 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   project.invalidate();
   const pages = project.findPages();
   if (!pages.length && !findCustomElementFiles(project).length) {
-    throw new SinthError("E0802", fs.existsSync(cfg.pagesDir) ? `No pages found in ${path.relative(project.root, cfg.pagesDir) || "."}` : `No pages found (no ${path.relative(project.root, cfg.pagesDir) || "pages"}/ folder, and no .sinth file with markup in the project root)`, undefined, fs.existsSync(cfg.pagesDir)
-      ? "Every .sinth file in this folder is a page (files starting with '_' are skipped). Add markup to pages/index.sinth, for example: Main { Heading { \"Hello\" } }"
-      : `Create ${path.relative(project.root, cfg.pagesDir) || "pages"}/index.sinth with some markup, for example: Main { Heading { "Hello" } }`);
+    const rel = (p: string): string => path.relative(project.root, p).split(path.sep).join("/");
+    const pagesRel = rel(cfg.pagesDir) || "pages";
+    const where = rel(cfg.srcDir) ? rel(cfg.srcDir) + "/" : "the project root";
+    throw new SinthError("E0802", fs.existsSync(cfg.pagesDir) ? `No pages found in ${pagesRel}` : `No pages found (no ${pagesRel}/ folder, and no .sinth file with markup in ${where})`, undefined, fs.existsSync(cfg.pagesDir)
+      ? `Every .sinth file in this folder is a page (files starting with '_' are skipped). Add markup to ${pagesRel}/index.sinth, for example: Main { Heading { "Hello" } }`
+      : `Create ${pagesRel}/index.sinth with some markup, for example: Main { Heading { "Hello" } }`);
   }
   const compiled = pages.map(p => project.compilePage(p));
   const entries = new Map<string, string>();
@@ -339,13 +381,12 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   }
   if (!project.dev) {
     copyDir(cfg.publicDir, cfg.outDir, files, cfg.outDir);
-    for (const d of cfg.staticDirs) copyDir(path.resolve(project.root, d), path.join(cfg.outDir, d), files, cfg.outDir);
-    if (cfg.security.headers && !files.has("_headers")) {
-      const lines = ["/*", "  X-Content-Type-Options: nosniff", "  Referrer-Policy: strict-origin-when-cross-origin", "  X-Frame-Options: SAMEORIGIN", "  Cross-Origin-Opener-Policy: same-origin"];
-      if (csp) lines.push(`  Content-Security-Policy: ${csp}`);
-      lines.push("", `${cfg.base}_sinth/*`, "  Cache-Control: public, max-age=31536000, immutable", "");
-      files.set("_headers", { path: path.join(cfg.outDir, "_headers"), contents: Buffer.from(lines.join("\n")) });
+    for (const d of cfg.staticDirs) copyDir(staticDirPath(cfg, d), path.join(cfg.outDir, d), files, cfg.outDir);
+    if (cfg.security.headers && readsHeadersFile(cfg.platform) && !files.has("_headers")) {
+      files.set("_headers", { path: path.join(cfg.outDir, "_headers"), contents: Buffer.from(headersFile(securityHeaders(csp), cfg.base)) });
     }
+    // GitHub Pages runs Jekyll by default, which drops folders starting with "_" such as _sinth/.
+    if (cfg.platform === "github-pages" && !files.has(".nojekyll")) files.set(".nojekyll", { path: path.join(cfg.outDir, ".nojekyll"), contents: Buffer.alloc(0) });
     if (cfg.site) {
       const site = cfg.site.replace(/\/$/, "");
       const urls = pageOutputs.filter(p => !/(^|\/)404$/.test(p.page.route)).map(p => `  <url><loc>${escapeHtml(site + p.page.route)}</loc></url>`);
@@ -361,6 +402,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
       fs.writeFileSync(f.path, f.contents);
     }
   }
+  const platformWarnings = project.dev ? [] : await writePlatformOutput(project, files, cfg.security.headers ? securityHeaders(csp) : {}, options.write);
 
   const bundlerWarnings: Diagnostic[] = result.warnings.map(w => ({
     severity: "warning",
@@ -368,7 +410,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     message: w.text,
     loc: w.location?.file && !w.location.file.endsWith(".sinth") ? { file: path.resolve(project.root, w.location.file.replace(/^[a-z-]+:/, "")), line: w.location.line, col: w.location.column + 1 } : undefined,
   }));
-  const warnings = dedupeWarnings([...compiled.flatMap(c => c.warnings), ...bundlerWarnings]);
+  const warnings = dedupeWarnings([...compiled.flatMap(c => c.warnings), ...bundlerWarnings, ...platformWarnings]);
   return { pages: pageOutputs, files, warnings, durationMs: Date.now() - started };
 }
 

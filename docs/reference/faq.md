@@ -18,7 +18,7 @@ Import `.ts` files directly; they are compiled during bundling. Sinth itself has
 In `onMount`, an event handler or an `async function`. The UI updates when the promise settles. See [Fetching data](../full-stack/data-fetching.md).
 
 **Can Sinth do server-side code and APIs?**
-Yes. Files in `functions/` are API routes that run in the dev server and on Cloudflare Pages. See [Server functions](../full-stack/functions.md).
+Yes. Files in `functions/` are API routes that run in the dev server and on Cloudflare Pages or Workers. See [Server functions](../full-stack/functions.md).
 
 **Can I use Sinth components on a site that is not built with Sinth?**
 Yes. Declare a component `as <my-tag>` and include the built script. See [Custom elements](../components/custom-elements.md).

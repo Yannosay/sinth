@@ -179,3 +179,17 @@ test("try, catch, finally and throw compile with a scoped error variable", () =>
   expectError(() => compilePage("function f() {\n  try { console.log(1) }\n}\nMain { \"x\" }\n"), "E0100");
   expectError(() => compilePage("function f() {\n  try { console.log(1) } catch { console.log(e) }\n}\nMain { \"x\" }\n"), "E0302");
 });
+
+test("children of void elements: warning in static markup, error in dynamic markup", () => {
+  const out = compilePage('Main { Input { "x" } }');
+  assert.ok(out.diagnostics.warnings.some(w => w.code === "W0331"));
+  expectError(() => compilePage('var num n = 0\nMain { Input(value: n) { "x" } }'), "E0331");
+});
+
+test("event handlers: literals are rejected and typos in event names get a suggestion", () => {
+  expectError(() => compilePage('Main { Button(onClick: 1) { "x" } }'), "E0352");
+  const out = compilePage('var num n = 0\nMain { Button(onClik: n += 1) { "x" } }');
+  const w = out.diagnostics.warnings.find(x => x.code === "W0302");
+  assert.ok(w && /onClick/.test(w.hint));
+  assert.ok(!compilePage('var num n = 0\nMain { Div(onMyEvent: n += 1) { "x" } }').diagnostics.warnings.some(x => x.code === "W0302"));
+});

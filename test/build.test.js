@@ -222,3 +222,57 @@ test("prerendered pages carry the initial values of reactive page styles", async
   const { text } = await build({ "pages/index.sinth": 'var num hue = 120\nMain { Div(class: "box") { "b" } }\nstyle { .box { background: "hsl(" + hue + ", 50%, 50%)" } }' });
   assert.match(text("index.html"), /<style>:root\{--sv-[\w]+-0: hsl\(120, 50%, 50%\)\}<\/style>/);
 });
+
+test("an app/ folder holds pages, components and assets (like Nuxt)", async () => {
+  const { out, text } = await build({
+    "app/pages/index.sinth": 'import { Card } from "/components/Card.sinth"\nimport "/styles/site.css"\nfavicon = "../assets/logo.svg"\nMain { Card() }\n',
+    "app/pages/about.sinth": 'Main { "About" }\n',
+    "app/components/Card.sinth": 'export component Card { Div(class: "card") { "card" } }\n',
+    "app/assets/logo.svg": "<svg/>",
+    "styles/site.css": "body { margin: 0 }",
+    "public/robots.txt": "ok",
+  });
+  assert.deepEqual(out.pages.map(p => p.page.route), ["/", "/about"]);
+  assert.match(text("index.html"), /class="[^"]* card">card</);
+  assert.match(text("index.html"), /<link rel="icon" href="\/assets\/logo\.svg"/);
+  assert.ok([...out.files.keys()].some(f => f.endsWith(".css")));
+  assert.ok(out.files.has("assets/logo.svg"));
+  assert.ok(out.files.has("robots.txt"));
+});
+
+test("app/ without a pages folder makes its own .sinth files pages, and app/public works", async () => {
+  const { out } = await build({
+    "app/index.sinth": 'Main { "Home" }\n',
+    "app/components/Card.sinth": 'Main { "not a page" }\n',
+    "app/public/favicon.ico": "x",
+  });
+  assert.deepEqual(out.pages.map(p => p.page.route), ["/"]);
+  assert.ok(out.files.has("favicon.ico"));
+});
+
+test("an app/ folder is ignored when the root has pages", async () => {
+  const { out } = await build({ "pages/index.sinth": 'Main { "Root" }\n', "app/pages/other.sinth": 'Main { "x" }\n' });
+  assert.deepEqual(out.pages.map(p => p.page.route), ["/"]);
+  const { out: out2 } = await build({ "index.sinth": 'Main { "Root" }\n', "app/thing.sinth": 'Main { "x" }\n' });
+  assert.deepEqual(out2.pages.map(p => p.page.route), ["/", "/app/thing"]);
+});
+
+test("srcDir can be set explicitly and must exist", async () => {
+  const { out } = await build({ "sinth.config.json": '{ "srcDir": "src" }', "src/pages/index.sinth": 'Main { "x" }\n' });
+  assert.deepEqual(out.pages.map(p => p.page.route), ["/"]);
+  const root = makeProject({ "sinth.config.json": '{ "srcDir": "nope" }' });
+  assert.throws(() => loadConfig(root, "production"), err => err.code === "E0903");
+});
+
+test("build output never contains absolute paths of the build machine", async () => {
+  const p = project({
+    "pages/index.sinth": 'import { Button } from "sinth:ui"\nvar num n = 0\nMain { Button(onClick: n += 1) { "n" + n } }\nstyle { main { padding: "1rem" } }\n',
+  });
+  p.config.minify = false;
+  const out = await buildProject(p, { write: false });
+  const needles = [p.root, p.root.split(path.sep).join("/"), path.resolve(__dirname, "..")];
+  for (const [name, f] of out.files) {
+    const text = Buffer.from(f.contents).toString("utf-8");
+    for (const n of needles) assert.ok(!text.includes(n), `${name} contains ${n}`);
+  }
+});

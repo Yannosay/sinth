@@ -200,7 +200,7 @@ Component styles are scoped: `.done` here does not affect other components.
 ```bash
 npm run check     # type-check everything
 npm run build     # writes dist/
-npm run deploy    # deploys to Cloudflare Pages
+npm run deploy    # deploys to Cloudflare Pages (or Workers, Vercel, Netlify)
 ```
 
 The build prerenders the page, so the list markup is already in the HTML, and ships a small bundle for the interactive parts.

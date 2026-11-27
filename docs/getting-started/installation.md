@@ -51,7 +51,7 @@ npm run dev       # dev server with hot reload
 npm run build     # production build in dist/
 npm run preview   # serve dist/ locally with production headers
 npm run check     # type-check without building
-npm run deploy    # deploy to Cloudflare Pages
+npm run deploy    # deploy (Cloudflare Pages by default, see Deploying)
 ```
 
 ## Next steps

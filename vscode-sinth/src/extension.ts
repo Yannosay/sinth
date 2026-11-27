@@ -344,7 +344,8 @@ function projectRootFor(file: string): string | undefined {
   let dir = path.dirname(file);
   const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file))?.uri.fsPath;
   for (;;) {
-    if (fs.existsSync(path.join(dir, "sinth.config.json")) || fs.existsSync(path.join(dir, "package.json")) || fs.existsSync(path.join(dir, "pages"))) return dir;
+    const isAppDir = path.basename(dir) === "app" && (fs.existsSync(path.join(path.dirname(dir), "sinth.config.json")) || fs.existsSync(path.join(path.dirname(dir), "package.json")));
+    if (fs.existsSync(path.join(dir, "sinth.config.json")) || fs.existsSync(path.join(dir, "package.json")) || (!isAppDir && fs.existsSync(path.join(dir, "pages")))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir || (folder && !parent.startsWith(folder))) return folder ?? dir;
     dir = parent;
@@ -486,6 +487,19 @@ function activeRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+/** The folder holding pages and components: `srcDir` from sinth.config.json, app/ (like Nuxt), or the root. */
+export function sourceDir(root: string): string {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(root, "sinth.config.json"), "utf-8")) as { srcDir?: unknown };
+    if (typeof config.srcDir === "string") return path.resolve(root, config.srcDir);
+  } catch {
+    // no config or invalid JSON: fall through to detection
+  }
+  const isDir = (p: string): boolean => fs.existsSync(p) && fs.statSync(p).isDirectory();
+  if (!isDir(path.join(root, "app")) || isDir(path.join(root, "pages"))) return root;
+  return fs.readdirSync(root).some(f => f.endsWith(".sinth")) ? root : path.join(root, "app");
+}
+
 async function createFile(kind: "page" | "component"): Promise<void> {
   const root = activeRoot();
   if (!root) {
@@ -497,7 +511,8 @@ async function createFile(kind: "page" | "component"): Promise<void> {
     validateInput: v => (kind === "page" ? (/^[a-z0-9][a-z0-9/_-]*$/i.test(v) && !v.includes("..") ? undefined : "Use letters, numbers, - and /") : /^[A-Z][A-Za-z0-9]*$/.test(v) ? undefined : "Use PascalCase, e.g. ProductCard"),
   });
   if (!name) return;
-  const file = kind === "page" ? path.join(root, "pages", name + ".sinth") : path.join(root, "components", name + ".sinth");
+  const src = sourceDir(root);
+  const file = kind === "page" ? path.join(src, "pages", name + ".sinth") : path.join(src, "components", name + ".sinth");
   if (fs.existsSync(file)) {
     void vscode.window.showErrorMessage(`${path.relative(root, file)} already exists.`);
     return;

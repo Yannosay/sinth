@@ -10,6 +10,8 @@ description: All sinth.config.json options.
 ```json
 {
   "$schema": "./node_modules/@yannosay/sinth/schema/sinth.config.schema.json",
+  "platform": "cloudflare",
+  "srcDir": "app",
   "outDir": "dist",
   "pagesDir": "pages",
   "publicDir": "public",
@@ -33,11 +35,13 @@ description: All sinth.config.json options.
 
 | Option | Default | Description |
 |---|---|---|
-| `outDir` | `dist` | Build output folder |
-| `pagesDir` | `pages` | Folder containing pages |
-| `publicDir` | `public` | Copied to the output root, including dotfiles like `.nojekyll` and `.well-known/` |
-| `staticDirs` | `["assets"]` | Copied to `<outDir>/<name>` |
-| `libraryPaths` | `["libraries"]` | Folders searched for bare imports like `"ui/Button"` |
+| `platform` | `cloudflare` | Where the site is hosted: `cloudflare`, `cloudflare-workers`, `vercel`, `netlify`, `github-pages` or `static`. Decides the host-specific build output and what `sinth deploy` does (see [Deploying](../production/deploy.md)) |
+| `srcDir` | `app` or `.` | Folder holding pages, components, libraries and assets. `app` when an `app/` folder exists and the root has no `pages/` folder or `.sinth` files, otherwise the project root (see [Project structure](../getting-started/project-structure.md#the-app-folder)) |
+| `outDir` | `dist` | Build output folder (relative to the project root) |
+| `pagesDir` | `pages` | Folder containing pages (relative to `srcDir`) |
+| `publicDir` | `public` | Copied to the output root, including dotfiles like `.nojekyll` and `.well-known/` (relative to the project root; `app/public` is used when there is no root `public/`) |
+| `staticDirs` | `["assets"]` | Folders in `srcDir` copied to `<outDir>/<name>` |
+| `libraryPaths` | `["libraries"]` | Folders in `srcDir` searched for bare imports like `"ui/Button"` |
 | `site` | none | Public URL; enables `sitemap.xml` and `robots.txt` |
 | `base` | `/` | URL prefix when hosting in a subfolder |
 | `minify` | `true` in build | Minify JS and CSS |
@@ -46,7 +50,7 @@ description: All sinth.config.json options.
 | `previewPort` | `4000` | Preview server port |
 | `target` | modern browsers | esbuild targets for JS and CSS |
 | `router` | `true` | [Client-side navigation](../getting-started/pages-and-routing.md#client-side-navigation) between pages; `false` uses full page loads |
-| `security.headers` | `true` | Write `_headers` |
+| `security.headers` | `true` | Security and caching headers (`_headers`, or the Vercel config on `platform: "vercel"`) |
 | `security.csp` | `true` | `true` (generated), `false`, or a custom policy string |
 | `cloudflare` | `{}` | Deployment settings (see [Deploying](../production/deploy.md)) |
 | `development` / `production` | none | Overrides per mode |

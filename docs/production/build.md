@@ -36,4 +36,4 @@ Every page includes `<meta name="generator" content="Sinth">` unless you set `ge
 
 ## Server functions
 
-`functions/` is not copied into `dist/`. Cloudflare Pages compiles it during `sinth deploy`, and `sinth preview` runs it next to the build. See [Server functions](../full-stack/functions.md).
+`functions/` is not copied into `dist/`. Cloudflare Pages compiles it during `sinth deploy`, `platform: "cloudflare-workers"` bundles it into a Worker during the build, and `sinth preview` runs it next to the build. Host-specific output (`.vercel/output/`, `.sinth/deploy/`, `.nojekyll`) depends on the [`platform`](deploy.md). See [Server functions](../full-stack/functions.md).

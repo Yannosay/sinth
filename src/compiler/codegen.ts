@@ -148,6 +148,16 @@ export function collectExports(file: SinthFile): ModuleExports {
 
 const EVENT_NAME_MAP: Record<string, string> = { doubleclick: "dblclick", dblclick: "dblclick" };
 
+/** Common DOM events, used to suggest a fix for typos like onClik. Other names still work as custom events. */
+const KNOWN_EVENTS = [
+  "Click", "DoubleClick", "Dblclick", "ContextMenu", "MouseDown", "MouseUp", "MouseMove", "MouseEnter", "MouseLeave", "MouseOver", "MouseOut",
+  "PointerDown", "PointerUp", "PointerMove", "PointerEnter", "PointerLeave", "PointerCancel", "TouchStart", "TouchEnd", "TouchMove",
+  "KeyDown", "KeyUp", "KeyPress", "Input", "Change", "Submit", "Reset", "Focus", "Blur", "FocusIn", "FocusOut", "Scroll", "Wheel",
+  "DragStart", "Drag", "DragEnd", "DragEnter", "DragLeave", "DragOver", "Drop", "Load", "Error", "Resize", "Select", "Invalid",
+  "Play", "Pause", "Ended", "TimeUpdate", "Toggle", "Close", "Cancel", "AnimationEnd", "TransitionEnd", "Copy", "Cut", "Paste",
+].map(e => "on" + e);
+const KNOWN_EVENT_SET = new Set(KNOWN_EVENTS.map(e => e.toLowerCase()));
+
 function eventName(attr: string): string {
   const raw = attr.slice(2).toLowerCase();
   return EVENT_NAME_MAP[raw] ?? raw;
@@ -587,9 +597,22 @@ class ModuleCompiler {
     return node.children.every(c => this.isStaticNode(c, ctx));
   }
 
+  /**
+   * Void elements (Input, Img, ...) cannot have children. Static markup used to drop them silently,
+   * so there it stays a warning to keep existing builds working; dynamic elements were always an error.
+   */
+  private checkVoidChildren(node: ElementNode, ctx: RenderCtx, strict: boolean): void {
+    if (!node.children.length || !VOID_TAGS.has(this.elementShape(node, ctx).tag)) return;
+    const message = `${node.name} is a void element and cannot have children`;
+    const hint = node.name === "Input" || node.name === "Checkbox" || node.name === "Radio" ? "Put the text in a Label next to it, e.g. Label { Checkbox(model: done) \" Done\" }" : undefined;
+    if (strict) this.fail("E0331", message, node.loc, hint);
+    this.diagnostics.warn("W0331", message + " (they are ignored)", node.loc, hint);
+  }
+
   private staticHtml(node: Node, ctx: RenderCtx): string {
     if (node.k === "text") return node.expr.k === "lit" && node.expr.value !== null ? escapeHtml(String(node.expr.value)) : "";
     if (node.k !== "element") return "";
+    this.checkVoidChildren(node, ctx, false);
     const { tag, attrs } = this.elementShape(node, ctx);
     const attrStr = Object.entries(attrs).map(([k, v]) => (v === "" && BOOLEAN_ATTRS.has(k) ? ` ${k}` : ` ${k}="${escapeAttr(v)}"`)).join("");
     if (VOID_TAGS.has(tag)) return `<${tag}${attrStr}>`;
@@ -664,6 +687,7 @@ class ModuleCompiler {
       this.fail("E0301", `Unknown component '${node.name}'`, node.loc, s ? `Did you mean '${s}'?` : "Import it, e.g. import { " + node.name + " } from \"./components/" + node.name + ".sinth\"");
     }
     if (node.slots.length) this.fail("E0311", "slot(...) fills can only be used inside components that declare $slot", node.slots[0].loc);
+    if (!this.isStaticNode(node, ctx)) this.checkVoidChildren(node, ctx, true);
 
     if (this.isStaticNode(node, ctx)) {
       const html = this.staticHtml(node, ctx);
@@ -682,12 +706,15 @@ class ModuleCompiler {
     const isSvg = !!info.svg || ctx.svg;
     lines.push(`const ${v} = ${isSvg ? `$$.svg(${JSON.stringify(tag)})` : `$$.el(${JSON.stringify(tag)})`};`);
     for (const [k, val] of Object.entries(attrs)) lines.push(`${v}.setAttribute(${JSON.stringify(k)}, ${JSON.stringify(val)});`);
-    lines.push(...this.genDynamicAttrs(node, v, tag, ctx));
+    const dynamic = this.genDynamicAttrs(node, v, tag, ctx);
+    // A <select>'s value can only be set once its options exist, so it is bound after the children.
+    const afterChildren = tag === "select" ? dynamic.filter(l => l.startsWith("$$.model(") || l.startsWith(`$$.prop(${v}, "value"`)) : [];
+    lines.push(...dynamic.filter(l => !afterChildren.includes(l)));
     const childCtx: RenderCtx = { ...ctx, svg: isSvg && tag !== "foreignObject" };
     const htmlAttr = node.attrs.find(a => a.name === "html");
     if (htmlAttr && node.children.length) this.fail("E0330", "An element with 'html' cannot also have children", htmlAttr.loc);
-    if (VOID_TAGS.has(tag) && node.children.length) this.fail("E0331", `<${tag}> is a void element and cannot have children`, node.loc);
     if (node.children.length) lines.push(this.genNodes(node.children, v, childCtx));
+    lines.push(...afterChildren);
     lines.push(`${parent}.appendChild(${v});`);
     return lines.filter(Boolean).join("\n");
   }
@@ -708,6 +735,10 @@ class ModuleCompiler {
       if (a.name === "level" && node.name === "Heading") continue;
       if (a.handler) {
         this.interactive = true;
+        if (!KNOWN_EVENT_SET.has(a.name.toLowerCase())) {
+          const s = suggest(a.name, KNOWN_EVENTS);
+          if (s) this.diagnostics.warn("W0302", `Unknown event '${a.name}'`, a.loc, `Did you mean '${s}'? Other names listen for custom events`);
+        }
         lines.push(`$$.on(${v}, ${JSON.stringify(eventName(a.name))}, ${this.genHandler(a, scope)}${a.modifiers.length ? ", " + JSON.stringify(a.modifiers) : ""});`);
         continue;
       }
@@ -770,6 +801,9 @@ class ModuleCompiler {
     if (stmts.length === 1 && stmts[0].k === "expr") {
       const ex = stmts[0].expr;
       if (ex.k === "arrow") return this.expr(ex, scope);
+      if (ex.k === "lit" && typeof ex.value !== "string") {
+        this.fail("E0352", `Event handlers must be code, not ${ex.value === null ? "null" : typeof ex.value}`, ex.loc, `Write the handler as code, e.g. ${a.name}: count += 1`);
+      }
       if (ex.k === "lit" || ex.k === "tpl") {
         const raw = ex.k === "lit" ? String(ex.value) : "";
         const name = raw.replace(/\(\s*\)\s*;?$/, "");

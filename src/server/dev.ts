@@ -5,6 +5,7 @@ import * as path from "path";
 import { formatDiagnostic, SinthError } from "../compiler/diagnostics";
 import { escapeHtml } from "../compiler/html";
 import { buildProject, BuildOutput } from "../project/build";
+import { staticDirPath } from "../project/config";
 import { Project } from "../project/project";
 import { c, formatMs, log, printDiagnostic } from "../cli/ui";
 import { DEV_CLIENT } from "./client";
@@ -128,7 +129,7 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
     const mem = output?.files.get(sitePath.slice(1));
     if (mem) return { status: 200, body: mem.contents, type: mimeType(sitePath), headers: NO_STORE };
     const fromPublic = fileIfExists(safeJoin(cfg.publicDir, sitePath));
-    const fromStatic = cfg.staticDirs.some(d => sitePath.startsWith("/" + d + "/")) ? fileIfExists(safeJoin(project.root, sitePath)) : null;
+    const fromStatic = cfg.staticDirs.some(d => sitePath.startsWith("/" + d + "/")) ? fileIfExists(safeJoin(cfg.srcDir, sitePath)) : null;
     const file = fromPublic ?? fromStatic;
     if (file) return { status: 200, body: fs.readFileSync(file), type: mimeType(file), headers: NO_STORE };
     return notFound();
@@ -186,7 +187,7 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
     clearTimeout(timers.get(file));
     timers.set(file, setTimeout(() => {
       timers.delete(file);
-      const inStatic = file.startsWith(cfg.publicDir + path.sep) || cfg.staticDirs.some(d => file.startsWith(path.resolve(project.root, d) + path.sep));
+      const inStatic = file.startsWith(cfg.publicDir + path.sep) || cfg.staticDirs.some(d => file.startsWith(staticDirPath(cfg, d) + path.sep));
       if (inStatic && !file.endsWith(".css") && !file.endsWith(".sinth")) {
         broadcast({ type: "reload" });
         return;

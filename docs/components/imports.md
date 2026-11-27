@@ -40,7 +40,7 @@ extern Widget                                          -- declare the global it 
 Rules:
 
 - Extensions are optional for `.sinth` files (`./components/Card`).
-- Paths starting with `/` are relative to the project root.
+- Paths starting with `/` are relative to the source folder: the project root, or `app/` (see [Project structure](../getting-started/project-structure.md#the-app-folder)).
 - Missing npm packages produce a clear error with the `npm install` command to run.
 - Circular imports between `.sinth` files are an error (E0609).
 - Importing a name that does not exist lists the available exports (E0602).

@@ -1,6 +1,19 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const siteUrl = 'https://sinth.yannosay.com'
+const sinthVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8')) as { version: string }).version
+const skillsDir = fileURLToPath(new URL('../skills', import.meta.url))
+
+/** Every file of the agent skill, prerendered under /skills/. */
+function skillRoutes(dir: string, prefix = '/skills'): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name)
+    if (statSync(full).isDirectory()) return skillRoutes(full, `${prefix}/${name}`)
+    return dir === skillsDir ? [] : [`${prefix}/${name}`]
+  })
+}
 const description = 'Sinth is a compiled, type-checked language for websites and web apps: reactive components, file-based routing with instant navigation, prerendered pages, API routes and one-command deploys.'
 
 export default defineNuxtConfig({
@@ -11,7 +24,7 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    public: { siteUrl }
+    public: { siteUrl, sinthVersion }
   },
 
   app: {
@@ -45,11 +58,14 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare-pages',
     cloudflare: { nodeCompat: true },
-    serverAssets: [{ baseName: 'docs', dir: fileURLToPath(new URL('../docs', import.meta.url)) }],
+    serverAssets: [
+      { baseName: 'docs', dir: fileURLToPath(new URL('../docs', import.meta.url)) },
+      { baseName: 'skills', dir: skillsDir }
+    ],
     prerender: {
       autoSubfolderIndex: false,
       crawlLinks: true,
-      routes: ['/', '/docs', '/playground', '/embed', '/sitemap.xml', '/llms.txt', '/llms-full.txt'],
+      routes: ['/', '/docs', '/playground', '/embed', '/sitemap.xml', '/llms.txt', '/llms-full.txt', '/agents.md', '/skills/sinth/manifest.json', ...skillRoutes(skillsDir)],
       failOnError: true
     }
   },

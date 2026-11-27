@@ -143,3 +143,25 @@ test("reactive values in page styles update CSS variables on the document", asyn
   app.$("#b").click();
   assert.deepEqual(vars(), ["9px"]);
 });
+
+test("a cleanup returned from onMount runs when the component is removed", async () => {
+  const app = await run('component Ticker {\n  var num n = 0\n  onMount {\n    const id = setInterval(() => { n += 1 }, 5)\n    return () => { clearInterval(id); window.cleaned = true }\n  }\n  Span { n }\n}\nvar bool on = true\nMain { if on { Ticker() } Button(id: "b", onClick: on = not on) { "x" } }');
+  await app.flush();
+  app.$("#b").click();
+  assert.equal(app.window.cleaned, true);
+});
+
+test("Select with model shows the bound value on first render", async () => {
+  const app = await run('var num pick = 2\nMain { Select(id: "s", model: pick) { for o in [1, 2, 3] { Option(value: o) { o } } } }');
+  assert.equal(app.$("#s").value, "2");
+});
+
+test("a number field bound with model can be cleared while typing", async () => {
+  const app = await run('var num q = 1\nvar bool reset = false\nMain { Input(id: "i", type: "number", model: q) Button(id: "r", onClick: q = 0) { "r" } }');
+  const input = app.$("#i");
+  input.value = "";
+  input.dispatchEvent(new app.window.Event("input"));
+  assert.equal(input.value, "");
+  app.$("#r").click();
+  assert.equal(input.value, "0");
+});

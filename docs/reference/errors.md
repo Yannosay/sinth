@@ -22,7 +22,7 @@ description: Every error and warning code.
 | E0320 | Invalid heading level |
 | E0330–E0334 | Invalid element content or attribute (children on void elements, inline `on*` strings, ...) |
 | E0340, E0341 | `model`/`ref` without a variable |
-| E0350, E0351 | A non-function or a string used as event handler |
+| E0350–E0352 | A non-function, a string or another literal used as event handler |
 | E0360 | Missing required component parameter |
 | E0370, E0371 | UI function or component used as a value |
 | E0380 | Returning a value from a `void` function |
@@ -44,14 +44,17 @@ description: Every error and warning code.
 | E0802 | No pages or custom elements found |
 | E0803 | A file in `functions/` failed to build |
 | E0899 | Internal compiler error (please report it) |
-| E0900–E0902 | Invalid configuration |
+| E0900–E0903 | Invalid configuration (including an unknown `platform` or a missing `srcDir`) |
 | E1000 | No build to preview |
-| E1100–E1105 | Deployment errors |
+| E1100–E1106 | Deployment errors (E1106: the platform has no `sinth deploy` upload, e.g. GitHub Pages) |
 | E1200–E1202 | Invalid command-line options |
 | E1300–E1305 | `new`/`create` errors |
 | W0101 | Markup outside a component in a module file |
 | W0201 | `int` is deprecated |
 | W0301 | Unescaped dynamic HTML |
+| W0302 | Unknown event name such as `onClik` (likely typo; other names listen for custom events) |
+| W0331 | Children of a void element such as `Input` in static markup (ignored; in dynamic markup this is E0331) |
 | W0310 | Unknown component parameter passed to the root element (likely typo) |
 | W0401 | `null` assigned to a non-nullable variable |
 | W0800 | Bundler warning |
+| W0810 | `functions/` exists but the `platform` cannot run server functions |

@@ -177,6 +177,13 @@ button {
     padding-right: 4rem;
   }
 
+  // Prose to copy (like agent prompts) wraps instead of scrolling.
+  .code-block pre:has(> code.language-text),
+  .code-block code.language-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .code-block[data-live] pre {
     padding-right: 8.5rem;
   }

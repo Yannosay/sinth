@@ -60,6 +60,18 @@
       </div>
     </section>
 
+    <section class="agents" aria-labelledby="agents-heading">
+      <div class="agents__container">
+        <h2 id="agents-heading" class="section-heading">Teach your AI agent Sinth</h2>
+        <p class="section-body">
+          Paste this into Claude Code, Codex, Cursor or any coding agent. It installs the Sinth skill: the syntax, the
+          pitfalls, a check-after-every-change workflow and how to deploy.
+        </p>
+        <AgentPrompt class="agents__prompt" />
+        <NuxtLink to="/docs/tooling/ai-agents" class="text-link">How the skill works →</NuxtLink>
+      </div>
+    </section>
+
     <section class="start" aria-labelledby="start-heading">
       <div class="start__container">
         <h2 id="start-heading" class="section-heading">Start in a minute</h2>
@@ -80,6 +92,7 @@ npm run dev</code></pre>
 import { ref } from 'vue'
 import UiButton from '~/components/ui/Button.vue'
 import SinthPlayground from '~/components/playground/SinthPlayground.vue'
+import AgentPrompt from '~/components/AgentPrompt.vue'
 
 const installCommand = 'npx @yannosay/sinth create my-site'
 const copied = ref(false)
@@ -115,11 +128,11 @@ const features = [
   { title: 'Checked before it runs', body: 'Unknown names, wrong types, missing arguments and missing component props are compile errors with a code frame and a hint.', href: '/docs/reference/errors', link: 'Error reference' },
   { title: 'Prerendered pages', body: 'Every page is rendered to HTML at build time. Content shows without waiting for JavaScript, and search engines see the full page.', href: '/docs/production/performance', link: 'Rendering and performance' },
   { title: 'Instant navigation', body: 'Links are prefetched and swapped in place without full reloads, while every page stays a real HTML file.', href: '/docs/getting-started/pages-and-routing', link: 'Pages and routing' },
-  { title: 'Full stack', body: 'API routes in functions/ use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages unchanged.', href: '/docs/full-stack/functions', link: 'Server functions' },
+  { title: 'Full stack', body: 'API routes in functions/ use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages or Workers unchanged.', href: '/docs/full-stack/functions', link: 'Server functions' },
   { title: 'Components everywhere', body: 'Scoped styles, slots, two-way bindings and a built-in UI library. Export any component as a web component for other sites.', href: '/docs/components/components', link: 'Components' },
   { title: 'Hot reload that keeps state', body: 'Save a file and the page updates without losing form input or variables. Errors appear in an overlay with the exact location.', href: '/docs/tooling/dev-server', link: 'Dev server' },
   { title: 'Secure defaults', body: 'No eval, escaped output, no inline event handlers, and a Content Security Policy without inline scripts plus security headers out of the box.', href: '/docs/production/security', link: 'Security' },
-  { title: 'One-command deploys', body: 'sinth deploy ships to Cloudflare Pages. The output is static files, so any host works too.', href: '/docs/production/deploy', link: 'Deploying' }
+  { title: 'One-command deploys', body: 'sinth deploy ships to Cloudflare Pages or Workers, Vercel and Netlify. GitHub Pages and any static host work too.', href: '/docs/production/deploy', link: 'Deploying' }
 ]
 
 const siteUrl = String(useRuntimeConfig().public.siteUrl)
@@ -371,6 +384,20 @@ useHead({
   margin-top: 1rem;
   font-size: 0.82rem;
   color: var(--accent-bright);
+}
+
+.agents {
+  border-top: 1px solid var(--line-soft);
+  padding: clamp(4rem, 8vw, 6rem) 1.5rem;
+}
+
+.agents__container {
+  @include page.container-narrow;
+  text-align: center;
+}
+
+.agents__prompt {
+  margin: 1.75rem 0 0.25rem;
 }
 
 .start {

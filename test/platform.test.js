@@ -132,3 +132,71 @@ test("compileFiles compiles in-memory sources with imports and reports errors", 
   assert.match(result.css, /color: red/);
   assert.throws(() => compileFiles({ "/pages/index.sinth": "Main { P { nope } }" }), err => err.code === "E0302");
 });
+
+const { routeDef, routePatterns } = require("../dist/server/functions-router");
+
+async function buildFor(platform, files) {
+  const p = project({ "sinth.config.json": JSON.stringify({ platform }), "pages/index.sinth": 'Main { "Home" }\n', "pages/about.sinth": 'Main { "About" }\n', "pages/404.sinth": 'Main { "Missing" }\n', ...files });
+  const out = await buildProject(p, { write: true });
+  return { p, out, read: rel => fs.readFileSync(path.join(p.root, rel), "utf-8"), exists: rel => fs.existsSync(path.join(p.root, rel)) };
+}
+
+test("platform vercel writes the Build Output API with clean URLs, headers and the 404 page", async () => {
+  const { read, exists, out } = await buildFor("vercel", {});
+  assert.ok(!out.files.has("_headers"));
+  const config = JSON.parse(read(".vercel/output/config.json"));
+  assert.equal(config.version, 3);
+  assert.deepEqual(config.overrides["about.html"], { path: "about" });
+  assert.equal(config.overrides["index.html"], undefined);
+  assert.ok(config.routes.some(r => r.headers && r.headers["X-Content-Type-Options"] === "nosniff"));
+  assert.ok(config.routes.some(r => r.status === 404 && r.dest === "/404.html"));
+  assert.ok(exists(".vercel/output/static/index.html"));
+  assert.ok(exists(".vercel/output/static/about.html"));
+});
+
+test("platform github-pages adds .nojekyll and skips _headers", async () => {
+  const { out } = await buildFor("github-pages", {});
+  assert.ok(out.files.has(".nojekyll"));
+  assert.ok(!out.files.has("_headers"));
+});
+
+test("platform cloudflare-workers writes a static-assets Worker config, with a Worker only for functions", async () => {
+  const plain = await buildFor("cloudflare-workers", {});
+  const config = JSON.parse(plain.read(".sinth/deploy/wrangler.json"));
+  assert.equal(config.main, undefined);
+  assert.equal(config.assets.directory, "../../dist");
+  assert.equal(config.assets.not_found_handling, "404-page");
+  assert.ok(plain.out.files.has("_headers"));
+
+  const withFns = await buildFor("cloudflare-workers", { "functions/api/hello.ts": "export const onRequest = () => new Response('hi');\n" });
+  const c2 = JSON.parse(withFns.read(".sinth/deploy/wrangler.json"));
+  assert.equal(c2.main, "worker.js");
+  assert.equal(c2.assets.binding, "ASSETS");
+  assert.deepEqual(c2.assets.run_worker_first, ["/api/hello"]);
+  assert.match(withFns.read(".sinth/deploy/worker.js"), /env\.ASSETS\.fetch/);
+});
+
+test("functions on a platform that cannot run them produce a warning", async () => {
+  const { out } = await buildFor("netlify", { "functions/api/x.ts": "export const onRequest = () => new Response('x');\n" });
+  assert.ok(out.warnings.some(w => w.code === "W0810"));
+  assert.ok(out.files.has("_headers"));
+});
+
+test("an unknown platform is rejected", () => {
+  const root = makeProject({ "sinth.config.json": '{ "platform": "heroku" }' });
+  assert.throws(() => require("../dist/project/config").loadConfig(root, "production"), err => err.code === "E0900");
+});
+
+test("route patterns cover exactly the URLs functions can answer", () => {
+  const defs = ["api/hello.ts", "api/users/[id].ts", "files/[[path]].ts", "admin/_middleware.ts"].map(routeDef);
+  assert.deepEqual(routePatterns(defs), ["/admin", "/admin/*", "/api/hello", "/api/users", "/api/users/*", "/files", "/files/*"]);
+  assert.deepEqual(routePatterns([routeDef("_middleware.ts")]), ["/*"]);
+  assert.deepEqual(routePatterns([routeDef("[slug].ts")]), ["/*"]);
+});
+
+test("functions: a malformed URL escape falls through instead of crashing", async () => {
+  const root = functionsProject({ "functions/[name].ts": "export const onRequest = ({ params }: any) => new Response(params.name);\n" });
+  const host = new FunctionsHost(root);
+  const res = await host.handle(new Request("http://x/%E0%A4%A"), async () => new Response("static", { status: 404 }));
+  assert.equal(res, null);
+});

@@ -13,7 +13,14 @@ export interface SecurityConfig {
   csp: boolean | string;
 }
 
+/** Where the site is hosted. Decides which host-specific files the build writes and how `sinth deploy` uploads. */
+export type Platform = "cloudflare" | "cloudflare-workers" | "vercel" | "netlify" | "github-pages" | "static";
+export const PLATFORMS: Platform[] = ["cloudflare", "cloudflare-workers", "vercel", "netlify", "github-pages", "static"];
+
 export interface SinthConfig {
+  platform: Platform;
+  /** Folder holding pages, components, libraries and assets: the project root, or app/ (absolute after loading). */
+  srcDir: string;
   outDir: string;
   pagesDir: string;
   publicDir: string;
@@ -43,6 +50,8 @@ type Partialish = Partial<Omit<SinthConfig, "security" | "cloudflare">> & {
 };
 
 export const DEFAULT_CONFIG: SinthConfig = {
+  platform: "cloudflare",
+  srcDir: ".",
   outDir: "dist",
   pagesDir: "pages",
   publicDir: "public",
@@ -61,7 +70,7 @@ export const DEFAULT_CONFIG: SinthConfig = {
 };
 
 const KNOWN_KEYS = new Set([
-  "outDir", "pagesDir", "publicDir", "staticDirs", "libraryPaths", "site", "base", "minify", "sourcemap", "port", "host",
+  "platform", "srcDir", "outDir", "pagesDir", "publicDir", "staticDirs", "libraryPaths", "site", "base", "minify", "sourcemap", "port", "host",
   "previewPort", "target", "router", "security", "cloudflare", "development", "production", "$schema",
   "sharedRuntime", "inlineJS", "inlineCSS",
 ]);
@@ -84,10 +93,11 @@ function validate(raw: Record<string, unknown>, file: string, warnings: string[]
   };
   const str = (v: unknown): boolean => typeof v === "string";
   const strArr = (v: unknown): boolean => Array.isArray(v) && v.every(x => typeof x === "string");
-  for (const k of ["outDir", "pagesDir", "publicDir", "site", "base", "host"]) check(k, "a string", str);
+  for (const k of ["srcDir", "outDir", "pagesDir", "publicDir", "site", "base", "host"]) check(k, "a string", str);
   for (const k of ["staticDirs", "libraryPaths", "target"]) check(k, "an array of strings", strArr);
   for (const k of ["minify", "sourcemap", "router"]) check(k, "true or false", v => typeof v === "boolean");
   for (const k of ["port", "previewPort"]) check(k, "a port number (1-65535)", v => Number.isInteger(v) && (v as number) > 0 && (v as number) < 65536);
+  check("platform", `one of ${PLATFORMS.map(p => `"${p}"`).join(", ")}`, v => PLATFORMS.includes(v as Platform));
   check("site", "an absolute URL like https://example.com", v => typeof v === "string" && /^https?:\/\/[^\s]+$/.test(v));
 }
 
@@ -120,15 +130,50 @@ export function loadConfig(root: string, mode: "development" | "production"): Lo
   };
   if (mode === "production" && raw.minify === undefined && envOverrides.minify === undefined) merged.minify = true;
   if (mode === "development" && raw.sourcemap === undefined && envOverrides.sourcemap === undefined) merged.sourcemap = true;
-  merged.staticDirs = merged.staticDirs.map(d => d.replace(/^\.\//, ""));
-  merged.libraryPaths = merged.libraryPaths.map(d => path.resolve(root, d));
+  const srcSet = raw.srcDir !== undefined || envOverrides.srcDir !== undefined;
+  merged.srcDir = path.resolve(root, srcSet ? merged.srcDir : detectSrcDir(root));
+  const src = merged.srcDir;
+  merged.staticDirs = merged.staticDirs.map(d => d.replace(/^\.\//, "").replace(/\/+$/, ""));
+  merged.libraryPaths = merged.libraryPaths.map(d => path.resolve(src, d));
   merged.outDir = path.resolve(root, merged.outDir);
-  merged.pagesDir = path.resolve(root, merged.pagesDir);
+  merged.pagesDir = path.resolve(src, merged.pagesDir);
+  const publicSet = raw.publicDir !== undefined || envOverrides.publicDir !== undefined;
   merged.publicDir = path.resolve(root, merged.publicDir);
+  // Like Nuxt, public/ normally sits next to app/, but app/public works too.
+  if (!publicSet && src !== path.resolve(root) && !isDir(merged.publicDir) && isDir(path.join(src, "public"))) merged.publicDir = path.join(src, "public");
   if (!merged.base.startsWith("/")) merged.base = "/" + merged.base;
   if (!merged.base.endsWith("/")) merged.base += "/";
+  if (!isDir(src) && srcSet) throw new SinthError("E0903", `srcDir '${path.relative(root, src) || "."}' does not exist`, { file, line: 1, col: 1 });
   if (merged.outDir === path.resolve(root)) throw new SinthError("E0902", "outDir cannot be the project root", { file, line: 1, col: 1 });
   return { config: merged, file: fs.existsSync(file) ? file : undefined, warnings };
+}
+
+function isDir(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Uses app/ as the source folder (like Nuxt) when it exists and the root has no pages/ folder and
+ * no .sinth files of its own, so projects that keep everything in the root are unaffected.
+ */
+export function detectSrcDir(root: string): string {
+  if (!isDir(path.join(root, "app"))) return ".";
+  if (isDir(path.join(root, "pages"))) return ".";
+  try {
+    if (fs.readdirSync(root).some(f => f.endsWith(".sinth"))) return ".";
+  } catch {
+    return ".";
+  }
+  return "app";
+}
+
+/** Resolves a static asset folder (like "assets") inside the source folder. */
+export function staticDirPath(config: SinthConfig, dir: string): string {
+  return path.resolve(config.srcDir, dir);
 }
 
 function stripNested(raw: Partialish): Partial<SinthConfig> {

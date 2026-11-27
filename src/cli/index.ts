@@ -3,9 +3,9 @@ import * as path from "path";
 import * as readline from "readline";
 import { setDisplayRoot, SinthError } from "../compiler/diagnostics";
 import { buildProject, checkProject } from "../project/build";
-import { loadConfig } from "../project/config";
+import { loadConfig, Platform, PLATFORMS } from "../project/config";
 import { Project } from "../project/project";
-import { deployToCloudflare } from "../deploy/cloudflare";
+import { deploy } from "../deploy/cloudflare";
 import { startDevServer } from "../server/dev";
 import { startPreview } from "../server/preview";
 import { FlagSpec, parseArgs, ParsedArgs } from "./args";
@@ -38,6 +38,11 @@ function openProject(args: ParsedArgs, mode: "development" | "production"): Proj
   if (typeof args.flags.out === "string") config.outDir = path.resolve(root, args.flags.out);
   if (args.flags.minify !== undefined) config.minify = !!args.flags.minify;
   if (args.flags.sourcemap !== undefined) config.sourcemap = !!args.flags.sourcemap;
+  if (typeof args.flags.platform === "string") {
+    const platform = args.flags.platform as Platform;
+    if (!PLATFORMS.includes(platform)) throw new SinthError("E0900", `Unknown platform '${args.flags.platform}'`, undefined, `Use one of: ${PLATFORMS.join(", ")}`);
+    config.platform = platform;
+  }
   return new Project(root, config, mode === "development");
 }
 
@@ -69,13 +74,14 @@ const commands: Record<string, Command> = {
   },
   build: {
     summary: "Build the site for production",
-    usage: "sinth build [--out dist] [--no-minify] [--sourcemap]",
+    usage: "sinth build [--out dist] [--platform name] [--no-minify] [--sourcemap]",
     flags: {
       ...ROOT_FLAG,
       out: { type: "string", description: "Output directory" },
       minify: { type: "boolean", description: "Minify output (default: on)" },
       sourcemap: { type: "boolean", description: "Emit source maps" },
       verbose: { type: "boolean", description: "List every page, even on large sites" },
+      platform: { type: "string", description: "Override \"platform\" from sinth.config.json" },
     },
     async run(args) {
       console.log(`\n  ${brand("build", VERSION)}\n`);
@@ -131,13 +137,14 @@ const commands: Record<string, Command> = {
     },
   },
   deploy: {
-    summary: "Build and deploy to Cloudflare Pages",
-    usage: "sinth deploy [--preview] [--branch name] [--project name] [--create] [--skip-build]",
+    summary: "Build and deploy (Cloudflare Pages or Workers, Vercel, Netlify)",
+    usage: "sinth deploy [--platform name] [--preview] [--branch name] [--project name] [--create] [--skip-build]",
     flags: {
       ...ROOT_FLAG,
       preview: { type: "boolean", description: "Deploy to a preview URL instead of production" },
       branch: { type: "string", description: "Branch name for the deployment" },
-      project: { type: "string", description: "Cloudflare Pages project name" },
+      project: { type: "string", description: "Cloudflare Pages project or Worker name" },
+      platform: { type: "string", description: "Override \"platform\" from sinth.config.json" },
       create: { type: "boolean", description: "Create the Pages project first" },
       "skip-build": { type: "boolean", description: "Deploy the existing build without rebuilding" },
     },
@@ -149,7 +156,7 @@ const commands: Record<string, Command> = {
         for (const w of out.warnings) printDiagnostic(w);
         log.success(`Built ${out.pages.length} page(s) in ${formatMs(out.durationMs)}`);
       }
-      await deployToCloudflare(project.root, project.config.outDir, project.config, {
+      await deploy(project.root, project.config, {
         preview: !!args.flags.preview,
         branch: args.flags.branch as string | undefined,
         projectName: args.flags.project as string | undefined,
@@ -213,7 +220,8 @@ const commands: Record<string, Command> = {
       }
       if (kind === "component" && name) {
         if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) throw new SinthError("E1301", `Component names must be PascalCase, like 'ProductCard'`);
-        writeNew(path.join(root, "components", name + ".sinth"), componentTemplate(name));
+        const { config } = loadConfig(root, "development");
+        writeNew(path.join(config.srcDir, "components", name + ".sinth"), componentTemplate(name));
         return 0;
       }
       throw new SinthError("E1302", "Usage: sinth new page <path> | sinth new component <Name>");
@@ -239,7 +247,8 @@ const commands: Record<string, Command> = {
         ["Platform", `${process.platform} ${process.arch}`],
         ["Project", root],
         ["Config", file ? path.relative(root, file) : c.gray("none (defaults)")],
-        ["Pages", `${pages} in ${path.relative(root, config.pagesDir) || "."}`],
+        ["Source", path.relative(root, config.srcDir) || "."],
+        ["Pages", `${pages} in ${path.relative(root, fs.existsSync(config.pagesDir) ? config.pagesDir : config.srcDir) || "."}`],
         ["Output", path.relative(root, config.outDir)],
       ].map(([k, v]) => [c.gray(k), v])));
       return 0;

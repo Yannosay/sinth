@@ -5,6 +5,7 @@ import * as http from "http";
 import * as path from "path";
 import { SinthError } from "../compiler/diagnostics";
 import { log } from "../cli/ui";
+import { compareRoutes, dispatch, FunctionModule, isFunctionFile, LoadedRoute, routeDef, RouteDef } from "./functions-router";
 
 /**
  * Server routes in `functions/`, following the Cloudflare Pages Functions conventions so the same
@@ -19,74 +20,24 @@ import { log } from "../cli/ui";
  */
 
 export const FUNCTIONS_DIR = "functions";
-const EXTENSIONS = /\.(ts|js|mjs|tsx|jsx)$/;
-const METHOD_EXPORTS: Record<string, string> = {
-  GET: "onRequestGet", POST: "onRequestPost", PUT: "onRequestPut", PATCH: "onRequestPatch",
-  DELETE: "onRequestDelete", HEAD: "onRequestHead", OPTIONS: "onRequestOptions",
-};
-
-type Segment = { kind: "static"; value: string } | { kind: "param"; name: string } | { kind: "catchall"; name: string };
-type Handler = (context: FunctionContext) => Response | Promise<Response>;
-type FunctionModule = Record<string, Handler | Handler[] | undefined>;
-
-interface Route {
-  file: string;
-  segments: Segment[];
-  middleware: boolean;
-}
-
-export interface FunctionContext {
-  request: Request;
-  params: Record<string, string | string[]>;
-  env: Record<string, unknown>;
-  data: Record<string, unknown>;
-  functionPath: string;
-  next(input?: Request | string, init?: RequestInit): Promise<Response>;
-  waitUntil(promise: Promise<unknown>): void;
-  passThroughOnException(): void;
-}
+export type { FunctionContext } from "./functions-router";
 
 /** Serves a static file or page for `next()` and `env.ASSETS`. */
 export type AssetHandler = (request: Request) => Promise<Response>;
 
-function parseSegments(rel: string): Segment[] {
-  const parts = rel.replace(EXTENSIONS, "").split("/").filter(Boolean);
-  if (parts[parts.length - 1] === "index" || parts[parts.length - 1] === "_middleware") parts.pop();
-  return parts.map(p => {
-    const catchall = p.match(/^\[\[([A-Za-z_]\w*)\]\]$/);
-    if (catchall) return { kind: "catchall", name: catchall[1] };
-    const param = p.match(/^\[([A-Za-z_]\w*)\]$/);
-    if (param) return { kind: "param", name: param[1] };
-    return { kind: "static", value: p };
-  });
-}
-
-function rank(route: Route): number[] {
-  return route.segments.map(s => (s.kind === "static" ? 0 : s.kind === "param" ? 1 : 2));
-}
-
-function compareRoutes(a: Route, b: Route): number {
-  if (a.segments.length !== b.segments.length) return b.segments.length - a.segments.length;
-  const ra = rank(a);
-  const rb = rank(b);
-  for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
-  return 0;
-}
-
-function matchRoute(route: Route, parts: string[], prefixOnly: boolean): Record<string, string | string[]> | null {
-  const params: Record<string, string | string[]> = {};
-  for (let i = 0; i < route.segments.length; i++) {
-    const seg = route.segments[i];
-    if (seg.kind === "catchall") {
-      if (i >= parts.length) return null;
-      params[seg.name] = parts.slice(i);
-      return params;
+/** Every route file in a functions/ folder, most specific first. */
+export function scanFunctions(dir: string): (RouteDef & { file: string })[] {
+  const routes: (RouteDef & { file: string })[] = [];
+  const walk = (d: string): void => {
+    if (!fs.existsSync(d)) return;
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (isFunctionFile(e.name)) routes.push({ ...routeDef(path.relative(dir, full).split(path.sep).join("/")), file: full });
     }
-    if (i >= parts.length) return null;
-    if (seg.kind === "static" && seg.value !== parts[i]) return null;
-    if (seg.kind === "param") params[seg.name] = parts[i];
-  }
-  return prefixOnly || route.segments.length === parts.length ? params : null;
+  };
+  walk(dir);
+  return routes.sort(compareRoutes);
 }
 
 function readDevVars(root: string): Record<string, string> {
@@ -104,7 +55,7 @@ function readDevVars(root: string): Record<string, string> {
 }
 
 export class FunctionsHost {
-  private routes: Route[] | null = null;
+  private routes: (RouteDef & { file: string })[] | null = null;
   private modules = new Map<string, FunctionModule>();
   private building: Promise<void> | null = null;
   readonly dir: string;
@@ -125,22 +76,8 @@ export class FunctionsHost {
     this.building = null;
   }
 
-  private scan(): Route[] {
-    if (this.routes) return this.routes;
-    const routes: Route[] = [];
-    const walk = (dir: string): void => {
-      if (!fs.existsSync(dir)) return;
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (EXTENSIONS.test(e.name) && !e.name.endsWith(".d.ts") && !/\.(test|spec)\./.test(e.name)) {
-          const rel = path.relative(this.dir, full).replace(/\\/g, "/");
-          routes.push({ file: full, segments: parseSegments(rel), middleware: /(^|\/)_middleware\.\w+$/.test(rel) });
-        }
-      }
-    };
-    walk(this.dir);
-    this.routes = routes.sort(compareRoutes);
+  private scan(): (RouteDef & { file: string })[] {
+    if (!this.routes) this.routes = scanFunctions(this.dir);
     return this.routes;
   }
 
@@ -186,52 +123,19 @@ export class FunctionsHost {
    */
   async handle(request: Request, assets: AssetHandler): Promise<Response | null> {
     if (!this.enabled) return null;
-    const url = new URL(request.url);
-    const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const routes = this.scan();
     if (!routes.length) return null;
     await this.load();
-    const chain: { handler: Handler; params: Record<string, string | string[]>; file: string }[] = [];
-    for (const r of [...routes].filter(x => x.middleware).sort((a, b) => a.segments.length - b.segments.length)) {
-      const params = matchRoute(r, parts, true);
-      const handler = params && this.handlerFor(r.file, request.method);
-      if (params && handler) for (const h of Array.isArray(handler) ? handler : [handler]) chain.push({ handler: h, params, file: r.file });
-    }
-    for (const r of routes) {
-      if (r.middleware) continue;
-      const params = matchRoute(r, parts, false);
-      if (!params) continue;
-      const handler = this.handlerFor(r.file, request.method);
-      if (!handler) continue;
-      for (const h of Array.isArray(handler) ? handler : [handler]) chain.push({ handler: h, params, file: r.file });
-      break;
-    }
-    if (!chain.length) return null;
-
+    const loaded: LoadedRoute[] = routes.flatMap(r => {
+      const mod = this.modules.get(r.file);
+      return mod ? [{ ...r, module: mod }] : [];
+    });
     const env: Record<string, unknown> = { ...readDevVars(this.root), ASSETS: { fetch: (input: Request | string, init?: RequestInit) => assets(new Request(input, init)) } };
-    const data: Record<string, unknown> = {};
-    const run = async (index: number, req: Request): Promise<Response> => {
-      const step = chain[index];
-      if (!step) return assets(req);
-      const result = await step.handler({
-        request: req, params: step.params, env, data,
-        functionPath: url.pathname,
-        next: (input, init) => run(index + 1, input === undefined ? req : new Request(input, init)),
-        waitUntil: p => { p.catch(err => log.error(String(err))); },
-        passThroughOnException: () => undefined,
-      });
-      if (!(result instanceof Response)) {
-        throw new Error(`${path.relative(this.root, step.file)} must return a Response (got ${result === undefined ? "undefined" : typeof result})`);
-      }
-      return result;
-    };
-    return run(0, request);
-  }
-
-  private handlerFor(file: string, method: string): Handler | Handler[] | undefined {
-    const mod = this.modules.get(file);
-    if (!mod) return undefined;
-    return mod[METHOD_EXPORTS[method] ?? ""] ?? mod.onRequest;
+    return dispatch(loaded, request, {
+      env,
+      assets,
+      waitUntil: p => { p.catch(err => log.error(String(err))); },
+    });
   }
 }
 

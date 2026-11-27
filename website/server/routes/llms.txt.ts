@@ -7,9 +7,11 @@ export default defineEventHandler(async (event) => {
   const lines = [
     '# Sinth',
     '',
-    '> Sinth is a compiled, type-checked language for websites and web apps. Pages and components combine markup, reactive state, functions and scoped styles in one file. The compiler (npm package @yannosay/sinth) prerenders every page to HTML, bundles interactive parts with a small runtime (a counter page ships 3.5 kB of gzipped JavaScript), provides client-side navigation, API routes in functions/ (Cloudflare Pages Functions compatible) and deploys with one command.',
+    '> Sinth is a compiled, type-checked language for websites and web apps. Pages and components combine markup, reactive state, functions and scoped styles in one file. The compiler (npm package @yannosay/sinth) prerenders every page to HTML, bundles interactive parts with a small runtime (a counter page ships 3.5 kB of gzipped JavaScript), provides client-side navigation, API routes in functions/ (Cloudflare Pages Functions compatible) and deploys with one command to Cloudflare Pages or Workers, Vercel or Netlify.',
     '',
     'Install: `npx @yannosay/sinth create my-site`. Source: https://github.com/Yannosay/sinth. The full documentation as one file: ' + site + '/llms-full.txt',
+    '',
+    'Coding agents: install the Sinth skill by following ' + site + '/agents.md (skill files: ' + site + '/skills/sinth/manifest.json).',
     ''
   ]
   for (const section of manifest.sections) {

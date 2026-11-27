@@ -119,7 +119,14 @@ function scrollTo(url: URL, restore?: number): void {
     window.scrollTo(0, restore);
     return;
   }
-  const target = url.hash ? document.getElementById(decodeURIComponent(url.hash.slice(1))) : null;
+  let target: HTMLElement | null = null;
+  if (url.hash) {
+    try {
+      target = document.getElementById(decodeURIComponent(url.hash.slice(1)));
+    } catch {
+      target = document.getElementById(url.hash.slice(1));
+    }
+  }
   if (target) target.scrollIntoView();
   else window.scrollTo(0, 0);
 }
@@ -135,6 +142,14 @@ async function navigate(url: URL, mode: "push" | "pop", restore?: number): Promi
   if (!res) {
     location.href = url.href;
     return;
+  }
+  // Follow server redirects (e.g. /about/ -> /about) so the address bar shows the final URL.
+  if (res.redirected && res.url) {
+    const final = new URL(res.url);
+    if (final.origin === location.origin) {
+      final.hash = url.hash;
+      url = final;
+    }
   }
   const doc = new DOMParser().parseFromString(await res.text(), "text/html");
   if (id !== token) return;
