@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.3.1
+
+- Version aligned with Sinth 5.3.1 (runtime license exception); no editor changes.
+
 ## 5.3.0
 
 - Highlighting for `try`, `catch`, `finally` and `throw`.

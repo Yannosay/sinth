@@ -24,7 +24,7 @@
       </div>
       <div class="site-footer__bottom">
         <p class="site-footer__copy">&copy; {{ currentYear }} Yannosay Productions</p>
-        <p class="site-footer__credit">Sinth is released under the AGPL-3.0 license.</p>
+        <p class="site-footer__credit">Sinth is released under the AGPL-3.0 license with a <a href="https://github.com/Yannosay/sinth/blob/main/RUNTIME-EXCEPTION.md" target="_blank" rel="noopener noreferrer">runtime exception</a> for the sites you build.</p>
       </div>
     </div>
   </footer>

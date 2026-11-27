@@ -1,6 +1,6 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.3.0",
+  "version": "5.3.1",
   "description": "A compiled, type-checked language for websites and web apps: reactive components, file-based routing with instant navigation, prerendered pages, API routes and one-command deploys.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",
@@ -47,7 +47,8 @@
     "schema/",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "RUNTIME-EXCEPTION.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json && node scripts/build-browser.js",

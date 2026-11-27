@@ -38,5 +38,8 @@ Set `"base": "/docs/"`. The dev server and `sinth preview` serve the site under 
 **How does Sinth compare to React, Vue or Svelte?**
 Sinth is a language and toolchain rather than a library: routing, prerendering, scoped styles, type checking, a component library and deployment are built in, and the output is plain HTML with a small runtime. Like Svelte it compiles components ahead of time; like Astro it prerenders every page; like Vue it makes state reactive without extra API calls.
 
+**Do I have to open-source my site because Sinth is AGPL?**
+No. Sinth is licensed under the AGPL-3.0 with a [runtime exception](https://github.com/Yannosay/sinth/blob/main/RUNTIME-EXCEPTION.md): the HTML, CSS and JavaScript that Sinth generates, including the runtime code bundled into it, can be used and licensed however you like. The AGPL applies when you modify or redistribute Sinth itself.
+
 **Where do I report bugs?**
 [github.com/Yannosay/sinth/issues](https://github.com/Yannosay/sinth/issues). Include the output of `sinth info`.

@@ -104,4 +104,4 @@ Documentation source: [docs/](./docs) · [Changelog](./CHANGELOG.md) · [Discord
 
 ## License
 
-[AGPL-3.0](./LICENSE).
+Sinth is licensed under the [AGPL-3.0](./LICENSE) with a [runtime exception](./RUNTIME-EXCEPTION.md): the sites you build with it, including the Sinth runtime code they contain, are yours to license however you like. The AGPL applies to Sinth itself.

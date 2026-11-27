@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.3.1
+
+- **Runtime exception.** Sinth is now licensed under the AGPL-3.0 with an additional permission ([RUNTIME-EXCEPTION.md](./RUNTIME-EXCEPTION.md)): sites built with Sinth, including the runtime code bundled into them, can be licensed however you like. Sinth itself stays under the AGPL. The exception covers all versions of Sinth.
+- README and docs state measured output sizes instead of approximations.
+
 ## 5.3.0
 
 ### Instant navigation
