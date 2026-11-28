@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.3.4
+
+- Completions and hover documentation for all 28 `sinth:ui` components, including the new `Select`, `Tabs`, `Table`, `Toaster` and others.
+- `sinth:env` in import completions.
+- The `sinth.config.json` schema knows `redirects`, `headers` and `allowedHosts`.
+
 ## 5.3.1
 
 - Version aligned with Sinth 5.3.1 (runtime license exception); no editor changes.

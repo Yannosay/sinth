@@ -1,6 +1,6 @@
 {
   "name": "@yannosay/sinth",
-  "version": "5.3.3",
+  "version": "5.3.4",
   "description": "A compiled, type-checked language for websites and web apps: reactive components, file-based routing with instant navigation, prerendered pages, API routes and one-command deploys.",
   "author": "Yannosay Productions",
   "license": "AGPL-3.0",

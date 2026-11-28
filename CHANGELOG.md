@@ -1,5 +1,53 @@
 # Changelog
 
+## 5.3.4
+
+### Security
+
+- **URL sanitizing can no longer be bypassed.** Browsers ignore tabs, newlines and control characters inside a URL scheme, so a value like `"java<tab>script:alert(1)"` in `href` or `src` got past the check. Both the runtime and prerendered HTML now strip those characters before checking, and prerendered pages also block HTML `data:` URLs, as the runtime already did. Relative links that merely start with "javascript" (`javascript-guide.html`) are no longer blocked.
+- **The dev and preview servers reject requests for unknown host names**, which protects them from DNS rebinding (a website you visit reaching your local server through a domain it controls). `localhost`, `*.localhost`, IP addresses and the `--host` name always work; tunnels and custom local domains go in the new `allowedHosts` option.
+- Request bodies sent to `functions/` in `sinth dev` and `sinth preview` are limited to 64 MB.
+- `--open` on Windows no longer passes the URL through `cmd`, which interpreted characters like `&` in it.
+
+### Environment variables
+
+- **`sinth:env`**: `import { PUBLIC_API_URL } from "sinth:env"` reads variables from `.env`, `.env.local`, `.env.development` / `.env.production` and the environment. Only names starting with `PUBLIC_` are available to pages, so secrets cannot reach the browser; a missing or non-public name is compile error E0607 with a suggestion. Values are inlined at build time and work in metadata and prerendered HTML.
+- `functions/` get every variable on `context.env` (`.dev.vars` still wins), and `sinth dev` rebuilds when a `.env` file changes.
+
+### Redirects and headers
+
+- **`redirects`** in `sinth.config.json`, with `:params` and `*` splats: `{ "/blog/:slug": "/posts/:slug" }`. They apply in `sinth dev` and `sinth preview` and are written for every platform (`_redirects` on Cloudflare and Netlify, routes in the Vercel output, redirect pages on GitHub Pages).
+- **`headers`** adds response headers by path pattern, on top of the security headers.
+- A `_headers` file in `public/` is now merged with the generated one. Before, it replaced it, which silently dropped the security headers and CSP.
+
+### sinth:ui
+
+- **New components:** `Select`, `Tabs`, `Accordion`, `Tooltip`, `Table` (sortable), `Pagination`, `Breadcrumbs`, `ProgressBar`, `Skeleton`, `EmptyState`, `Dropdown`, `Kbd`, and `Toaster` with a `toast()` function you can call from anywhere.
+- **`Modal`** traps focus, returns it to the element that opened it, locks page scrolling, labels itself with its title and takes `dismissible: false`.
+- `Button` has `loading`; `Field` links `hint` and `error` to the control with `aria-describedby` and takes `disabled` and `autocomplete`; `Toggle` takes `disabled`. Dark mode has brighter status colors.
+
+### AI agents
+
+- **`sinth skill`** installs the Sinth skill from the installed package (Claude Code, or `.agents/skills/sinth` plus an `AGENTS.md` section for Codex, Cursor, Copilot, Gemini CLI and others), so it always matches your Sinth version.
+- The skill teaches agents to write lean Sinth (`sinth:ui`, `computed`, `model`, `for … else` before custom code), adds a `sinth:ui` reference, covers environment variables and redirects, and has agents report results instead of narrating their steps.
+- Sites with `site` set get an **`llms.txt`** listing every page with its title and description, for AI assistants and answer engines.
+
+### CLI
+
+- `sinth check --max-warnings 0` fails on warnings, for CI.
+- `sinth create` mentions `sinth skill`, and new projects ignore `.vercel/`, `.env.local` and `.env.*.local`.
+
+### Fixes
+
+- `Select` with `model` shows the bound value when its options come from a loop or arrive later. Before, it showed the first option.
+- A capitalized constant written as text, like `P { API_URL }`, renders its value. Before, it was reported as an unknown component, with the same name as the suggestion.
+- Elements leaving with `transition(...)` are inert while they fade out, so they no longer catch clicks.
+- Editing several files quickly in `sinth dev` reports the last one changed.
+
+### Editors
+
+- VS Code and Sinth IDE complete every `sinth:ui` component and the `sinth:env` import; the config schema knows `redirects`, `headers` and `allowedHosts`.
+
 ## 5.3.3
 
 ### Hosting

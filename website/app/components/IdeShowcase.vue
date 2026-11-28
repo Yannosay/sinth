@@ -257,7 +257,7 @@ const highlighted = code.split('\n').map(highlight)
 .ide__body {
   display: grid;
   grid-template-columns: 40px 190px minmax(0, 1fr);
-  height: 470px;
+  height: 580px;
 
   @media (max-width: 760px) {
     grid-template-columns: 40px minmax(0, 1fr);
