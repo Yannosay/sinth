@@ -5,7 +5,7 @@ description: The built-in component library.
 
 # The sinth:ui library
 
-`sinth:ui` ships with Sinth: 28 components and a `toast()` function for forms, overlays, data and layout, written in Sinth itself. Import only what a file uses: `import { Button, Field, Modal } from "sinth:ui"`. Every component is keyboard accessible, follows the WAI-ARIA pattern for its role, and supports light and dark mode. Theme with custom properties instead of new CSS:
+`sinth:ui` ships with Sinth: 28 components and a `toast()` function for forms, overlays, data and layout, written in Sinth itself. Import only what a file uses: `import { Button, Field, Modal } from "sinth:ui"`. Every component is keyboard accessible, follows the WAI-ARIA pattern for its role, follows the system light or dark mode, and shares one set of sizes, so a page built only from `sinth:ui` looks finished without custom CSS. Theme it with custom properties instead of new CSS:
 
 ```sinth
 style {
@@ -13,7 +13,16 @@ style {
 }
 ```
 
-Tokens: `--ui-bg --ui-surface --ui-surface-2 --ui-text --ui-muted --ui-border --ui-accent --ui-accent-hover --ui-accent-text --ui-success --ui-warning --ui-danger --ui-info --ui-radius --ui-radius-lg --ui-shadow --ui-font --ui-mono`.
+Tokens:
+
+| Group | Tokens |
+|---|---|
+| Color | `--ui-bg --ui-surface --ui-surface-2 --ui-elevated --ui-text --ui-muted --ui-border --ui-border-strong` |
+| Accent and status | `--ui-accent --ui-accent-hover --ui-accent-text --ui-success --ui-warning --ui-danger --ui-info` |
+| Shape and depth | `--ui-radius --ui-radius-lg --ui-control` (control height) `--ui-ring` (focus ring) `--ui-shadow --ui-shadow-lg` |
+| Type and motion | `--ui-font --ui-mono --ui-ease` |
+
+Set them on `:root` for the whole site, or on any element to theme just that part.
 
 ## Actions and feedback
 
@@ -39,6 +48,8 @@ Tokens: `--ui-bg --ui-surface --ui-surface-2 --ui-text --ui-muted --ui-border --
 | `Toggle` | `bind checked`, `label`, `disabled` |
 
 `hint` and `error` are linked to the control with `aria-describedby`; `error` also sets `aria-invalid`.
+
+Inside a `Form`, every field, select and toggle takes its own row with even spacing, and buttons line up side by side after them. No layout wrapper is needed.
 
 ## Overlays and disclosure
 
@@ -92,6 +103,7 @@ Content(width: "sm") {
   Modal(open: confirm, title: "Delete account?") {
     Paragraph { "This cannot be undone." }
     slot(name: "footer") {
+      Button(variant: "secondary", onClick: confirm = false) { "Cancel" }
       Button(variant: "danger", onClick: confirm = false) { "Delete" }
     }
   }
@@ -101,6 +113,10 @@ Content(width: "sm") {
 
 ## Size
 
-Components a page does not use are removed from its JavaScript: a page with one `Button` adds 1.5 kB gzipped, a page using every component 7.7 kB. The stylesheet is 3.8 kB gzipped, shared and cached across pages.
+Components a page does not use are removed from its JavaScript. A `Button` adds almost nothing over a plain button; a page that uses all 28 components, markup included, ships about 11 kB of gzipped JavaScript. The stylesheet is 5.2 kB gzipped and is built once as a shared, content-hashed file (`_sinth/lib-<hash>.css`), so a site downloads it once no matter how many pages use the library. Pages that do not import `sinth:ui` do not load it.
+
+## Using a plain element inside a component
+
+A component named after an element, like a `component Button` in your own library, replaces that element everywhere in its file. Write `Html.Button(...)` when you need the native element anyway; `Html.` works with every built-in element.
 
 The library also sets a light base style for `body`, links and focus rings. The legacy `import SinthUI` imports the whole library.

@@ -173,3 +173,7 @@ Main { Heading(level: 1) { post.title } }
 ```
 
 Links between pages navigate instantly (no full reload). Add `dataReload: true` to a link to opt out.
+
+## Elements shadowed by components
+
+A component named like an element (`component Button`) replaces that element in its file. `Html.Button(...)` always means the native element (any built-in name works after `Html.`).

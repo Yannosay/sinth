@@ -85,3 +85,7 @@ export const onRequestGet = ({ request, env }) => {
 ## Environment variables
 
 `.env`, `.env.local`, `.env.development` / `.env.production` (and `.env.<mode>.local`), with the process environment winning. Pages import only `PUBLIC_` variables: `import { PUBLIC_API_URL } from "sinth:env"` (inlined at build time; a missing or non-public name is error E0607). Functions get every variable, secrets included, on `context.env`; `.dev.vars` wins locally. Never put secrets in `PUBLIC_` variables or commit `.env.local`/`.dev.vars`.
+
+## Desktop apps (opt-in)
+
+`npx sinth desktop init --name "App" --identifier com.acme.app` adds `src-tauri/` (Tauri 2). `sinth desktop dev` opens the app with hot reload; `sinth desktop build` writes installers to `src-tauri/target/release/bundle` (needs Rust). Native features come from `sinth:desktop`: `isDesktop()`, `pickFile(accept)` (resolves `{ name, path, text }` or null), `saveFile(name, contents)`, `notify(title, body)`, `confirmDialog(message, title)`, `setTitle(title)`, `openExternal(url)`. Each also works in a browser, so do not branch on `isDesktop()` just to call them. Keep `capabilities/default.json` minimal; never add broad `fs` scopes.

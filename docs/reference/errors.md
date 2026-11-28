@@ -17,6 +17,7 @@ description: Every error and warning code.
 | E0210 | `persist` outside page or component state |
 | E0301 | Unknown component or element |
 | E0302 | Unknown name |
+| E0303 | `Html.Name` used with something that is not a built-in element |
 | E0310 | `$slot` outside a component |
 | E0311–E0316 | Wrong function or slot arguments (unknown, duplicated, too many, missing, misordered) |
 | E0320 | Invalid heading level |
@@ -45,6 +46,7 @@ description: Every error and warning code.
 | E0802 | No pages or custom elements found |
 | E0803 | A file in `functions/` failed to build |
 | E0804 | Request body sent to `functions/` in `sinth dev` or `sinth preview` is larger than 64 MB |
+| E0805 | The dev server port is taken and `--strict-port` is set |
 | E0899 | Internal compiler error (please report it) |
 | E0900–E0903 | Invalid configuration (including an unknown `platform`, a missing `srcDir`, or malformed `redirects`, `headers` or `allowedHosts`) |
 | E1000 | No build to preview |
@@ -52,6 +54,12 @@ description: Every error and warning code.
 | E1200–E1202 | Invalid command-line options |
 | E1300–E1305 | `new`/`create` errors |
 | E1310 | The Sinth skill is missing from the installed package (`sinth skill`) |
+| E1400 | `sinth desktop init`: `src-tauri/` already exists (pass `--force` to write it again) |
+| E1401 | Invalid desktop app name or identifier |
+| E1402 | The app icons could not be generated |
+| E1403 | `sinth desktop dev` or `build` in a project without `src-tauri/` (run `sinth desktop init`) |
+| E1404 | Rust is not installed (needed for desktop builds) |
+| E1405 | The Tauri build failed |
 | W0101 | Markup outside a component in a module file |
 | W0201 | `int` is deprecated |
 | W0301 | Unescaped dynamic HTML |

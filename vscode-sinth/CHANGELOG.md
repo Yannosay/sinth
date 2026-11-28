@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.4.0
+
+- `sinth:desktop` in import completions.
+
 ## 5.3.4
 
 - Completions and hover documentation for all 28 `sinth:ui` components, including the new `Select`, `Tabs`, `Table`, `Toaster` and others.

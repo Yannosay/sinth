@@ -86,3 +86,25 @@ test("sinth:ui components render accessible markup and react to input", async ()
   $(".ui-toast__close").click();
   assert.equal($(".ui-toast"), null);
 });
+
+test("library tabs, pagination and sort headers are plain buttons, not the Button component", async () => {
+  const app = await run(PAGE);
+  for (const el of app.doc.querySelectorAll(".ui-tabs__tab, .ui-pagination__item, .ui-table__sort")) {
+    assert.equal(el.tagName, "BUTTON");
+    assert.equal(el.classList.contains("ui-btn"), false);
+    assert.equal(el.getAttribute("type"), "button");
+  }
+});
+
+test("Html.Name always means the built-in element, even when a component shadows it", async () => {
+  const app = await run(`component Button(str label) {
+  Html.Button(class: "mine", type: "button") { label }
+}
+Main {
+  Button(label: "Hi")
+  Html.Button(id: "raw") { "Raw" }
+}`);
+  assert.equal(app.$(".mine").textContent, "Hi");
+  assert.equal(app.$("#raw").tagName, "BUTTON");
+  assert.equal(app.$("#raw").classList.contains("mine"), false);
+});

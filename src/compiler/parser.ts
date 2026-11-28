@@ -634,6 +634,10 @@ export class Parser {
       name += "." + this.next().value;
     }
     const el: ElementNode = { k: "element", name, attrs: [], children: [], slots: [], hasBody: false, loc: start.loc };
+    if (name.startsWith("Html.") && name.split(".").length === 2) {
+      el.name = name.slice(5);
+      el.builtin = true;
+    }
     if (this.isPunct("(") && this.sameLine()) el.attrs = this.parseAttrs();
     if (this.isPunct("{")) {
       this.next();

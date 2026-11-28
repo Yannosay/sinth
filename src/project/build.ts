@@ -1,4 +1,5 @@
 import * as esbuild from "esbuild";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { Diagnostic, SinthError } from "../compiler/diagnostics";
@@ -52,11 +53,34 @@ function cssModuleId(project: Project, file: string): string {
   return nm !== -1 ? parts.slice(nm).join("/") : "external/" + parts.slice(-2).join("/");
 }
 
-function sinthPlugin(project: Project, entries: Map<string, string>, injectCss = false): esbuild.Plugin {
+/**
+ * CSS of .sinth libraries outside the project (sinth:ui, packages). It is left out of every page
+ * bundle and written once as a shared stylesheet, so browsers download it once per site.
+ */
+type LibraryCss = Map<string, string>;
+
+function isLibraryModule(id: string): boolean {
+  return id.startsWith("external/") || id.startsWith("node_modules/");
+}
+
+/** Writes the shared library stylesheet into `files` and returns its path below the site root. */
+function writeLibraryCss(css: LibraryCss, outDir: string, dev: boolean, minify: boolean, files: Map<string, OutputFile>): string | undefined {
+  const parts = [...css.entries()].sort(([a], [b]) => a.localeCompare(b)).filter(([, text]) => text.trim());
+  if (!parts.length) return undefined;
+  let text = parts.map(([id, body]) => (minify ? body : `/* ${id} */\n${body}`)).join("\n");
+  if (minify) text = esbuild.transformSync(text, { loader: "css", minify: true, legalComments: "none" }).code;
+  const name = dev ? "_sinth/lib.css" : `_sinth/lib-${crypto.createHash("sha256").update(text).digest("hex").slice(0, 8).toUpperCase()}.css`;
+  files.set(name, { path: path.join(outDir, name), contents: Buffer.from(text) });
+  return name;
+}
+
+function sinthPlugin(project: Project, entries: Map<string, string>, injectCss = false, libraryCss?: LibraryCss): esbuild.Plugin {
   const cssFiles = new Map<string, string>();
   return {
     name: "sinth",
     setup(b) {
+      // url("/img.png") in a style points at public/ and is served as is; data: and remote URLs too.
+      b.onResolve({ filter: /^(\/|data:|https?:)/ }, a => (a.kind === "url-token" ? { path: a.path, external: true } : undefined));
       b.onResolve({ filter: /^sinth-(runtime|router)$/ }, a => ({ path: a.path, namespace: "sinth-builtin" }));
       b.onLoad({ filter: /.*/, namespace: "sinth-builtin" }, a => {
         const file = a.path === "sinth-router" ? ROUTER_PATH : RUNTIME_PATH;
@@ -72,6 +96,10 @@ function sinthPlugin(project: Project, entries: Map<string, string>, injectCss =
       });
       b.onLoad({ filter: /.*/, namespace: "sinth-css" }, a => {
         const file = cssFiles.get(a.path) ?? path.resolve(project.root, a.path);
+        if (!injectCss && libraryCss && isLibraryModule(a.path)) {
+          libraryCss.set(a.path, project.compile(file).css);
+          return { contents: `/* ${a.path} */`, loader: "css", resolveDir: path.dirname(file) };
+        }
         return injectCss
           ? { contents: `import { injectCss } from "sinth-runtime";\ninjectCss(${JSON.stringify("sinth-css-" + a.path.replace(/[^\w-]+/g, "-"))}, ${JSON.stringify(project.compile(file).css)});`, loader: "js", resolveDir: path.dirname(file) }
           : { contents: project.compile(file).css, loader: "css", resolveDir: path.dirname(file) };
@@ -177,9 +205,11 @@ function esbuildErrorToSinth(err: unknown, project: Project): SinthError {
   const loc = first.location;
   const missing = first.text.match(/Could not resolve "([^"]+)"/);
   let hint: string | undefined;
-  if (missing && !missing[1].startsWith(".") && !missing[1].startsWith("/")) {
+  if (missing && /\.(css|s[ac]ss)$|\.sinth$/.test(loc?.file ?? "") && /\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|mp4|webm)$/i.test(missing[1])) {
+    hint = `Put '${missing[1].replace(/^\.?\//, "")}' in public/ and reference it from the site root, like url("/${missing[1].replace(/^\.?\//, "")}")`;
+  } else if (missing && !missing[1].startsWith(".") && !missing[1].startsWith("/")) {
     const name = missing[1].startsWith("@") ? missing[1].split("/").slice(0, 2).join("/") : missing[1].split("/")[0];
-    hint = `Install it with: npm install ${name}`;
+    if (/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/.test(name)) hint = `Install it with: npm install ${name}`;
   }
   const file = loc?.file ? path.resolve(project.root, loc.file.replace(/^[a-z-]+:/, "")) : undefined;
   const isGenerated = !!file && file.endsWith(".sinth");
@@ -301,6 +331,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
     entryPoints[key] = "sinth-entry:" + key;
   }
 
+  const libraryCss: LibraryCss = new Map();
   let result: Pick<esbuild.BuildResult<{ metafile: true; write: false }>, "outputFiles" | "metafile" | "warnings"> = { outputFiles: [], metafile: { inputs: {}, outputs: {} }, warnings: [] };
   if (compiled.length) try {
     result = await esbuild.build({
@@ -324,7 +355,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
       legalComments: cfg.minify ? "none" : "eof",
       loader: ASSET_LOADERS,
       define: { "process.env.NODE_ENV": JSON.stringify(project.dev ? "development" : "production") },
-      plugins: [sinthPlugin(project, entries)],
+      plugins: [sinthPlugin(project, entries, false, libraryCss)],
       absWorkingDir: project.root,
     });
   } catch (err) {
@@ -335,6 +366,7 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
   for (const f of result.outputFiles) {
     files.set(path.relative(cfg.outDir, f.path).replace(/\\/g, "/"), { path: f.path, contents: f.contents });
   }
+  const sharedCss = writeLibraryCss(libraryCss, cfg.outDir, project.dev, cfg.minify, files);
 
   const csp = contentSecurityPolicy(compiled, cfg.security.csp);
   const pageOutputs: PageOutput[] = [];
@@ -358,7 +390,15 @@ export async function buildProject(project: Project, options: BuildOptions): Pro
       for (const f of c.fonts) styles.push(fontHref(f));
     }
     styles.push(...c.externalStyles);
-    if (cssOut) styles.push(toUrl(cssOut));
+    const cssMeta = cssOut ? result.metafile.outputs[cssOut] : undefined;
+    if (sharedCss && cssMeta && Object.keys(cssMeta.inputs).some(i => isLibraryModule(i.replace(/^sinth-css:/, "")))) styles.push(cfg.base + sharedCss);
+    if (cssOut) {
+      const rel = path.relative(cfg.outDir, path.resolve(project.root, cssOut)).replace(/\\/g, "/");
+      const own = files.get(rel);
+      // A page whose only styles come from libraries has nothing left in its own bundle.
+      if (own && !Buffer.from(own.contents).toString("utf-8").replace(/\/\*[\s\S]*?\*\//g, "").trim()) files.delete(rel);
+      else styles.push(toUrl(cssOut));
+    }
     const scripts = c.externalScripts.map(s => ({ src: s.src, module: false, attrs: s.attrs }));
     const shipsJs = !!jsOut && (c.interactive || cfg.router);
     if (shipsJs && jsOut) scripts.push({ src: toUrl(jsOut), module: true, attrs: { "data-sinth-entry": true } });

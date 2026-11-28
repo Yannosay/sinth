@@ -12,6 +12,7 @@ import { FlagSpec, parseArgs, ParsedArgs } from "./args";
 import { componentTemplate, pageTemplate, TemplateName, TEMPLATES, templateFiles } from "./templates";
 import { brand, c, formatBytes, formatMs, log, printDiagnostic, table } from "./ui";
 import { installSkill } from "./skill";
+import { desktopInit, desktopRun } from "./desktop";
 import { startUpdateCheck } from "./update-check";
 
 const VERSION = (JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")) as { version: string }).version;
@@ -50,12 +51,13 @@ function openProject(args: ParsedArgs, mode: "development" | "production"): Proj
 const commands: Record<string, Command> = {
   dev: {
     summary: "Start the dev server with hot reload",
-    usage: "sinth dev [--port 3000] [--host [address]] [--open]",
+    usage: "sinth dev [--port 3000] [--strict-port] [--host [address]] [--open]",
     flags: {
       ...ROOT_FLAG,
       port: { type: "number", alias: "p", description: "Port to listen on" },
       host: { type: "string", description: "Expose on the network (default address 0.0.0.0)", optionalValue: "0.0.0.0" },
       open: { type: "boolean", alias: "o", description: "Open the browser" },
+      "strict-port": { type: "boolean", description: "Fail if the port is taken instead of using the next free one" },
     },
     async run(args) {
       console.log(`\n  ${brand("dev", VERSION)}`);
@@ -65,6 +67,7 @@ const commands: Record<string, Command> = {
         port: Number(args.flags.port ?? project.config.port),
         host: String(args.flags.host ?? project.config.host),
         open: !!args.flags.open,
+        strictPort: !!args.flags["strict-port"],
       });
       setTimeout(() => {
         const msg = update();
@@ -200,6 +203,30 @@ const commands: Record<string, Command> = {
         return 1;
       }
       log.success(`${result.pages.length} page(s) checked, no errors${result.warnings.length ? `, ${result.warnings.length} warning(s)` : ""} ${c.gray(formatMs(Date.now() - started))}`);
+      return 0;
+    },
+  },
+  desktop: {
+    summary: "Package the site as a native desktop app (Tauri)",
+    usage: "sinth desktop init [--name \"My App\"] [--identifier com.acme.app] | sinth desktop dev | sinth desktop build [--debug]",
+    flags: {
+      ...ROOT_FLAG,
+      name: { type: "string", description: "App name shown in the title bar and installers (init)" },
+      identifier: { type: "string", description: "Reverse-DNS app id, like com.acme.orders (init)" },
+      force: { type: "boolean", description: "Write src-tauri/ again (init)" },
+      debug: { type: "boolean", description: "Build an unoptimized app with dev tools (build)" },
+    },
+    async run(args) {
+      const sub = args.positionals[0];
+      const root = projectRoot(args);
+      console.log(`\n  ${brand("desktop", VERSION)}\n`);
+      if (sub === "init") {
+        await desktopInit(root, { name: args.flags.name as string | undefined, identifier: args.flags.identifier as string | undefined, force: !!args.flags.force }, VERSION);
+      } else if (sub === "dev" || sub === "build") {
+        await desktopRun(root, sub, sub === "build" && args.flags.debug ? ["--debug"] : []);
+      } else {
+        throw new SinthError("E1200", "Usage: sinth desktop init | dev | build", undefined, "Start with: sinth desktop init");
+      }
       return 0;
     },
   },

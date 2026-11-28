@@ -54,3 +54,8 @@ test("reactive values are extracted", () => {
   assert.equal(res.expressions.length, 2);
   assert.match(res.css, /width: var\(--v-0\)/);
 });
+
+test("escaped quotes inside a quoted value are unescaped, CSS escapes are kept", () => {
+  assert.match(css(`.a { backgroundImage: "url(\\"/x.png\\")" }`), /background-image: url\("\/x.png"\)/);
+  assert.match(css(".a { content: \"'\\e900'\" }"), /content: '\\e900'/);
+});

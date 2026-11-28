@@ -110,6 +110,8 @@ export interface ElementNode {
   children: Node[];
   slots: SlotFill[];
   hasBody: boolean;
+  /** Written as Html.Name: always the built-in element, even where a component of that name is in scope. */
+  builtin?: boolean;
   loc: Loc;
 }
 

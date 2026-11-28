@@ -56,7 +56,9 @@ component Card(str? title, str? subtitle, bool interactive = false) {
     Div(class: "ui-card__body") {
       $slot
     }
-    $slot(name: "footer")
+    Footer(class: "ui-card__footer") {
+      $slot(name: "footer")
+    }
   }
 }
 
@@ -151,12 +153,12 @@ component Select(str label, bind value, any[] options, str? placeholder, str? hi
 
 component Toggle(bind checked, str? label, bool disabled = false) {
   Label(class: ["ui-toggle", disabled ? "ui-toggle--disabled" : ""]) {
+    if label {
+      Span(class: "ui-toggle__label") { label }
+    }
     Input(type: "checkbox", role: "switch", class: "ui-toggle__input", model: checked, disabled: disabled)
     Span(class: "ui-toggle__track", ariaHidden: "true") {
       Span(class: "ui-toggle__thumb")
-    }
-    if label {
-      Span(class: "ui-toggle__label") { label }
     }
   }
 }
@@ -217,13 +219,15 @@ component Modal(bind open, str? title, str width = "32rem", bool dismissible = t
             Heading(level: 2, class: "ui-modal__title", id: titleId) { title }
           }
           if dismissible {
-            Button(class: "ui-modal__close", ariaLabel: "Close", onClick: open = false) { "×" }
+            Html.Button(class: "ui-close", type: "button", ariaLabel: "Close", onClick: open = false) { Svg(viewBox: "0 0 16 16", width: "16", height: "16", ariaHidden: "true") { Path(d: "M4 4l8 8M12 4l-8 8") } }
           }
         }
         Div(class: "ui-modal__body") {
           $slot
         }
-        $slot(name: "footer")
+        Footer(class: "ui-modal__footer") {
+          $slot(name: "footer")
+        }
       }
     }
   }
@@ -245,7 +249,7 @@ component Tabs(str[] tabs, bind selected = 0, str? label) {
         onKeyDown.right: pick(selected + 1), onKeyDown.left: pick(selected - 1),
         onKeyDown.home: pick(0), onKeyDown.end: pick(tabs.length - 1)) {
       for tab, i in tabs {
-        Button(class: "ui-tabs__tab", role: "tab", id: id + "-tab-" + i, ariaSelected: selected == i ? "true" : "false",
+        Html.Button(type: "button", class: "ui-tabs__tab", role: "tab", id: id + "-tab-" + i, ariaSelected: selected == i ? "true" : "false",
                ariaControls: id + "-panel", tabindex: selected == i ? "0" : "-1", onClick: selected = i) { tab }
       }
     }
@@ -299,9 +303,9 @@ component Table(obj[] columns, obj[] rows, str? caption, bool sortable = false, 
           for col in columns {
             Th(scope: "col", class: col.align == "end" ? "ui-table__num" : "", ariaSort: sortKey == col.key ? (sortDir == 1 ? "ascending" : "descending") : null) {
               if sortable {
-                Button(class: "ui-table__sort", onClick: sortBy(col.key)) {
+                Html.Button(type: "button", class: "ui-table__sort", onClick: sortBy(col.key)) {
                   col.label
-                  Span(class: "ui-table__arrow", ariaHidden: "true") { sortKey == col.key ? (sortDir == 1 ? " ▲" : " ▼") : "" }
+                  Span(class: ["ui-table__arrow", sortKey == col.key ? "ui-table__arrow--on" : "", sortDir == -1 ? "ui-table__arrow--desc" : ""], ariaHidden: "true")
                 }
               } else {
                 col.label
@@ -332,14 +336,14 @@ component Pagination(bind page, num total, str label = "Pagination") {
   computed num[] pages = range(1, total + 1).filter((p) => p == 1 or p == total or Math.abs(p - page) <= 1)
 
   Nav(class: "ui-pagination", ariaLabel: label) {
-    Button(class: "ui-pagination__item", disabled: page <= 1, ariaLabel: "Previous page", onClick: page -= 1) { "‹" }
+    Html.Button(type: "button", class: "ui-pagination__item", disabled: page <= 1, ariaLabel: "Previous page", onClick: page -= 1) { Svg(viewBox: "0 0 16 16", width: "14", height: "14", ariaHidden: "true") { Path(d: "M10 4l-4 4 4 4") } }
     for p, i in pages {
       if i > 0 and p - pages[i - 1] > 1 {
         Span(class: "ui-pagination__gap", ariaHidden: "true") { "…" }
       }
-      Button(class: "ui-pagination__item", ariaCurrent: p == page ? "page" : null, onClick: page = p) { p }
+      Html.Button(type: "button", class: "ui-pagination__item", ariaCurrent: p == page ? "page" : null, onClick: page = p) { p }
     }
-    Button(class: "ui-pagination__item", disabled: page >= total, ariaLabel: "Next page", onClick: page += 1) { "›" }
+    Html.Button(type: "button", class: "ui-pagination__item", disabled: page >= total, ariaLabel: "Next page", onClick: page += 1) { Svg(viewBox: "0 0 16 16", width: "14", height: "14", ariaHidden: "true") { Path(d: "M6 4l4 4-4 4") } }
   }
 }
 
@@ -421,9 +425,9 @@ component Dropdown(str label, str variant = "secondary", str align = "start") {
   }
 
   Div(class: "ui-dropdown", ref: root, onKeyDown.esc: closeAndFocus(), onKeyDown.down: move(e, 1), onKeyDown.up: move(e, -1)) {
-    Button(class: ["ui-btn", "ui-btn--" + variant, "ui-btn--md", "ui-dropdown__trigger"], ariaHaspopup: "menu", ariaExpanded: open ? "true" : "false", onClick: toggle()) {
+    Html.Button(type: "button", class: ["ui-btn", "ui-btn--" + variant, "ui-btn--md", "ui-dropdown__trigger"], ariaHaspopup: "menu", ariaExpanded: open ? "true" : "false", onClick: toggle()) {
       label
-      Span(class: "ui-dropdown__caret", ariaHidden: "true") { "▾" }
+      Svg(class: "ui-dropdown__caret", viewBox: "0 0 16 16", width: "12", height: "12", ariaHidden: "true") { Path(d: "M4 6l4 4 4-4") }
     }
     if open {
       Div(class: ["ui-dropdown__menu", "ui-dropdown__menu--" + align], role: "menu", onClick: open = false) {
@@ -438,8 +442,9 @@ component Toaster(str position = "bottom-end") {
   Div(class: ["ui-toaster", "ui-toaster--" + position], role: "region", ariaLabel: "Notifications", ariaLive: "polite") {
     for t in toasts key t.id {
       Div(class: ["ui-toast", "ui-toast--" + t.tone], role: t.tone == "danger" ? "alert" : "status") {
+        Span(class: "ui-toast__dot", ariaHidden: "true")
         Span(class: "ui-toast__message") { t.message }
-        Button(class: "ui-toast__close", ariaLabel: "Dismiss", onClick: dismissToast(t.id)) { "×" }
+        Html.Button(class: "ui-close ui-toast__close", type: "button", ariaLabel: "Dismiss", onClick: dismissToast(t.id)) { Svg(viewBox: "0 0 16 16", width: "16", height: "16", ariaHidden: "true") { Path(d: "M4 4l8 8M12 4l-8 8") } }
       }
     }
   }
@@ -489,133 +494,199 @@ component Divider(str? label) {
   }
 }
 
+
+-- Base styles and theme. In a form every control gets its own row and buttons line up side by side.
 style global {
   :root {
     --ui-bg: "#ffffff"
-    --ui-surface: "#f7f7f8"
-    --ui-surface-2: "#efeff1"
+    --ui-surface: "#f6f6f8"
+    --ui-surface-2: "#ececf0"
+    --ui-elevated: "#ffffff"
     --ui-text: "#0a0a0b"
-    --ui-muted: "#5f5f6b"
-    --ui-border: "#e3e3e8"
-    --ui-accent: "#9333ea"
-    --ui-accent-hover: "#7e22ce"
+    --ui-muted: "#6b6b76"
+    --ui-border: "#e4e4e9"
+    --ui-border-strong: "#d2d2d9"
+    --ui-accent: "#7c3aed"
+    --ui-accent-hover: "#6d28d9"
     --ui-accent-text: "#ffffff"
-    --ui-success: "#15803d"
-    --ui-warning: "#b45309"
+    --ui-success: "#16a34a"
+    --ui-warning: "#d97706"
     --ui-danger: "#dc2626"
     --ui-info: "#2563eb"
     --ui-radius: "10px"
     --ui-radius-lg: "16px"
-    --ui-shadow: "0 1px 2px rgba(10, 10, 11, 0.06), 0 8px 24px rgba(10, 10, 11, 0.06)"
-    --ui-font: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    --ui-mono: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    --ui-control: "2.5rem"
+    --ui-ring: "0 0 0 3px color-mix(in srgb, var(--ui-accent) 28%, transparent)"
+    --ui-shadow: "0 1px 2px rgba(10, 10, 11, 0.05), 0 4px 16px rgba(10, 10, 11, 0.06)"
+    --ui-shadow-lg: "0 2px 6px rgba(10, 10, 11, 0.06), 0 24px 64px rgba(10, 10, 11, 0.16)"
+    --ui-font: "-apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif"
+    --ui-mono: "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace"
+    --ui-ease: "cubic-bezier(0.2, 0, 0, 1)"
     colorScheme: "light dark"
   }
   dark {
     :root {
       --ui-bg: "#0a0a0b"
-      --ui-surface: "#141416"
-      --ui-surface-2: "#1c1c20"
+      --ui-surface: "#141417"
+      --ui-surface-2: "#1d1d22"
+      --ui-elevated: "#18181c"
       --ui-text: "#f5f5f6"
       --ui-muted: "#a1a1aa"
-      --ui-border: "#2a2a2f"
-      --ui-accent: "#c084fc"
-      --ui-accent-hover: "#d8b4fe"
+      --ui-border: "rgba(255, 255, 255, 0.09)"
+      --ui-border-strong: "rgba(255, 255, 255, 0.16)"
+      --ui-accent: "#a78bfa"
+      --ui-accent-hover: "#c4b5fd"
       --ui-accent-text: "#0a0a0b"
       --ui-success: "#4ade80"
       --ui-warning: "#fbbf24"
       --ui-danger: "#f87171"
       --ui-info: "#60a5fa"
-      --ui-shadow: "0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35)"
+      --ui-shadow: "0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3)"
+      --ui-shadow-lg: "0 2px 6px rgba(0, 0, 0, 0.5), 0 24px 64px rgba(0, 0, 0, 0.55)"
     }
   }
+
   *, *::before, *::after { boxSizing: "border-box" }
   body {
     margin: 0
     background: "var(--ui-bg)"
     color: "var(--ui-text)"
     fontFamily: "var(--ui-font)"
+    fontSize: "1rem"
     lineHeight: "1.6"
     WebkitFontSmoothing: "antialiased"
+    textRendering: "optimizeLegibility"
   }
-  img, svg, video { maxWidth: "100%" }
-  a { color: "var(--ui-accent)" }
+  :where(h1, h2, h3, h4) { lineHeight: "1.2"; letterSpacing: "-0.02em"; fontWeight: "700"; margin: "0 0 0.5em" }
+  :where(h1) { fontSize: "clamp(2rem, 1.6rem + 1.5vw, 2.6rem)"; letterSpacing: "-0.03em" }
+  :where(h2) { fontSize: "1.5rem"; marginTop: "1.6em" }
+  :where(h3) { fontSize: "1.15rem" }
+  :where(p) { margin: "0 0 1em" }
+  :where(img, svg, video) { maxWidth: "100%" }
+  :where(a) { color: "var(--ui-accent)"; textUnderlineOffset: "0.18em" }
+  :where(code) { fontFamily: "var(--ui-mono)"; fontSize: "0.9em" }
   :focus-visible { outline: "2px solid var(--ui-accent)"; outlineOffset: "2px" }
+  ::selection { background: "color-mix(in srgb, var(--ui-accent) 30%, transparent)" }
+
+  :where(form) { display: "flex"; flexWrap: "wrap"; alignItems: "center"; gap: "1.1rem 0.5rem" }
+  :where(form) > :where(:not(button, .ui-btn, .ui-dropdown, .ui-spinner)) { flex: "1 0 100%"; minWidth: "0" }
 
   .ui-btn {
     display: "inline-flex"
     alignItems: "center"
     justifyContent: "center"
     gap: "0.5rem"
+    height: "var(--ui-control)"
+    padding: "0 1rem"
     border: "1px solid transparent"
     borderRadius: "var(--ui-radius)"
     font: "inherit"
-    fontWeight: "600"
-    lineHeight: "1.2"
+    fontSize: "0.94rem"
+    fontWeight: "550"
+    lineHeight: "1"
+    letterSpacing: "-0.005em"
+    whiteSpace: "nowrap"
     textDecoration: "none"
     cursor: "pointer"
-    transition: "background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.05s"
-    &:active { transform: "translateY(1px)" }
-    &:disabled, &[aria-disabled="true"] { opacity: "0.5"; cursor: "not-allowed"; pointerEvents: "none" }
-    &[aria-busy="true"] { opacity: "0.8"; cursor: "progress" }
+    userSelect: "none"
+    transition: "background-color 0.15s var(--ui-ease), border-color 0.15s var(--ui-ease), color 0.15s var(--ui-ease), box-shadow 0.15s var(--ui-ease), transform 0.1s var(--ui-ease)"
+    &:active { transform: "scale(0.98)" }
+    &:focus-visible { outline: "none"; boxShadow: "var(--ui-ring)" }
+    &:disabled, &[aria-disabled="true"] { opacity: "0.45"; cursor: "not-allowed"; pointerEvents: "none" }
+    &[aria-busy="true"] { cursor: "progress" }
   }
-  .ui-btn--sm { padding: "0.375rem 0.75rem"; fontSize: "0.875rem" }
-  .ui-btn--md { padding: "0.625rem 1.125rem"; fontSize: "0.95rem" }
-  .ui-btn--lg { padding: "0.8rem 1.5rem"; fontSize: "1.05rem" }
+  .ui-btn--sm { height: "2rem"; padding: "0 0.75rem"; fontSize: "0.85rem"; borderRadius: "8px" }
+  .ui-btn--lg { height: "3rem"; padding: "0 1.4rem"; fontSize: "1rem"; borderRadius: "12px" }
   .ui-btn--block { display: "flex"; width: "100%" }
-  .ui-btn--primary { background: "var(--ui-accent)"; color: "var(--ui-accent-text)" }
+  .ui-btn--primary { background: "var(--ui-accent)"; color: "var(--ui-accent-text)"; boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.14)" }
   .ui-btn--primary:hover { background: "var(--ui-accent-hover)" }
   .ui-btn--secondary { background: "var(--ui-surface)"; color: "var(--ui-text)"; borderColor: "var(--ui-border)" }
-  .ui-btn--secondary:hover { background: "var(--ui-surface-2)" }
+  .ui-btn--secondary:hover { background: "var(--ui-surface-2)"; borderColor: "var(--ui-border-strong)" }
   .ui-btn--ghost { background: "transparent"; color: "var(--ui-text)" }
   .ui-btn--ghost:hover { background: "var(--ui-surface)" }
-  .ui-btn--danger { background: "var(--ui-danger)"; color: "#ffffff" }
+  .ui-btn--danger { background: "color-mix(in srgb, var(--ui-danger) 12%, transparent)"; color: "var(--ui-danger)"; borderColor: "color-mix(in srgb, var(--ui-danger) 30%, transparent)" }
+  .ui-btn--danger:hover { background: "var(--ui-danger)"; color: "#ffffff"; borderColor: "var(--ui-danger)" }
+
+  .ui-close {
+    display: "inline-flex"
+    alignItems: "center"
+    justifyContent: "center"
+    width: "2rem"
+    height: "2rem"
+    flexShrink: "0"
+    marginLeft: "auto"
+    border: "0"
+    borderRadius: "8px"
+    background: "transparent"
+    color: "var(--ui-muted)"
+    cursor: "pointer"
+    transition: "background-color 0.15s, color 0.15s"
+    &:hover { background: "var(--ui-surface-2)"; color: "var(--ui-text)" }
+    & svg { fill: "none"; stroke: "currentColor"; strokeWidth: "1.6"; strokeLinecap: "round" }
+  }
 
   .ui-card {
-    background: "var(--ui-surface)"
-    border: "1px solid var(--ui-border)"
-    borderRadius: "var(--ui-radius-lg)"
-    padding: "1.25rem"
     display: "flex"
     flexDirection: "column"
-    gap: "0.75rem"
+    gap: "0.9rem"
+    padding: "1.4rem"
+    background: "var(--ui-elevated)"
+    border: "1px solid var(--ui-border)"
+    borderRadius: "var(--ui-radius-lg)"
+    boxShadow: "var(--ui-shadow)"
   }
-  .ui-card--interactive { transition: "transform 0.15s, box-shadow 0.15s" }
-  .ui-card--interactive:hover { transform: "translateY(-2px)"; boxShadow: "var(--ui-shadow)" }
-  .ui-card__title { margin: "0"; fontSize: "1.1rem" }
-  .ui-card__subtitle { margin: "0.25rem 0 0"; color: "var(--ui-muted)"; fontSize: "0.9rem" }
+  .ui-card--interactive { transition: "transform 0.2s var(--ui-ease), box-shadow 0.2s var(--ui-ease), border-color 0.2s" }
+  .ui-card--interactive:hover { transform: "translateY(-2px)"; boxShadow: "var(--ui-shadow-lg)"; borderColor: "var(--ui-border-strong)" }
+  .ui-card__title { margin: "0"; fontSize: "1.05rem"; fontWeight: "650"; letterSpacing: "-0.01em" }
+  .ui-card__subtitle { margin: "0.2rem 0 0"; color: "var(--ui-muted)"; fontSize: "0.9rem" }
   .ui-card__body > :first-child { marginTop: "0" }
   .ui-card__body > :last-child { marginBottom: "0" }
+  .ui-card__footer, .ui-modal__footer { display: "flex"; flexWrap: "wrap"; justifyContent: "flex-end"; gap: "0.5rem" }
+  .ui-card__footer:empty, .ui-modal__footer:empty { display: "none" }
+  .ui-card__footer { paddingTop: "0.9rem"; borderTop: "1px solid var(--ui-border)" }
 
   .ui-badge {
     display: "inline-flex"
     alignItems: "center"
-    padding: "0.125rem 0.6rem"
+    gap: "0.35rem"
+    height: "1.4rem"
+    padding: "0 0.55rem"
     borderRadius: "999px"
-    fontSize: "0.78rem"
+    fontSize: "0.75rem"
     fontWeight: "600"
+    lineHeight: "1"
     background: "var(--ui-surface-2)"
     color: "var(--ui-text)"
   }
-  .ui-badge--accent { background: "color-mix(in srgb, var(--ui-accent) 18%, transparent)"; color: "var(--ui-accent)" }
-  .ui-badge--success { background: "color-mix(in srgb, var(--ui-success) 16%, transparent)"; color: "var(--ui-success)" }
-  .ui-badge--warning { background: "color-mix(in srgb, var(--ui-warning) 16%, transparent)"; color: "var(--ui-warning)" }
-  .ui-badge--danger { background: "color-mix(in srgb, var(--ui-danger) 16%, transparent)"; color: "var(--ui-danger)" }
+  .ui-badge--accent { background: "color-mix(in srgb, var(--ui-accent) 15%, transparent)"; color: "var(--ui-accent)" }
+  .ui-badge--success { background: "color-mix(in srgb, var(--ui-success) 15%, transparent)"; color: "var(--ui-success)" }
+  .ui-badge--warning { background: "color-mix(in srgb, var(--ui-warning) 15%, transparent)"; color: "var(--ui-warning)" }
+  .ui-badge--danger { background: "color-mix(in srgb, var(--ui-danger) 15%, transparent)"; color: "var(--ui-danger)" }
 
   .ui-alert {
+    --ui-tone: "var(--ui-info)"
     display: "flex"
     flexDirection: "column"
-    gap: "0.25rem"
-    padding: "0.875rem 1rem"
+    gap: "0.2rem"
+    padding: "0.9rem 1rem 0.9rem 2.4rem"
+    position: "relative"
     borderRadius: "var(--ui-radius)"
-    borderLeft: "4px solid var(--ui-info)"
-    background: "color-mix(in srgb, var(--ui-info) 10%, var(--ui-bg))"
+    border: "1px solid color-mix(in srgb, var(--ui-tone) 28%, transparent)"
+    background: "color-mix(in srgb, var(--ui-tone) 8%, var(--ui-bg))"
+    fontSize: "0.94rem"
+    &::before { content: "''"; position: "absolute"; left: "1rem"; top: "1.35rem"; width: "0.5rem"; height: "0.5rem"; borderRadius: "50%"; background: "var(--ui-tone)"; transform: "translateY(-50%)" }
   }
-  .ui-alert--success { borderLeftColor: "var(--ui-success)"; background: "color-mix(in srgb, var(--ui-success) 10%, var(--ui-bg))" }
-  .ui-alert--warning { borderLeftColor: "var(--ui-warning)"; background: "color-mix(in srgb, var(--ui-warning) 10%, var(--ui-bg))" }
-  .ui-alert--danger { borderLeftColor: "var(--ui-danger)"; background: "color-mix(in srgb, var(--ui-danger) 10%, var(--ui-bg))" }
+  .ui-alert--success { --ui-tone: "var(--ui-success)" }
+  .ui-alert--warning { --ui-tone: "var(--ui-warning)" }
+  .ui-alert--danger { --ui-tone: "var(--ui-danger)" }
+  .ui-alert__title { fontWeight: "650" }
+  .ui-alert__body { color: "color-mix(in srgb, var(--ui-text) 82%, transparent)" }
+  .ui-alert__body > :last-child { marginBottom: "0" }
 
-  .ui-content { width: "100%"; marginInline: "auto"; paddingInline: "1.25rem" }
+  .ui-content { display: "flex"; flexDirection: "column"; gap: "1.25rem"; width: "100%"; marginInline: "auto"; paddingInline: "clamp(1rem, 4vw, 2rem)"; paddingBlock: "clamp(1.5rem, 5vw, 3rem)" }
+  .ui-content > :where(h1, h2, h3, h4, p, ul, ol) { margin: "0" }
+  .ui-content > :where(h2, h3) { marginTop: "0.75rem" }
+  .ui-content > .ui-divider { margin: "0.5rem 0" }
   .ui-content--sm { maxWidth: "40rem" }
   .ui-content--md { maxWidth: "56rem" }
   .ui-content--lg { maxWidth: "72rem" }
@@ -624,50 +695,67 @@ style global {
   .ui-inline { display: "flex" }
   .ui-vstack { display: "flex"; flexDirection: "column" }
 
-  .ui-field { display: "flex"; flexDirection: "column"; gap: "0.375rem"; fontSize: "0.95rem" }
-  .ui-field__label { fontWeight: "600" }
+  .ui-field { display: "flex"; flexDirection: "column"; gap: "0.4rem"; minWidth: "0"; fontSize: "0.94rem" }
+  .ui-field__label { fontSize: "0.875rem"; fontWeight: "550"; color: "var(--ui-text)" }
   .ui-field__required { color: "var(--ui-danger)" }
   .ui-field__control {
+    width: "100%"
+    minHeight: "var(--ui-control)"
+    padding: "0 0.8rem"
     font: "inherit"
     color: "inherit"
-    padding: "0.6rem 0.75rem"
-    borderRadius: "var(--ui-radius)"
-    border: "1px solid var(--ui-border)"
     background: "var(--ui-bg)"
-    transition: "border-color 0.15s, box-shadow 0.15s"
-    &:focus { outline: "none"; borderColor: "var(--ui-accent)"; boxShadow: "0 0 0 3px color-mix(in srgb, var(--ui-accent) 25%, transparent)" }
-    &:disabled { opacity: "0.6"; cursor: "not-allowed" }
+    border: "1px solid var(--ui-border-strong)"
+    borderRadius: "var(--ui-radius)"
+    transition: "border-color 0.15s var(--ui-ease), box-shadow 0.15s var(--ui-ease)"
+    &::placeholder { color: "color-mix(in srgb, var(--ui-muted) 75%, transparent)" }
+    &:hover:not(:disabled) { borderColor: "color-mix(in srgb, var(--ui-text) 30%, transparent)" }
+    &:focus { outline: "none"; borderColor: "var(--ui-accent)"; boxShadow: "var(--ui-ring)" }
+    &:disabled { opacity: "0.55"; cursor: "not-allowed"; background: "var(--ui-surface)" }
   }
-  textarea.ui-field__control { minHeight: "6rem"; resize: "vertical" }
+  textarea.ui-field__control { minHeight: "6.5rem"; padding: "0.6rem 0.8rem"; resize: "vertical"; lineHeight: "1.5" }
+  select.ui-field__control {
+    appearance: "none"
+    paddingRight: "2.4rem"
+    cursor: "pointer"
+    backgroundImage: "linear-gradient(45deg, transparent 50%, var(--ui-muted) 50%), linear-gradient(135deg, var(--ui-muted) 50%, transparent 50%)"
+    backgroundPosition: "calc(100% - 1.15rem) 55%, calc(100% - 0.85rem) 55%"
+    backgroundSize: "0.3rem 0.3rem"
+    backgroundRepeat: "no-repeat"
+  }
   .ui-field--invalid .ui-field__control { borderColor: "var(--ui-danger)" }
-  .ui-field__hint { color: "var(--ui-muted)"; fontSize: "0.85rem" }
-  .ui-field__error { color: "var(--ui-danger)"; fontSize: "0.85rem" }
+  .ui-field--invalid .ui-field__control:focus { boxShadow: "0 0 0 3px color-mix(in srgb, var(--ui-danger) 25%, transparent)" }
+  .ui-field__hint { color: "var(--ui-muted)"; fontSize: "0.84rem" }
+  .ui-field__error { color: "var(--ui-danger)"; fontSize: "0.84rem" }
 
-  .ui-toggle { display: "inline-flex"; alignItems: "center"; gap: "0.6rem"; cursor: "pointer"; position: "relative" }
-  .ui-toggle--disabled { opacity: "0.55"; cursor: "not-allowed" }
-  .ui-toggle__input { position: "absolute"; opacity: "0"; width: "1px"; height: "1px" }
+  .ui-toggle { display: "inline-flex"; alignItems: "center"; justifyContent: "space-between"; gap: "0.85rem"; minHeight: "var(--ui-control)"; cursor: "pointer"; position: "relative"; fontSize: "0.94rem" }
+  .ui-toggle--disabled { opacity: "0.5"; cursor: "not-allowed" }
+  .ui-toggle__input { position: "absolute"; opacity: "0"; width: "1px"; height: "1px"; margin: "0" }
   .ui-toggle__track {
-    width: "2.5rem"
-    height: "1.45rem"
-    borderRadius: "999px"
-    background: "var(--ui-surface-2)"
-    border: "1px solid var(--ui-border)"
+    flexShrink: "0"
     position: "relative"
-    transition: "background-color 0.15s"
+    width: "2.75rem"
+    height: "1.625rem"
+    borderRadius: "999px"
+    background: "color-mix(in srgb, var(--ui-text) 16%, transparent)"
+    transition: "background-color 0.2s var(--ui-ease)"
   }
   .ui-toggle__thumb {
     position: "absolute"
-    top: "2px"
-    left: "2px"
-    width: "1.1rem"
-    height: "1.1rem"
+    top: "0.125rem"
+    left: "0.125rem"
+    width: "1.375rem"
+    height: "1.375rem"
     borderRadius: "50%"
-    background: "var(--ui-text)"
-    transition: "transform 0.15s"
+    background: "#ffffff"
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 1px rgba(0, 0, 0, 0.08)"
+    transition: "transform 0.22s var(--ui-ease)"
   }
-  .ui-toggle__input:checked + .ui-toggle__track { background: "var(--ui-accent)"; borderColor: "var(--ui-accent)" }
-  .ui-toggle__input:checked + .ui-toggle__track .ui-toggle__thumb { transform: "translateX(1.05rem)"; background: "var(--ui-accent-text)" }
-  .ui-toggle__input:focus-visible + .ui-toggle__track { outline: "2px solid var(--ui-accent)"; outlineOffset: "2px" }
+  .ui-toggle__input:checked + .ui-toggle__track { background: "var(--ui-accent)" }
+  .ui-toggle__input:checked + .ui-toggle__track .ui-toggle__thumb { transform: "translateX(1.125rem)" }
+  .ui-toggle__input:focus-visible + .ui-toggle__track { boxShadow: "var(--ui-ring)" }
+  .ui-toggle:active .ui-toggle__thumb { width: "1.6rem" }
+  .ui-toggle:active .ui-toggle__input:checked + .ui-toggle__track .ui-toggle__thumb { transform: "translateX(0.9rem)" }
 
   .ui-modal {
     position: "fixed"
@@ -677,57 +765,56 @@ style global {
     alignItems: "center"
     justifyContent: "center"
     padding: "1rem"
-    background: "rgba(10, 10, 11, 0.55)"
-    backdropFilter: "blur(4px)"
-    transition: "opacity 0.18s"
+    background: "rgba(10, 10, 11, 0.45)"
+    backdropFilter: "blur(6px)"
+    transition: "opacity 0.2s var(--ui-ease)"
   }
   .ui-modal__dialog {
     width: "100%"
-    background: "var(--ui-bg)"
-    color: "var(--ui-text)"
-    borderRadius: "var(--ui-radius-lg)"
-    border: "1px solid var(--ui-border)"
-    boxShadow: "var(--ui-shadow)"
-    padding: "1.25rem"
+    maxHeight: "min(90vh, 48rem)"
+    overflow: "auto"
     display: "flex"
     flexDirection: "column"
     gap: "1rem"
-    maxHeight: "90vh"
-    overflow: "auto"
+    padding: "1.5rem"
+    background: "var(--ui-elevated)"
+    color: "var(--ui-text)"
+    border: "1px solid var(--ui-border)"
+    borderRadius: "20px"
+    boxShadow: "var(--ui-shadow-lg)"
+    transition: "transform 0.2s var(--ui-ease)"
     &:focus { outline: "none" }
   }
-  .ui-modal__header { display: "flex"; alignItems: "center"; justifyContent: "space-between"; gap: "1rem" }
-  .ui-modal__title { margin: "0"; fontSize: "1.2rem" }
-  .ui-modal__close, .ui-toast__close {
-    border: "0"
-    background: "transparent"
-    color: "var(--ui-muted)"
-    fontSize: "1.5rem"
-    lineHeight: "1"
-    cursor: "pointer"
-    padding: "0.25rem 0.5rem"
-    borderRadius: "var(--ui-radius)"
-    marginLeft: "auto"
-    &:hover { background: "var(--ui-surface-2)"; color: "var(--ui-text)" }
-  }
+  .ui-modal__header { display: "flex"; alignItems: "center"; gap: "1rem"; margin: "-0.35rem -0.5rem 0 0" }
+  .ui-modal__title { margin: "0"; fontSize: "1.15rem"; fontWeight: "650"; letterSpacing: "-0.015em" }
+  .ui-modal__body { color: "color-mix(in srgb, var(--ui-text) 85%, transparent)" }
+  .ui-modal__body > :last-child { marginBottom: "0" }
+  .ui-modal__footer { marginTop: "0.25rem" }
   .ui-fade-enter, .ui-fade-leave { opacity: "0" }
+  .ui-fade-enter .ui-modal__dialog, .ui-fade-leave .ui-modal__dialog { transform: "scale(0.96) translateY(6px)" }
 
-  .ui-tabs__list { display: "flex"; gap: "0.25rem"; borderBottom: "1px solid var(--ui-border)"; overflowX: "auto" }
+  .ui-tabs__list { display: "flex"; gap: "0.25rem"; borderBottom: "1px solid var(--ui-border)"; overflowX: "auto"; scrollbarWidth: "none" }
   .ui-tabs__tab {
+    position: "relative"
     font: "inherit"
-    fontWeight: "500"
+    fontSize: "0.92rem"
+    fontWeight: "550"
     color: "var(--ui-muted)"
     background: "transparent"
     border: "0"
-    borderBottom: "2px solid transparent"
-    padding: "0.6rem 0.9rem"
-    marginBottom: "-1px"
+    padding: "0.7rem 0.85rem"
     cursor: "pointer"
     whiteSpace: "nowrap"
+    borderRadius: "8px 8px 0 0"
+    transition: "color 0.15s"
     &:hover { color: "var(--ui-text)" }
-    &[aria-selected="true"] { color: "var(--ui-text)"; borderBottomColor: "var(--ui-accent)" }
+    &::after { content: "''"; position: "absolute"; left: "0.6rem"; right: "0.6rem"; bottom: "-1px"; height: "2px"; borderRadius: "2px"; background: "transparent"; transition: "background-color 0.15s" }
+    &[aria-selected="true"] { color: "var(--ui-text)" }
+    &[aria-selected="true"]::after { background: "var(--ui-accent)" }
+    &:focus-visible { outline: "none"; boxShadow: "inset var(--ui-ring)" }
   }
-  .ui-tabs__panel { paddingTop: "1rem" }
+  .ui-tabs__panel { paddingTop: "1.1rem" }
+  .ui-tabs__panel:focus-visible { outline: "none" }
   .ui-tabs__panel > * { display: "none" }
   .ui-tabs__panel[data-selected="0"] > :nth-child(1) { display: "block" }
   .ui-tabs__panel[data-selected="1"] > :nth-child(2) { display: "block" }
@@ -740,79 +827,91 @@ style global {
 
   .ui-accordion { borderBottom: "1px solid var(--ui-border)" }
   .ui-accordion__summary {
-    cursor: "pointer"
-    padding: "0.85rem 0"
-    fontWeight: "600"
-    listStyle: "none"
     display: "flex"
+    alignItems: "center"
     justifyContent: "space-between"
+    gap: "1rem"
+    padding: "1rem 0"
+    fontWeight: "600"
+    cursor: "pointer"
+    listStyle: "none"
     &::-webkit-details-marker { display: "none" }
-    &::after { content: "'+'"; color: "var(--ui-muted)"; fontWeight: "400" }
+    &::after { content: "''"; width: "0.5rem"; height: "0.5rem"; borderRight: "1.5px solid var(--ui-muted)"; borderBottom: "1.5px solid var(--ui-muted)"; transform: "rotate(45deg) translate(-2px, -2px)"; transition: "transform 0.2s var(--ui-ease)" }
   }
-  .ui-accordion[open] > .ui-accordion__summary::after { content: "'−'" }
-  .ui-accordion__body { paddingBottom: "1rem" }
+  .ui-accordion[open] > .ui-accordion__summary::after { transform: "rotate(-135deg) translate(-2px, -2px)" }
+  .ui-accordion__body { paddingBottom: "1rem"; color: "color-mix(in srgb, var(--ui-text) 85%, transparent)" }
 
   .ui-tooltip { position: "relative"; display: "inline-flex" }
   .ui-tooltip__bubble {
     position: "absolute"
     left: "50%"
-    bottom: "calc(100% + 6px)"
-    transform: "translateX(-50%)"
+    bottom: "calc(100% + 8px)"
+    transform: "translate(-50%, 2px)"
+    zIndex: "50"
+    padding: "0.35rem 0.6rem"
+    borderRadius: "8px"
     background: "var(--ui-text)"
     color: "var(--ui-bg)"
-    fontSize: "0.8rem"
+    fontSize: "0.78rem"
+    fontWeight: "500"
     lineHeight: "1.3"
-    padding: "0.35rem 0.55rem"
-    borderRadius: "6px"
     whiteSpace: "nowrap"
     pointerEvents: "none"
     opacity: "0"
     visibility: "hidden"
-    transition: "opacity 0.12s"
-    zIndex: "50"
+    transition: "opacity 0.15s var(--ui-ease), transform 0.15s var(--ui-ease)"
   }
-  .ui-tooltip--bottom .ui-tooltip__bubble { bottom: "auto"; top: "calc(100% + 6px)" }
-  .ui-tooltip:hover .ui-tooltip__bubble, .ui-tooltip:focus-within .ui-tooltip__bubble { opacity: "1"; visibility: "visible" }
+  .ui-tooltip--bottom .ui-tooltip__bubble { bottom: "auto"; top: "calc(100% + 8px)"; transform: "translate(-50%, -2px)" }
+  .ui-tooltip:hover .ui-tooltip__bubble, .ui-tooltip:focus-within .ui-tooltip__bubble { opacity: "1"; visibility: "visible"; transform: "translate(-50%, 0)" }
 
-  .ui-table__wrap { overflowX: "auto"; border: "1px solid var(--ui-border)"; borderRadius: "var(--ui-radius)" }
+  .ui-table__wrap { overflowX: "auto"; border: "1px solid var(--ui-border)"; borderRadius: "var(--ui-radius-lg)"; background: "var(--ui-elevated)" }
   .ui-table { width: "100%"; borderCollapse: "collapse"; fontSize: "0.92rem" }
-  .ui-table th, .ui-table td { padding: "0.6rem 0.85rem"; textAlign: "start"; borderBottom: "1px solid var(--ui-border)" }
-  .ui-table th { background: "var(--ui-surface)"; fontWeight: "600"; whiteSpace: "nowrap" }
+  .ui-table th, .ui-table td { padding: "0.7rem 1rem"; textAlign: "start"; borderBottom: "1px solid var(--ui-border)" }
+  .ui-table th { fontSize: "0.82rem"; fontWeight: "600"; color: "var(--ui-muted)"; whiteSpace: "nowrap"; background: "var(--ui-surface)" }
+  .ui-table tbody tr { transition: "background-color 0.1s" }
+  .ui-table tbody tr:hover td { background: "color-mix(in srgb, var(--ui-accent) 5%, transparent)" }
   .ui-table tbody tr:last-child td { borderBottom: "0" }
-  .ui-table--striped tbody tr:nth-child(even) td { background: "color-mix(in srgb, var(--ui-surface) 60%, transparent)" }
-  .ui-table__num { textAlign: "end"; fontVariantNumeric: "tabular-nums" }
-  .ui-table th.ui-table__num { textAlign: "end" }
-  .ui-table__caption { captionSide: "top"; textAlign: "start"; padding: "0.6rem 0.85rem"; fontWeight: "600" }
-  .ui-table__sort { font: "inherit"; color: "inherit"; background: "none"; border: "0"; padding: "0"; cursor: "pointer" }
-  .ui-table__arrow { color: "var(--ui-muted)"; fontSize: "0.75em" }
-  .ui-table__empty { textAlign: "center"; color: "var(--ui-muted)"; padding: "1.5rem" }
+  .ui-table--striped tbody tr:nth-child(even) td { background: "color-mix(in srgb, var(--ui-surface) 70%, transparent)" }
+  .ui-table .ui-table__num { textAlign: "end"; fontVariantNumeric: "tabular-nums" }
+  .ui-table__caption { captionSide: "top"; textAlign: "start"; padding: "0.85rem 1rem"; fontWeight: "650" }
+  .ui-table__sort { display: "inline-flex"; alignItems: "center"; gap: "0.35rem"; font: "inherit"; color: "inherit"; background: "none"; border: "0"; padding: "0"; cursor: "pointer"; &:hover { color: "var(--ui-text)" } }
+  .ui-table__arrow { width: "0.4rem"; height: "0.4rem"; borderRight: "1.5px solid currentColor"; borderBottom: "1.5px solid currentColor"; transform: "rotate(45deg) translateY(-2px)"; opacity: "0.3"; transition: "transform 0.15s, opacity 0.15s" }
+  .ui-table__arrow--on { opacity: "1"; transform: "rotate(-135deg) translateY(-1px)" }
+  .ui-table__arrow--on.ui-table__arrow--desc { transform: "rotate(45deg) translateY(-2px)" }
+  .ui-table__empty { textAlign: "center"; color: "var(--ui-muted)"; padding: "2rem" }
 
   .ui-pagination { display: "flex"; alignItems: "center"; gap: "0.25rem"; flexWrap: "wrap" }
   .ui-pagination__item {
-    font: "inherit"
+    display: "inline-flex"
+    alignItems: "center"
+    justifyContent: "center"
     minWidth: "2.25rem"
     height: "2.25rem"
-    padding: "0 0.5rem"
+    padding: "0 0.6rem"
+    font: "inherit"
+    fontSize: "0.9rem"
+    fontVariantNumeric: "tabular-nums"
+    border: "1px solid transparent"
     borderRadius: "var(--ui-radius)"
-    border: "1px solid var(--ui-border)"
-    background: "var(--ui-bg)"
+    background: "transparent"
     color: "var(--ui-text)"
     cursor: "pointer"
-    &:hover { background: "var(--ui-surface)" }
-    &:disabled { opacity: "0.45"; cursor: "not-allowed" }
-    &[aria-current="page"] { background: "var(--ui-accent)"; borderColor: "var(--ui-accent)"; color: "var(--ui-accent-text)" }
+    transition: "background-color 0.15s"
+    & svg { fill: "none"; stroke: "currentColor"; strokeWidth: "1.6"; strokeLinecap: "round"; strokeLinejoin: "round" }
+    &:hover:not(:disabled) { background: "var(--ui-surface-2)" }
+    &:disabled { opacity: "0.35"; cursor: "not-allowed" }
+    &[aria-current="page"] { background: "var(--ui-accent)"; color: "var(--ui-accent-text)"; fontWeight: "600" }
   }
   .ui-pagination__gap { color: "var(--ui-muted)"; padding: "0 0.25rem" }
 
-  .ui-breadcrumbs ol { display: "flex"; flexWrap: "wrap"; gap: "0.4rem"; listStyle: "none"; margin: "0"; padding: "0"; fontSize: "0.9rem" }
-  .ui-breadcrumbs li { display: "flex"; gap: "0.4rem"; color: "var(--ui-muted)" }
-  .ui-breadcrumbs li + li::before { content: "'/'"; color: "var(--ui-border)" }
-  .ui-breadcrumbs a { color: "var(--ui-muted)"; textDecoration: "none" }
-  .ui-breadcrumbs a:hover { color: "var(--ui-text)" }
-  .ui-breadcrumbs [aria-current] { color: "var(--ui-text)"; fontWeight: "500" }
+  .ui-breadcrumbs ol { display: "flex"; flexWrap: "wrap"; alignItems: "center"; gap: "0.45rem"; listStyle: "none"; margin: "0"; padding: "0"; fontSize: "0.88rem" }
+  .ui-breadcrumbs li { display: "flex"; alignItems: "center"; gap: "0.45rem"; color: "var(--ui-muted)" }
+  .ui-breadcrumbs li + li::before { content: "''"; width: "0.35rem"; height: "0.35rem"; borderRight: "1.5px solid var(--ui-border-strong)"; borderTop: "1.5px solid var(--ui-border-strong)"; transform: "rotate(45deg)" }
+  .ui-breadcrumbs a { color: "var(--ui-muted)"; textDecoration: "none"; &:hover { color: "var(--ui-text)" } }
+  .ui-breadcrumbs [aria-current] { color: "var(--ui-text)"; fontWeight: "550" }
 
-  .ui-progress { height: "0.5rem"; background: "var(--ui-surface-2)"; borderRadius: "999px"; overflow: "hidden" }
-  .ui-progress__bar { height: "100%"; background: "var(--ui-accent)"; borderRadius: "inherit"; transition: "width 0.2s" }
+  .ui-progress { height: "0.4rem"; background: "var(--ui-surface-2)"; borderRadius: "999px"; overflow: "hidden" }
+  .ui-progress__bar { height: "100%"; background: "var(--ui-accent)"; borderRadius: "inherit"; transition: "width 0.3s var(--ui-ease)" }
   .ui-progress--indeterminate .ui-progress__bar { animation: "ui-indeterminate 1.2s ease-in-out infinite" }
   @keyframes ui-indeterminate { from { transform: "translateX(-100%)" } to { transform: "translateX(250%)" } }
 
@@ -824,122 +923,145 @@ style global {
   }
   @keyframes ui-shimmer { from { backgroundPosition: "200% 0" } to { backgroundPosition: "-200% 0" } }
 
-  .ui-empty { display: "flex"; flexDirection: "column"; alignItems: "center"; gap: "0.5rem"; textAlign: "center"; padding: "2.5rem 1rem"; border: "1px dashed var(--ui-border)"; borderRadius: "var(--ui-radius-lg)" }
-  .ui-empty__title { fontSize: "1.05rem" }
-  .ui-empty__description { margin: "0"; color: "var(--ui-muted)"; maxWidth: "36rem" }
+  .ui-empty { display: "flex"; flexDirection: "column"; alignItems: "center"; gap: "0.5rem"; textAlign: "center"; padding: "3rem 1.25rem"; border: "1px dashed var(--ui-border-strong)"; borderRadius: "var(--ui-radius-lg)" }
+  .ui-empty__title { fontSize: "1.05rem"; fontWeight: "650" }
+  .ui-empty__description { margin: "0 0 0.5rem"; color: "var(--ui-muted)"; maxWidth: "36rem" }
 
   .ui-dropdown { position: "relative"; display: "inline-block" }
-  .ui-dropdown__caret { fontSize: "0.8em"; opacity: "0.7" }
+  .ui-dropdown__caret { fill: "none"; stroke: "currentColor"; strokeWidth: "1.8"; strokeLinecap: "round"; strokeLinejoin: "round"; opacity: "0.7"; transition: "transform 0.15s var(--ui-ease)" }
+  .ui-dropdown__trigger[aria-expanded="true"] .ui-dropdown__caret { transform: "rotate(180deg)" }
   .ui-dropdown__menu {
     position: "absolute"
-    top: "calc(100% + 4px)"
+    top: "calc(100% + 6px)"
     left: "0"
-    minWidth: "12rem"
     zIndex: "60"
+    minWidth: "13rem"
     display: "flex"
     flexDirection: "column"
-    padding: "0.3rem"
-    background: "var(--ui-bg)"
+    padding: "0.35rem"
+    background: "var(--ui-elevated)"
     border: "1px solid var(--ui-border)"
-    borderRadius: "var(--ui-radius)"
-    boxShadow: "var(--ui-shadow)"
+    borderRadius: "12px"
+    boxShadow: "var(--ui-shadow-lg)"
+    animation: "ui-pop 0.14s var(--ui-ease)"
   }
   .ui-dropdown__menu--end { left: "auto"; right: "0" }
   .ui-dropdown__menu > a, .ui-dropdown__menu > button {
+    display: "flex"
+    alignItems: "center"
+    gap: "0.5rem"
+    height: "2.1rem"
+    padding: "0 0.7rem"
     font: "inherit"
+    fontSize: "0.92rem"
     textAlign: "start"
     color: "var(--ui-text)"
     background: "none"
     border: "0"
-    borderRadius: "6px"
-    padding: "0.45rem 0.65rem"
+    borderRadius: "8px"
     textDecoration: "none"
     cursor: "pointer"
-    &:hover, &:focus-visible { background: "var(--ui-surface)"; outline: "none" }
+    &:hover, &:focus-visible { background: "color-mix(in srgb, var(--ui-accent) 12%, transparent)"; outline: "none" }
   }
+  .ui-dropdown__menu > hr { border: "0"; borderTop: "1px solid var(--ui-border)"; margin: "0.3rem 0.2rem" }
+  @keyframes ui-pop { from { opacity: "0"; transform: "translateY(-4px) scale(0.98)" } }
 
-  .ui-toaster { position: "fixed"; zIndex: "1100"; display: "flex"; flexDirection: "column"; gap: "0.5rem"; padding: "1rem"; maxWidth: "min(26rem, 100vw)"; pointerEvents: "none" }
+  .ui-toaster { position: "fixed"; zIndex: "1100"; display: "flex"; flexDirection: "column"; gap: "0.5rem"; padding: "1rem"; width: "min(24rem, 100vw)"; pointerEvents: "none" }
   .ui-toaster--bottom-end { right: "0"; bottom: "0" }
   .ui-toaster--bottom-start { left: "0"; bottom: "0" }
   .ui-toaster--top-end { right: "0"; top: "0" }
   .ui-toaster--top-start { left: "0"; top: "0" }
   .ui-toast {
+    --ui-tone: "var(--ui-info)"
     pointerEvents: "auto"
     display: "flex"
     alignItems: "center"
-    gap: "0.75rem"
-    padding: "0.7rem 0.6rem 0.7rem 1rem"
-    background: "var(--ui-bg)"
+    gap: "0.7rem"
+    padding: "0.6rem 0.5rem 0.6rem 0.95rem"
+    background: "color-mix(in srgb, var(--ui-elevated) 92%, transparent)"
+    backdropFilter: "blur(12px) saturate(1.4)"
     border: "1px solid var(--ui-border)"
-    borderLeft: "4px solid var(--ui-info)"
-    borderRadius: "var(--ui-radius)"
-    boxShadow: "var(--ui-shadow)"
-    animation: "ui-toast-in 0.18s ease-out"
+    borderRadius: "14px"
+    boxShadow: "var(--ui-shadow-lg)"
+    fontSize: "0.92rem"
+    animation: "ui-toast-in 0.25s var(--ui-ease)"
   }
-  .ui-toast--success { borderLeftColor: "var(--ui-success)" }
-  .ui-toast--warning { borderLeftColor: "var(--ui-warning)" }
-  .ui-toast--danger { borderLeftColor: "var(--ui-danger)" }
-  .ui-toast__close { fontSize: "1.2rem" }
-  @keyframes ui-toast-in { from { opacity: "0"; transform: "translateY(6px)" } }
+  .ui-toast--success { --ui-tone: "var(--ui-success)" }
+  .ui-toast--warning { --ui-tone: "var(--ui-warning)" }
+  .ui-toast--danger { --ui-tone: "var(--ui-danger)" }
+  .ui-toast__dot { width: "0.5rem"; height: "0.5rem"; flexShrink: "0"; borderRadius: "50%"; background: "var(--ui-tone)"; boxShadow: "0 0 0 3px color-mix(in srgb, var(--ui-tone) 20%, transparent)" }
+  .ui-toast__message { flex: "1"; minWidth: "0" }
+  .ui-toast__close { width: "1.75rem"; height: "1.75rem" }
+  @keyframes ui-toast-in { from { opacity: "0"; transform: "translateY(8px) scale(0.98)" } }
 
   .ui-kbd {
-    fontFamily: "var(--ui-mono)"
-    fontSize: "0.8em"
+    display: "inline-flex"
+    alignItems: "center"
+    minWidth: "1.5em"
+    justifyContent: "center"
     padding: "0.1rem 0.4rem"
-    border: "1px solid var(--ui-border)"
+    fontFamily: "var(--ui-font)"
+    fontSize: "0.78em"
+    fontWeight: "550"
+    border: "1px solid var(--ui-border-strong)"
     borderBottomWidth: "2px"
-    borderRadius: "5px"
+    borderRadius: "6px"
     background: "var(--ui-surface)"
+    color: "var(--ui-muted)"
   }
 
-  .ui-avatar { borderRadius: "50%"; objectFit: "cover"; flexShrink: "0" }
+  .ui-avatar { borderRadius: "50%"; objectFit: "cover"; flexShrink: "0"; boxShadow: "0 0 0 1px var(--ui-border)" }
   .ui-avatar--initials {
     display: "inline-flex"
     alignItems: "center"
     justifyContent: "center"
-    background: "color-mix(in srgb, var(--ui-accent) 20%, var(--ui-surface))"
+    background: "color-mix(in srgb, var(--ui-accent) 16%, var(--ui-surface))"
     color: "var(--ui-accent)"
-    fontWeight: "700"
+    fontWeight: "650"
     fontSize: "0.85em"
+    letterSpacing: "0.02em"
   }
 
   .ui-spinner {
     display: "inline-block"
+    flexShrink: "0"
     borderRadius: "50%"
-    border: "2px solid var(--ui-border)"
+    border: "2px solid color-mix(in srgb, var(--ui-accent) 22%, transparent)"
     borderTopColor: "var(--ui-accent)"
     animation: "ui-spin 0.7s linear infinite"
   }
-  .ui-spinner--inline { width: "1em"; height: "1em"; borderColor: "currentColor"; borderTopColor: "transparent" }
+  .ui-spinner--inline { width: "1em"; height: "1em"; borderColor: "color-mix(in srgb, currentColor 30%, transparent)"; borderTopColor: "currentColor" }
   @keyframes ui-spin { to { transform: "rotate(360deg)" } }
-  reducedMotion {
-    .ui-spinner { animationDuration: "2s" }
-    .ui-skeleton, .ui-progress--indeterminate .ui-progress__bar, .ui-toast { animation: "none" }
-    .ui-btn, .ui-card--interactive, .ui-modal, .ui-progress__bar { transition: "none" }
-  }
 
   .ui-navbar {
     position: "sticky"
     top: "0"
     zIndex: "100"
-    background: "color-mix(in srgb, var(--ui-bg) 85%, transparent)"
-    backdropFilter: "saturate(1.4) blur(10px)"
+    background: "color-mix(in srgb, var(--ui-bg) 80%, transparent)"
+    backdropFilter: "saturate(1.6) blur(14px)"
     borderBottom: "1px solid var(--ui-border)"
   }
-  .ui-navbar__inner { maxWidth: "72rem"; margin: "0 auto"; padding: "0.75rem 1.25rem"; display: "flex"; alignItems: "center"; gap: "1.5rem" }
-  .ui-navbar__brand { fontWeight: "800"; fontSize: "1.1rem"; color: "var(--ui-text)"; textDecoration: "none" }
-  .ui-navbar__links { display: "flex"; alignItems: "center"; gap: "1rem"; marginLeft: "auto"; flexWrap: "wrap" }
-  .ui-navbar__links a { color: "var(--ui-muted)"; textDecoration: "none"; fontWeight: "500" }
-  .ui-navbar__links a:hover { color: "var(--ui-text)" }
+  .ui-navbar__inner { maxWidth: "72rem"; margin: "0 auto"; padding: "0 clamp(1rem, 4vw, 2rem)"; height: "3.75rem"; display: "flex"; alignItems: "center"; gap: "1.5rem" }
+  .ui-navbar__brand { fontWeight: "700"; fontSize: "1.05rem"; letterSpacing: "-0.02em"; color: "var(--ui-text)"; textDecoration: "none" }
+  .ui-navbar__links { display: "flex"; alignItems: "center"; gap: "0.25rem"; marginLeft: "auto"; flexWrap: "wrap" }
+  .ui-navbar__links a { padding: "0.4rem 0.7rem"; borderRadius: "8px"; color: "var(--ui-muted)"; textDecoration: "none"; fontSize: "0.92rem"; fontWeight: "500"; transition: "color 0.15s, background-color 0.15s" }
+  .ui-navbar__links a:hover { color: "var(--ui-text)"; background: "var(--ui-surface)" }
+  .ui-navbar__links a[aria-current="page"] { color: "var(--ui-text)" }
 
-  .ui-divider { border: "0"; borderTop: "1px solid var(--ui-border)"; margin: "1.5rem 0" }
+  .ui-divider { border: "0"; borderTop: "1px solid var(--ui-border)"; margin: "1.75rem 0" }
   .ui-divider--label {
     display: "flex"
     alignItems: "center"
     gap: "0.75rem"
     color: "var(--ui-muted)"
-    fontSize: "0.85rem"
+    fontSize: "0.82rem"
     borderTop: "0"
     &::before, &::after { content: "''"; flex: "1"; borderTop: "1px solid var(--ui-border)" }
+  }
+
+  reducedMotion {
+    .ui-spinner { animationDuration: "2s" }
+    .ui-skeleton, .ui-progress--indeterminate .ui-progress__bar, .ui-toast, .ui-dropdown__menu { animation: "none" }
+    .ui-btn, .ui-card--interactive, .ui-modal, .ui-modal__dialog, .ui-progress__bar, .ui-toggle__thumb, .ui-toggle__track, .ui-tooltip__bubble { transition: "none" }
   }
 }

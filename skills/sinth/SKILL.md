@@ -32,6 +32,7 @@ Sinth code is short when it uses the language instead of working around it. Befo
 | State shared across pages | a module file with top-level `var`s (a store) | passing values through many components |
 | Navigation | files in `pages/` and `Link(href: ...)` | a router package or `onClick` + `location` |
 | Config values for the browser | `import { PUBLIC_API } from "sinth:env"` | hard-coded URLs |
+| Native file dialogs, notifications, window title in a desktop app | `import { pickFile, saveFile, notify } from "sinth:desktop"` ([references/project-and-deploy.md](references/project-and-deploy.md)) | Electron, custom Tauri commands, or browser-only file inputs |
 | Redirects and response headers | `"redirects"` / `"headers"` in `sinth.config.json` | `_redirects` files per host or JS redirects |
 
 Also:

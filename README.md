@@ -38,6 +38,7 @@ Requires Node.js 18.17 or newer.
 - **Routing.** Files in `pages/` are routes, `pages/blog/[slug].sinth` generates one page per item, and links between pages load without a full reload (2 kB gzipped; `"router": false` turns it off).
 - **API routes.** Files in `functions/` handle requests with the standard Fetch API in `sinth dev` and `sinth preview`, and deploy to Cloudflare Pages or Workers.
 - **Components.** Parameters, two-way bindings, slots and scoped styles, plus `sinth:ui`, a built-in library of 28 accessible components (forms, modals, tabs, sortable tables, toasts, menus). Components can be exported as web components for use on other sites.
+- **Desktop apps.** `sinth desktop` packages the same project as a native app for Windows, macOS and Linux (Tauri 2, installers of a few MB), and `sinth:desktop` adds file dialogs, notifications and window control that fall back to web APIs in a browser.
 - **Production config.** Environment variables through `sinth:env` (only `PUBLIC_` names reach the browser), and redirects and headers written once for every host.
 - **Tooling.** Hot reload that keeps state, npm packages, TypeScript and SCSS imports, security headers and a Content Security Policy without inline scripts, and `sinth deploy` for Cloudflare Pages or Workers, Vercel and Netlify. GitHub Pages and any static host work too. Sources can live in the project root or in an `app/` folder.
 

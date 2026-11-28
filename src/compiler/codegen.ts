@@ -589,7 +589,7 @@ class ModuleCompiler {
     if (node.k === "text") return node.expr.k === "lit";
     if (node.k !== "element") return false;
     if (SPECIAL_ELEMENTS.has(node.name)) return false;
-    if (!ELEMENTS[node.name] || (ctx.scope.lookup(node.name)?.kind === "component" && ctx.comp?.name !== node.name)) return false;
+    if (!ELEMENTS[node.name] || (!node.builtin && ctx.scope.lookup(node.name)?.kind === "component" && ctx.comp?.name !== node.name)) return false;
     if (node.slots.length) return false;
     for (const a of node.attrs) {
       if (a.handler || a.name === "..." || a.name === "model" || a.name === "bind" || a.name === "ref" || a.name === "hide" || a.name === "show" || a.name === "html" || a.name === "delay") return false;
@@ -677,12 +677,13 @@ class ModuleCompiler {
   }
 
   private genElement(node: ElementNode, parent: string, ctx: RenderCtx, roots?: string[]): string {
-    const binding = node.name.includes(".") ? this.resolveNamespacedComponent(node.name) : ctx.scope.lookup(node.name);
+    const binding = node.builtin ? undefined : node.name.includes(".") ? this.resolveNamespacedComponent(node.name) : ctx.scope.lookup(node.name);
     const selfWrapsBuiltin = ctx.comp?.name === node.name && !!ELEMENTS[node.name];
     if (binding?.kind === "component" && binding.comp && !selfWrapsBuiltin) return this.genComponentUse(node, binding, parent, ctx, roots);
     if (node.name === "Fragment") return this.genNodes(node.children, parent, ctx);
     if (node.name === "RawHTML" || node.name === "Html") return this.genRawHtml(node, parent, ctx);
     const info = ELEMENTS[node.name];
+    if (!info && node.builtin) this.fail("E0303", `'Html.${node.name}' is not a built-in element`, node.loc, "Html. only prefixes built-in elements, like Html.Button or Html.Input");
     if (!info) {
       const candidates = [...Object.keys(ELEMENTS), ...ctx.scope.all().filter(n => /^[A-Z]/.test(n))];
       const s = suggest(node.name, candidates);

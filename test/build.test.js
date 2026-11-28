@@ -276,3 +276,32 @@ test("build output never contains absolute paths of the build machine", async ()
     for (const n of needles) assert.ok(!text.includes(n), `${name} contains ${n}`);
   }
 });
+
+test("root-relative and remote url() values in styles are left for the server", async () => {
+  const { out } = await build({
+    "pages/index.sinth": `Main { Div(class: "a") { "x" } }\nstyle {\n  .a { backgroundImage: "url('/hero.png')" }\n  .b { backgroundImage: "url(https://example.com/a.png)" }\n}\n`,
+  });
+  const css = [...out.files.entries()].filter(([k]) => k.endsWith(".css")).map(([, f]) => Buffer.from(f.contents).toString("utf-8")).join("\n");
+  assert.match(css, /url\(\/hero\.png\)/);
+  assert.match(css, /url\(https:\/\/example\.com\/a\.png\)/);
+});
+
+test("Html.Name with a non-element is a clear error", () => {
+  expectError(() => require("./helpers").compilePage(`Main { Html.Nope { "x" } }`), "E0303");
+});
+
+test("sinth:ui styles ship once as a shared stylesheet, only to pages that use it", async () => {
+  const { out, text } = await build({
+    "pages/index.sinth": `import { Button } from "sinth:ui"\nMain { Button { "A" } }\nstyle { .x { color: "red" } }\n`,
+    "pages/about.sinth": `import { Card } from "sinth:ui"\nMain { Card(title: "B") { "b" } }\n`,
+    "pages/plain.sinth": `Main { Paragraph { "c" } }\n`,
+  });
+  const lib = [...out.files.keys()].filter(k => /^_sinth\/lib-[0-9A-F]{8}\.css$/.test(k));
+  assert.equal(lib.length, 1);
+  assert.match(text(lib[0]), /\.ui-btn/);
+  const links = html => [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(links(text("index.html"))[0], "/" + lib[0]);
+  assert.equal(links(text("index.html")).length, 2);
+  assert.deepEqual(links(text("about.html")), ["/" + lib[0]]);
+  assert.deepEqual(links(text("plain.html")), []);
+});

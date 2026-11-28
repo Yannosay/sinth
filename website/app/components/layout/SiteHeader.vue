@@ -6,7 +6,7 @@
           src="/assets/images/logo/sinth-logo.png"
           alt="Sinth"
           class="site-logo__img"
-          width="120"
+          width="114"
           height="36"
           decoding="async"
         >

@@ -1,0 +1,41 @@
+-- sinth:desktop: native features for apps packaged with `sinth desktop`.
+-- Usage: import { pickFile, saveFile, notify } from "sinth:desktop"
+-- Every function also works on the web with the closest browser equivalent, so one project can ship
+-- as a website and as a desktop app. Files are only readable and writable where the user picked them.
+
+import * as native from "./native.js"
+
+-- True inside the desktop app, false in a browser.
+function isDesktop() -> bool {
+  return native.isDesktop()
+}
+
+-- Lets the user pick a text file. accept: extensions like ".csv,.txt". Resolves to { name, path, text } or null.
+function pickFile(str accept = "") {
+  return await native.pickFile(accept)
+}
+
+-- Saves contents to a file the user chooses, suggesting name. Resolves to false when cancelled.
+function saveFile(str name, str contents) {
+  return await native.saveFile(name, contents)
+}
+
+-- Shows a system notification. Resolves to false when notifications are not allowed.
+function notify(str title, str body = "") {
+  return await native.notify(title, body)
+}
+
+-- Asks a yes/no question in a native dialog. Resolves to true for OK.
+function confirmDialog(str message, str title = "") {
+  return await native.confirmDialog(message, title)
+}
+
+-- Sets the window title.
+function setTitle(str title) {
+  await native.setTitle(title)
+}
+
+-- Opens an http(s) or mailto link in the default browser or mail app.
+function openExternal(str url) {
+  await native.openExternal(url)
+}

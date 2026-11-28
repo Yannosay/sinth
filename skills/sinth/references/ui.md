@@ -87,9 +87,17 @@ Content(width: "sm") {
   Modal(open: confirm, title: "Delete account?") {
     Paragraph { "This cannot be undone." }
     slot(name: "footer") {
+      Button(variant: "secondary", onClick: confirm = false) { "Cancel" }
       Button(variant: "danger", onClick: confirm = false) { "Delete" }
     }
   }
   Toaster()
 }
 ```
+
+Layout rules that keep markup short:
+
+- Inside `Form`, each `Field`, `Select` and `Toggle` gets its own row and buttons sit side by side. Do not wrap form controls in `VStack` or `Inline`.
+- `Content` spaces its children evenly. Do not add margins between sections.
+- `Card` and `Modal` footers (`slot(name: "footer")`) right-align their buttons.
+- Theme with `--ui-*` tokens on `:root`; do not restyle `.ui-*` classes.

@@ -33,7 +33,7 @@ function showOverlay(title, message, kind) {
     "<div class='backdrop'><div class='panel' role='alertdialog' aria-modal='true'>" +
     "<div class='head'><span class='badge'>" + (kind === "runtime" ? "Runtime error" : "Compile error") + "</span><span class='title'>" + escapeHtml(title) + "</span><button type='button'>Dismiss (Esc)</button></div>" +
     "<pre>" + escapeHtml(message) + "</pre>" +
-    "<div class='foot'>Fix the problem and save. The page updates automatically.</div>" +
+    "<div class='foot'>Fix the problem and save.</div>" +
     "</div></div>";
   root.querySelector("button").addEventListener("click", hideOverlay);
   document.documentElement.appendChild(host);
@@ -63,10 +63,35 @@ function swapCss(href) {
   if (old) old.after(next); else document.head.appendChild(next);
 }
 
+const SCROLL_KEY = "__sinth_scroll";
+
+// Re-mounting empties the page for a moment, which would jump to the top; keep the reader's place.
+function keepScroll(x, y) {
+  let tries = 0;
+  const restore = () => {
+    scrollTo(x, y);
+    if ((Math.abs(scrollY - y) > 1 || Math.abs(scrollX - x) > 1) && ++tries < 20) requestAnimationFrame(restore);
+  };
+  requestAnimationFrame(restore);
+}
+
+function reload() {
+  try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ path: location.pathname, x: scrollX, y: scrollY })); } catch {}
+  location.reload();
+}
+
+try {
+  const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "null");
+  sessionStorage.removeItem(SCROLL_KEY);
+  if (saved && saved.path === location.pathname) addEventListener("load", () => keepScroll(saved.x, saved.y), { once: true });
+} catch {}
+
 async function hotSwap(js) {
+  const x = scrollX, y = scrollY;
   const app = globalThis.__sinth_app__;
   if (app) app.dispose();
   await import(js + "?t=" + Date.now());
+  keepScroll(x, y);
 }
 
 function apply(pages) {
@@ -76,26 +101,26 @@ function apply(pages) {
   state.hashes = pages;
   if (!me || !prev) return;
   if (me.head !== prev.head || (!!me.js) !== (!!prev.js) || (!me.js && me.body !== prev.body)) {
-    location.reload();
+    reload();
     return;
   }
   if (me.cssHash !== prev.cssHash && me.css) swapCss(me.css);
-  if (me.jsHash !== prev.jsHash && me.js) hotSwap(me.js).catch(err => { console.error(err); location.reload(); });
+  if (me.jsHash !== prev.jsHash && me.js) hotSwap(me.js).catch(err => { console.error(err); reload(); });
 }
 
 function connect() {
   const es = new EventSource("/__sinth/events");
   es.onopen = () => {
-    if (state.connected === "lost") location.reload();
+    if (state.connected === "lost") reload();
     state.connected = true;
   };
   es.onmessage = e => {
     const msg = JSON.parse(e.data);
     if (msg.type === "error") showOverlay(msg.title, msg.message, "compile");
-    else if (msg.type === "reload") location.reload();
+    else if (msg.type === "reload") reload();
     else if (msg.type === "update") {
       hideOverlay();
-      if (msg.full) location.reload();
+      if (msg.full) reload();
       else apply(msg.pages);
     } else if (msg.type === "init") {
       state.hashes = msg.pages;

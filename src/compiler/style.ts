@@ -315,8 +315,10 @@ class StyleConverter {
       return { k: "decl", prop, value: `var(${cssVar})${important}`, line: d.line };
     }
     const single = value.match(/^(["'])([\s\S]*)\1$/);
-    if (single && !QUOTED_CONTENT_PROPS.has(prop)) value = single[2];
-    else if (single && prop === "content" && (/^(attr|counter|counters|url|var)\(|^(none|normal|open-quote|close-quote)$/.test(single[2]) || /^(["'])[\s\S]*\1$/.test(single[2]))) value = single[2];
+    // `"url(\"a.png\")"` means url("a.png"): drop the escape on the outer quote, keep CSS escapes such as \e900.
+    const inner = single ? single[2].split("\\" + single[1]).join(single[1]) : "";
+    if (single && !QUOTED_CONTENT_PROPS.has(prop)) value = inner;
+    else if (single && prop === "content" && (/^(attr|counter|counters|url|var)\(|^(none|normal|open-quote|close-quote)$/.test(inner) || /^(["'])[\s\S]*\1$/.test(inner))) value = inner;
     return { k: "decl", prop, value: value + important, line: d.line };
   }
 

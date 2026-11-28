@@ -40,7 +40,7 @@ function sanitizeName(name: string): string {
 }
 
 /** Runs a host's CLI through npx, so it does not have to be installed. */
-function runNpx(pkg: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<number> {
+export function runNpx(pkg: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<number> {
   for (const a of args) {
     if (!/^[A-Za-z0-9@._/:=\\ -]+$/.test(a)) throw new SinthError("E1100", `Refusing to pass unsafe argument to ${pkg}: ${a}`);
   }

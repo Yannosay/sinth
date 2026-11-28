@@ -44,6 +44,8 @@ export interface DevServerOptions {
   port: number;
   host: string;
   open: boolean;
+  /** Fail when the port is taken instead of moving to the next free one (desktop dev needs a fixed address). */
+  strictPort?: boolean;
 }
 
 export async function startDevServer(project: Project, opts: DevServerOptions): Promise<void> {
@@ -176,7 +178,10 @@ export async function startDevServer(project: Project, opts: DevServerOptions): 
     });
   });
 
-  const port = await listen(server, opts.port, opts.host);
+  const port = await listen(server, opts.port, opts.host, opts.strictPort ? 0 : 10).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") throw new SinthError("E0805", `Port ${opts.port} is already in use`, undefined, "Stop the other server on that port, or pass a different --port");
+    throw err;
+  });
   const url = `http://${displayHost(opts.host)}:${port}${cfg.base}`;
   log.blank();
   console.log(`  ${c.green("➜")}  ${c.bold("Local:")}   ${c.cyan(url)}`);

@@ -1,5 +1,32 @@
 # Changelog
 
+## 5.4.0
+
+### Desktop apps
+
+- **`sinth desktop`** ships a project as a native app for Windows, macOS and Linux, built on Tauri 2. `sinth desktop init` adds `src-tauri/` with a locked-down configuration and app icons, `sinth desktop dev` opens the app with hot reload, and `sinth desktop build` produces installers (`.msi`/`.exe`, `.dmg`, `.deb`/`.rpm`/`.AppImage`). Installers are a few MB because apps use the system web view. Desktop support is opt-in; projects without it are unchanged.
+- **`sinth:desktop`**: `pickFile`, `saveFile`, `notify`, `confirmDialog`, `setTitle`, `openExternal` and `isDesktop`. Every function also works in a browser with the closest web equivalent, so one project serves as a website and as an app. Apps can only read or write files the user picked in a dialog.
+- `sinth dev --strict-port` fails when the port is taken instead of moving to the next free one (error E0805).
+
+### sinth:ui
+
+- **Redesigned.** Every control shares one height and focus ring, cards, modals, menus and toasts have proper depth, switches behave like system switches, and light and dark mode were tuned side by side. New tokens: `--ui-elevated`, `--ui-border-strong`, `--ui-control`, `--ui-ring`, `--ui-shadow-lg`, `--ui-ease`.
+- **Forms lay themselves out**: inside a `Form`, every field, select and toggle gets its own row and buttons line up side by side. `Content` spaces its children evenly. `Card` and `Modal` footers right-align their buttons.
+- **Fixed:** tabs, pagination buttons, sortable table headers and the dropdown trigger rendered as primary `Button`s, because the library's own `Button` component replaced the element inside it. They now render as the native buttons they are, with `type="button"`, so they no longer submit a surrounding form.
+- Icons are crisp SVGs instead of text characters, and sortable headers show their direction.
+- **The stylesheet ships once per site**: library CSS is built into one shared, content-hashed file (`_sinth/lib-<hash>.css`), linked only by pages that use the library. Before, every page carried its own copy.
+
+### Language
+
+- **`Html.Name`** always means the built-in element, even where a component of the same name is in scope: `Html.Button { "Plain" }`. Using it with anything else is error E0303.
+
+### Fixes
+
+- Escaped quotes in style values work: `backgroundImage: "url(\"/hero.png\")"` produced a backslash in the CSS. CSS escapes such as `"'\e900'"` are kept.
+- `url("/image.png")` in a style no longer fails the build. Root-relative, `data:` and remote URLs are left for the server, and a missing relative image now suggests `public/` instead of `npm install`.
+- Hot reload keeps the scroll position, also when it falls back to a full reload.
+- The dev error overlay no longer says the obvious ("The page updates automatically").
+
 ## 5.3.4
 
 ### Security

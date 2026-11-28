@@ -7,7 +7,7 @@
             src="/assets/images/logo/sinth-logo.png"
             alt=""
             class="site-footer__brand-img"
-            width="90"
+            width="86"
             height="27"
             decoding="async"
           >

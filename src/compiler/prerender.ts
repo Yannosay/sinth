@@ -528,7 +528,7 @@ export class Prerenderer {
   }
 
   private renderElement(node: ElementNode, scope: RenderScope): string {
-    const comp = scope.compName === node.name && ELEMENTS[node.name] ? undefined : this.components(scope.file).get(node.name);
+    const comp = node.builtin || (scope.compName === node.name && ELEMENTS[node.name]) ? undefined : this.components(scope.file).get(node.name);
     if (comp) return this.renderComponent(node, comp, scope);
     if (node.name === "Fragment") return this.renderNodes(node.children, scope);
     if (node.name === "RawHTML" || node.name === "Html") {

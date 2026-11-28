@@ -7,7 +7,7 @@
         alt="Sinth"
         class="hero__logo"
         width="520"
-        height="228"
+        height="164"
         decoding="async"
         fetchpriority="high"
       >
@@ -93,16 +93,15 @@
           The compiler checks every edit and returns machine-readable fixes, and the Sinth skill teaches the agent to
           build with <code>sinth:ui</code> instead of piling up custom code.
         </p>
-        <AgentLogos class="agents__logos" />
         <div class="agents__install">
-          <p class="agents__step">In a Sinth project</p>
           <button type="button" class="hero__install agents__command" :aria-label="`Copy: ${skillCommand}`" @click="copySkill">
             <code>{{ skillCommand }}</code>
             <span class="hero__install-hint">{{ skillCopied ? 'copied' : 'copy' }}</span>
           </button>
-          <p class="agents__step">Or ask your agent</p>
+          <p class="agents__or">in a Sinth project, or paste this into your agent:</p>
           <AgentPrompt class="agents__prompt" />
         </div>
+        <AgentLogos class="agents__logos" />
         <NuxtLink to="/docs/tooling/ai-agents" class="text-link">What the skill changes →</NuxtLink>
       </div>
     </section>
@@ -112,13 +111,14 @@
         <div class="ide-section__text">
           <h2 id="ide-heading" class="section-heading">Sinth IDE</h2>
           <p class="section-body">
-            A desktop editor made for Sinth. Open a folder and press Run: it finds the project's compiler, starts the dev
-            server in its own terminal and opens your browser. Errors from <code>sinth check</code> appear inline on every
-            save, and completions know every element, <code>sinth:ui</code> component and attribute.
+            A desktop editor made for Sinth. Open a folder and press Run: the page appears in a built-in preview next to
+            your code and updates on every save. Errors from <code>sinth check</code> appear inline, and completions know
+            every element, <code>sinth:ui</code> component and attribute.
           </p>
           <ul class="ide-section__points">
-            <li>Run, Build, Preview, Check and Deploy from the toolbar or the command palette</li>
-            <li>Installs Sinth compilers with verified checksums, no setup needed</li>
+            <li>Run, Build, Preview, Check and Deploy from the title bar or the command palette</li>
+            <li>Quick open for every file, and phone and tablet sizes in the preview</li>
+            <li>Picks up edits from git and AI agents, and never closes unsaved work</li>
             <li>Signed automatic updates for Windows, macOS and Linux</li>
           </ul>
           <div class="ide-section__cta">
@@ -215,8 +215,8 @@ const features = [
   { title: 'Checked before it runs', body: 'Unknown names, wrong types, missing arguments and missing component props are compile errors with a code frame and a hint.', href: '/docs/reference/errors', link: 'Error reference' },
   { title: 'Prerendered pages', body: 'Every page is HTML at build time, so content shows before any JavaScript runs. Links are prefetched and swapped in place without reloads.', href: '/docs/production/performance', link: 'Rendering and performance' },
   { title: 'Full stack', body: 'API routes in functions/ use the standard Fetch API, run in the dev server and deploy to Cloudflare Pages or Workers unchanged.', href: '/docs/full-stack/functions', link: 'Server functions' },
-  { title: 'A real component library', body: '28 sinth:ui components: forms, modals with focus trapping, tabs, sortable tables, toasts, menus. Themed with a few CSS variables, dark mode included.', href: '/docs/components/sinth-ui', link: 'sinth:ui' },
-  { title: 'Components everywhere', body: 'Scoped styles, slots and two-way bindings. Export any component as a web component and use it in plain HTML sites.', href: '/docs/components/custom-elements', link: 'Custom elements' },
+  { title: 'A real component library', body: '28 sinth:ui components: forms that lay themselves out, modals with focus trapping, tabs, sortable tables, toasts, menus. Light and dark, themed with tokens.', href: '/docs/components/sinth-ui', link: 'sinth:ui' },
+  { title: 'Websites and desktop apps', body: 'Ship the same project as a native app for Windows, macOS and Linux, with file dialogs and notifications, in installers of a few MB.', href: '/docs/full-stack/desktop', link: 'Desktop apps' },
   { title: 'Hot reload that keeps state', body: 'Save a file and the page updates without losing form input or variables. Errors appear in an overlay with the exact location.', href: '/docs/tooling/dev-server', link: 'Dev server' },
   { title: 'Secure defaults', body: 'No eval, escaped output, sanitized URLs, a CSP without inline scripts and security headers. The dev server blocks DNS rebinding.', href: '/docs/production/security', link: 'Security' },
   { title: 'Production config, once', body: 'Environment variables checked at compile time, plus redirects and headers that work the same locally and on every host.', href: '/docs/full-stack/environment', link: 'Environment variables' },
@@ -559,9 +559,9 @@ useHead({
   code { color: var(--accent-bright); margin-right: 0.35rem; }
 }
 
-.agents__logos { margin-top: 2rem; }
+.agents__logos { margin-top: 3rem; }
 .agents__install { margin-top: 2rem; }
-.agents__step { margin-top: 1.25rem; font-size: 0.8rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.agents__or { margin: 0.9rem 0 0.9rem; font-size: 0.85rem; color: var(--fg-muted); }
 .agents__command { margin-top: 0.5rem; }
 
 .ide-section__container {
